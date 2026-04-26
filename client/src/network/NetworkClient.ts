@@ -28,6 +28,16 @@ export class NetworkClient {
     for (const type of ['phase', 'spell_confirmed', 'cast_denied', 'damage']) {
       this.room.onMessage(type, (payload: any) => this.onEvent?.(type, payload));
     }
+
+    this.onState?.(this.room.state);
+  }
+
+  get localSessionId(): string | null {
+    return this.room?.sessionId ?? null;
+  }
+
+  get connected(): boolean {
+    return this.status === 'connected' && this.room !== null;
   }
 
   sendMove(input: MoveInput): void {

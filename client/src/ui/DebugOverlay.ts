@@ -73,6 +73,9 @@ export class DebugOverlay {
     projectileCount: number;
     voiceActive: boolean;
     voiceText: string;
+    localSessionId: string | null;
+    localPlayerBound: boolean;
+    controlsEnabled: boolean;
   }): void {
     const hp = args.local?.hp ?? 100;
     const mana = args.local?.mana ?? 100;
@@ -99,6 +102,10 @@ export class DebugOverlay {
       `phase ${args.phase}`,
       `players ${args.playerCount}`,
       `projectiles ${args.projectileCount}`,
+      `session ${args.localSessionId?.slice(0, 6) ?? 'none'}`,
+      `local ${args.localPlayerBound ? 'yes' : 'no'}`,
+      `controls ${args.controlsEnabled ? 'yes' : 'no'}`,
+      args.local ? `pos ${args.local.x.toFixed(2)},${args.local.z.toFixed(2)}` : 'pos none',
       `voice ${args.voiceActive ? 'on' : 'off'}`,
       args.voiceText ? `heard ${args.voiceText.slice(0, 24)}` : ''
     ].filter(Boolean).join('\n');

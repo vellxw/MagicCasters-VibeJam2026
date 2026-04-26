@@ -36,6 +36,9 @@ export class GameApp {
   private localName = `Mage ${Math.floor(Math.random() * 900 + 100)}`;
   private aimYaw = 0;
   private phase = 'WAITING';
+  private localControllerId: string | null = null;
+  private localPlayerBound = false;
+  private controlsEnabled = false;
   private lastMoveSent = 0;
   private animationId = 0;
 
@@ -149,15 +152,7 @@ export class GameApp {
     for (const player of players) {
       activeIds.add(player.id);
       this.playerSnapshots.set(player.id, player);
-      let controller = this.players.get(player.id);
-      if (!controller) {
-        const local = player.id === this.network.room?.sessionId;
-        controller = local
-          ? new LocalPlayerController(this.scene, true)
-          : new RemotePlayerController(this.scene, false);
-        controller.setName(player.name);
-        this.players.set(player.id, controller);
-      }
+      this.ensurePlayerController(player);
     }
 
     for (const [id, controller] of this.players) {
@@ -169,11 +164,13 @@ export class GameApp {
 
     this.projectileSnapshots = Array.from(state.projectiles?.values?.() ?? []) as ProjectileSnapshot[];
     this.vfx.syncProjectiles(this.projectileSnapshots);
+    this.syncControlState();
   }
 
   private handleNetEvent(type: string, payload: any): void {
     if (type === 'phase') {
       this.phase = payload.phase;
+      this.syncControlState();
       if (payload.message) this.ui.showToast(payload.message);
     }
     if (type === 'spell_confirmed') {
@@ -193,7 +190,7 @@ export class GameApp {
 
     for (const [id, snapshot] of this.playerSnapshots) {
       const controller = this.players.get(id);
-      controller?.update(snapshot, dt, id === this.network.room?.sessionId);
+      controller?.update(snapshot, dt, id === this.network.localSessionId);
     }
 
     const local = this.getLocalSnapshot();
@@ -211,7 +208,10 @@ export class GameApp {
       playerCount: this.playerSnapshots.size,
       projectileCount: this.projectileSnapshots.length,
       voiceActive: this.voice.active,
-      voiceText: this.voice.transcript
+      voiceText: this.voice.transcript,
+      localSessionId: this.network.localSessionId,
+      localPlayerBound: this.localPlayerBound,
+      controlsEnabled: this.controlsEnabled
     });
     this.renderer.render(this.scene, this.camera);
   }
@@ -220,6 +220,9 @@ export class GameApp {
     const now = performance.now();
     if (now - this.lastMoveSent < 50) return;
     this.lastMoveSent = now;
+
+    if (!this.controlsEnabled) return;
+
     const input: MoveInput = {
       forward: this.keys.has('w') || this.keys.has('arrowup'),
       backward: this.keys.has('s') || this.keys.has('arrowdown'),
@@ -231,8 +234,42 @@ export class GameApp {
   }
 
   private getLocalSnapshot(): PlayerSnapshot | undefined {
-    const id = this.network.room?.sessionId;
+    const id = this.network.localSessionId;
     return id ? this.playerSnapshots.get(id) : undefined;
+  }
+
+  private ensurePlayerController(player: PlayerSnapshot): void {
+    const localId = this.network.localSessionId;
+    const shouldBeLocal = player.id === localId;
+    const isCurrentLocal = player.id === this.localControllerId;
+    const existing = this.players.get(player.id);
+
+    if (existing && shouldBeLocal === isCurrentLocal) return;
+
+    if (existing) {
+      existing.dispose(this.scene);
+    }
+
+    const controller = shouldBeLocal
+      ? new LocalPlayerController(this.scene, true)
+      : new RemotePlayerController(this.scene, false);
+    controller.setName(player.name);
+    this.players.set(player.id, controller);
+
+    if (shouldBeLocal) {
+      this.localControllerId = player.id;
+    } else if (isCurrentLocal) {
+      this.localControllerId = null;
+    }
+  }
+
+  private syncControlState(): void {
+    this.localPlayerBound = Boolean(this.getLocalSnapshot());
+    this.controlsEnabled = this.network.connected && this.localPlayerBound && this.phase === 'PLAYING';
+
+    if (!this.controlsEnabled) {
+      this.keys.clear();
+    }
   }
 
   private resize(): void {
