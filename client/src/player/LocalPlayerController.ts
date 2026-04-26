@@ -12,6 +12,7 @@ export interface PlayerSnapshot {
   anim: string;
   casting: boolean;
   selectedSpell: string;
+  teamId?: string;
   fireballReadyAt?: number;
   iceBoltReadyAt?: number;
   lightBurstReadyAt?: number;
@@ -27,10 +28,11 @@ export class LocalPlayerController {
   private ring: THREE.Mesh;
   private nameSprite: THREE.Sprite;
 
-  constructor(scene: THREE.Scene, local: boolean) {
+  constructor(scene: THREE.Object3D, local: boolean, teamId: string = 'A') {
     this.group = new THREE.Group();
-    const bodyColor = local ? 0xd95030 : 0x2d9e9b;
-    const trimColor = local ? 0xf5c45e : 0x7dd3fc;
+    const teamColor = teamId === 'B' ? 0x2d9e9b : 0xd95030;
+    const bodyColor = local ? teamColor : teamColor;
+    const trimColor = local ? 0xf5c45e : teamId === 'B' ? 0x7dd3fc : 0xffb07c;
 
     this.body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.35, 0.95, 5, 10),
@@ -88,7 +90,7 @@ export class LocalPlayerController {
     material.needsUpdate = true;
   }
 
-  dispose(scene: THREE.Scene): void {
+  dispose(scene: THREE.Object3D): void {
     scene.remove(this.group);
     this.group.traverse((object) => {
       const mesh = object as THREE.Mesh;

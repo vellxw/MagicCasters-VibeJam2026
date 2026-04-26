@@ -1,8 +1,9 @@
 import type { SpellId } from './spells.js';
-import type { MoveInput } from './types.js';
+import type { MatchMode, MoveInput } from './types.js';
 
 export interface JoinOptions {
   name?: string;
+  mode?: MatchMode;
 }
 
 export type ClientMessage =

@@ -1,8 +1,8 @@
 # VibeJam Magic Duel
 
-A lightweight AI-generated 1v1 browser magic duel for VibeJam 2026.
+A lightweight AI-generated browser magic duel for VibeJam 2026.
 
-The game uses Three.js for a primitive 3D arena and Colyseus for authoritative 1v1 multiplayer. There is no login, no signup, no loading screen, and no heavy asset pipeline. Players automatically join the `magic_duel` room; open a second tab to start a duel.
+The game uses Three.js for a tiny local 3D lobby plus primitive arena, and Colyseus for authoritative public matchmaking. There is no login, no signup, no loading screen, and no heavy asset pipeline. Players enter a local lobby, choose either the `1v1 Duel` or `2v2 Team Duel` portal, then join the first available `magic_match` room for that mode.
 
 ## Requirements
 
@@ -40,6 +40,8 @@ npm run start
 
 - Move: `WASD` or arrow keys
 - Aim camera: click the canvas, then move the mouse
+- Queue: walk near a lobby portal and press `E`
+- Cancel queue / leave results: `Esc`
 - Cast by keyboard: `1` fireball, `2` ice bolt, `3` light burst, `4` shadow dash
 - Cast by voice: click `Voice`, then say `ignis`, `gelu`, `lux`, or `umbra`
 
@@ -72,6 +74,11 @@ npm run start
 ```
 
 The root `start` script runs the compiled Colyseus server. The server reads `process.env.PORT`, serves `client/dist` over HTTP, and hosts Colyseus WebSockets on the same Render URL.
+
+The client uses same-origin WebSockets in production, so both the built client and the `magic_match` Colyseus room run from the same Render URL. Render can keep:
+
+- Build Command: `npm install && npm run build`
+- Start Command: `npm run start`
 
 ## Project Layout
 

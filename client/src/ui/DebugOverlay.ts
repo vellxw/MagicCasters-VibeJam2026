@@ -1,5 +1,8 @@
 import { SPELL_IDS, SPELLS, type SpellId } from '../../../shared/spells';
+import type { MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
+
+type SceneMode = 'LOBBY' | 'QUEUE' | 'MATCH' | 'RESULTS';
 
 export class DebugOverlay {
   readonly element: HTMLDivElement;
@@ -9,6 +12,12 @@ export class DebugOverlay {
   private manaFill: HTMLSpanElement;
   private nameEl: HTMLElement;
   private phaseEl: HTMLElement;
+  private dockEl: HTMLElement;
+  private promptEl: HTMLElement;
+  private queueEl: HTMLElement;
+  private queueModeEl: HTMLElement;
+  private queueCountEl: HTMLElement;
+  private resultsEl: HTMLElement;
   private debugEl: HTMLElement;
   private toastEl: HTMLElement;
   private spellButtons = new Map<SpellId, HTMLButtonElement>();
@@ -16,6 +25,8 @@ export class DebugOverlay {
 
   onCast?: (spellId: SpellId) => void;
   onVoiceToggle?: () => void;
+  onCancelQueue?: () => void;
+  onReturnLobby?: () => void;
 
   constructor(root: HTMLElement) {
     this.element = document.createElement('div');
@@ -31,6 +42,17 @@ export class DebugOverlay {
         </div>
         <div class="phase-chip" data-phase>Entering arena</div>
       </div>
+      <div class="interaction-prompt" data-prompt></div>
+      <div class="queue-panel" data-queue>
+        <strong>Finding match...</strong>
+        <span data-queue-mode>Mode</span>
+        <span data-queue-count>0 / 2 players</span>
+        <button type="button" data-cancel-queue>Cancel</button>
+      </div>
+      <div class="results-panel" data-results>
+        <strong>Match ended</strong>
+        <button type="button" data-return-lobby>Return to lobby</button>
+      </div>
       <div class="spell-dock" data-spells></div>
       <div class="debug" data-debug></div>
       <div class="toast" data-toast></div>
@@ -41,10 +63,17 @@ export class DebugOverlay {
     this.manaFill = this.element.querySelector('[data-mana]')!;
     this.nameEl = this.element.querySelector('[data-name]')!;
     this.phaseEl = this.element.querySelector('[data-phase]')!;
+    this.dockEl = this.element.querySelector('[data-spells]')!;
+    this.promptEl = this.element.querySelector('[data-prompt]')!;
+    this.queueEl = this.element.querySelector('[data-queue]')!;
+    this.queueModeEl = this.element.querySelector('[data-queue-mode]')!;
+    this.queueCountEl = this.element.querySelector('[data-queue-count]')!;
+    this.resultsEl = this.element.querySelector('[data-results]')!;
     this.debugEl = this.element.querySelector('[data-debug]')!;
     this.toastEl = this.element.querySelector('[data-toast]')!;
+    this.element.querySelector('[data-cancel-queue]')?.addEventListener('click', () => this.onCancelQueue?.());
+    this.element.querySelector('[data-return-lobby]')?.addEventListener('click', () => this.onReturnLobby?.());
 
-    const dock = this.element.querySelector<HTMLElement>('[data-spells]')!;
     for (const id of SPELL_IDS) {
       const spell = SPELLS[id];
       const button = document.createElement('button');
@@ -52,7 +81,7 @@ export class DebugOverlay {
       button.style.setProperty('--spell-color', `#${spell.color.toString(16).padStart(6, '0')}`);
       button.innerHTML = `<b>${spell.key} ${spell.incantation}</b><span>${spell.label}</span>`;
       button.addEventListener('click', () => this.onCast?.(id));
-      dock.appendChild(button);
+      this.dockEl.appendChild(button);
       this.spellButtons.set(id, button);
     }
 
@@ -61,21 +90,28 @@ export class DebugOverlay {
     this.voiceButton.textContent = 'Voice';
     this.voiceButton.dataset.active = 'false';
     this.voiceButton.addEventListener('click', () => this.onVoiceToggle?.());
-    dock.appendChild(this.voiceButton);
+    this.dockEl.appendChild(this.voiceButton);
   }
 
   update(args: {
+    scene: SceneMode;
+    selectedMode: MatchMode | null;
     phase: string;
     status: string;
     roomId: string;
     local?: PlayerSnapshot;
     playerCount: number;
+    requiredPlayers: number;
+    teamId: string | null;
     projectileCount: number;
     voiceActive: boolean;
     voiceText: string;
     localSessionId: string | null;
     localPlayerBound: boolean;
     controlsEnabled: boolean;
+    portalPrompt: string;
+    queueActive: boolean;
+    resultsActive: boolean;
   }): void {
     const hp = args.local?.hp ?? 100;
     const mana = args.local?.mana ?? 100;
@@ -84,8 +120,15 @@ export class DebugOverlay {
     this.nameEl.textContent = args.local?.name ?? 'Mage';
     const roomEl = this.element.querySelector<HTMLElement>('[data-room]');
     if (roomEl) roomEl.textContent = args.roomId ? args.roomId.slice(0, 6) : args.status;
-    this.phaseEl.textContent = messageForPhase(args.phase, args.playerCount);
+    this.phaseEl.textContent = messageForPhase(args.scene, args.phase, args.playerCount, args.requiredPlayers);
     this.voiceButton.dataset.active = String(args.voiceActive);
+    this.dockEl.dataset.active = String(args.scene === 'MATCH');
+    this.promptEl.textContent = args.portalPrompt;
+    this.promptEl.dataset.visible = String(Boolean(args.portalPrompt));
+    this.queueEl.dataset.visible = String(args.queueActive);
+    this.queueModeEl.textContent = `Mode: ${labelForMode(args.selectedMode)}`;
+    this.queueCountEl.textContent = `${args.playerCount} / ${args.requiredPlayers} players`;
+    this.resultsEl.dataset.visible = String(args.resultsActive);
 
     const now = Date.now();
     for (const id of SPELL_IDS) {
@@ -98,9 +141,14 @@ export class DebugOverlay {
     }
 
     this.debugEl.textContent = [
+      `scene ${args.scene.toLowerCase()}`,
       `net ${args.status}`,
+      `selected ${args.selectedMode ?? 'none'}`,
+      `room ${args.roomId ? args.roomId.slice(0, 6) : 'none'}`,
+      `mode ${args.selectedMode ?? 'none'}`,
+      `team ${args.teamId ?? 'none'}`,
       `phase ${args.phase}`,
-      `players ${args.playerCount}`,
+      `players ${args.playerCount}/${args.requiredPlayers}`,
       `projectiles ${args.projectileCount}`,
       `session ${args.localSessionId?.slice(0, 6) ?? 'none'}`,
       `local ${args.localPlayerBound ? 'yes' : 'no'}`,
@@ -134,9 +182,18 @@ function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
   }
 }
 
-function messageForPhase(phase: string, count: number): string {
+function messageForPhase(scene: SceneMode, phase: string, count: number, required: number): string {
+  if (scene === 'LOBBY') return 'Choose a duel portal';
+  if (scene === 'QUEUE') return `Queue ${count}/${required}`;
+  if (scene === 'RESULTS') return 'Return to lobby';
   if (phase === 'PLAYING') return 'Duel live';
   if (phase === 'ENDED') return 'Duel sealed';
-  if (count < 2) return 'Waiting for rival';
+  if (count < required) return 'Waiting for rivals';
   return 'Binding room';
+}
+
+function labelForMode(mode: MatchMode | null): string {
+  if (mode === '2v2') return '2v2 Team Duel';
+  if (mode === '1v1') return '1v1 Duel';
+  return 'Portal';
 }

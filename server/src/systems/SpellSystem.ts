@@ -1,4 +1,4 @@
-import { ARENA_BOUNDS, MAX_HP, MAX_MANA, type PublicProjectileState, type RoomPhase } from '../../../shared/types.js';
+import { ARENA_BOUNDS, MAX_HP, MAX_MANA, type PublicProjectileState, type RoomPhase, type TeamId } from '../../../shared/types.js';
 import { isSpellId, SPELLS, type SpellId } from '../../../shared/spells.js';
 
 export type CastFailureReason = 'unknown_spell' | 'wrong_phase' | 'defeated' | 'no_mana' | 'cooldown';
@@ -6,6 +6,7 @@ export type CastFailureReason = 'unknown_spell' | 'wrong_phase' | 'defeated' | '
 export interface ServerPlayer {
   id: string;
   name: string;
+  teamId: TeamId;
   x: number;
   y: number;
   z: number;
@@ -36,10 +37,11 @@ export interface ExecuteCastArgs {
   nextProjectileId: () => string;
 }
 
-export function createTestPlayer(id: string): ServerPlayer {
+export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer {
   return {
     id,
     name: id,
+    teamId,
     x: 0,
     y: 0,
     z: 0,

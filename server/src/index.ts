@@ -23,7 +23,7 @@ const gameServer = new Server({
   })
 });
 
-gameServer.define(ROOM_NAME, MagicDuelRoom);
+gameServer.define(ROOM_NAME, MagicDuelRoom).filterBy(['mode']);
 
 httpServer.listen(port, () => {
   console.log(`[server] HTTP + Colyseus listening on port ${port}`);

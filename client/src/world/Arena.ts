@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { ARENA_BOUNDS } from '../../../shared/types';
 
-export function buildArena(scene: THREE.Scene): void {
+export function buildArena(scene: THREE.Scene): THREE.Group {
+  const group = new THREE.Group();
   const floorMaterial = new THREE.MeshStandardMaterial({
     color: 0x2b241a,
     roughness: 0.72,
@@ -10,7 +11,7 @@ export function buildArena(scene: THREE.Scene): void {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(19, 15), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
-  scene.add(floor);
+  group.add(floor);
 
   const ringMaterial = new THREE.MeshStandardMaterial({
     color: 0x9a5b2a,
@@ -21,7 +22,7 @@ export function buildArena(scene: THREE.Scene): void {
   const ring = new THREE.Mesh(new THREE.RingGeometry(3.2, 3.35, 80), ringMaterial);
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.012;
-  scene.add(ring);
+  group.add(ring);
 
   const boundaryMaterial = new THREE.MeshStandardMaterial({
     color: 0x3b2f25,
@@ -41,7 +42,7 @@ export function buildArena(scene: THREE.Scene): void {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(wall.w, 0.6, wall.d), boundaryMaterial);
     mesh.position.set(wall.x, 0.3, wall.z);
     mesh.castShadow = true;
-    scene.add(mesh);
+    group.add(mesh);
   }
 
   const pillarMaterial = new THREE.MeshStandardMaterial({
@@ -55,6 +56,9 @@ export function buildArena(scene: THREE.Scene): void {
     const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 1.5, 8), pillarMaterial);
     pillar.position.set(x, 0.75, z);
     pillar.castShadow = true;
-    scene.add(pillar);
+    group.add(pillar);
   }
+
+  scene.add(group);
+  return group;
 }

@@ -2,10 +2,12 @@
 
 ## Outcome
 
-Built a new VibeJam 2026 1v1 magic duel in this repository with:
+Built a new VibeJam 2026 magic duel in this repository with:
 
 - Three.js client
 - Colyseus server
+- local 3D lobby with `1v1 Duel` and `2v2 Team Duel` portals
+- public mode-filtered Colyseus matchmaking through `magic_match`
 - shared spell/constants layer
 - voice casting with keyboard fallback
 - server-validated spells, mana, cooldowns, projectiles, damage, and dash clamping
@@ -45,18 +47,18 @@ npm run build
 
 Fresh checks run:
 
-- `npm run test --workspace server`: passed, 2 test files / 5 tests.
+- `npm run test --workspace server`: passed, 4 test files / 11 tests.
 - `npm run typecheck`: passed for server and client.
 - `npm run build`: passed for server and client.
+- Production smoke on a temporary local port: built server served `/health`; two `1v1` clients joined the same room and reached `PLAYING`; four `2v2` clients joined the same room and reached `PLAYING`; 2v2 teams synced as `AABB`.
+- Browser smoke on built production server: lobby canvas rendered, `1v1 Duel` and `2v2 Team Duel` portal labels were visible, debug overlay showed `scene lobby`, the VibeJam widget rendered, and console had no messages.
 - Widget check: `client/index.html` contains `https://vibej.am/2026/widget.js`.
 - Snapshot check: `_legacy_snapshot/original-prototype-copy` exists.
-- Browser smoke: local server and client were started; Chrome DevTools showed two tabs connected to the same room with `phase PLAYING`, `players 2`, `widget: true`, and `canvas: true`.
-- Console smoke: a fresh local page reported no browser warning/error messages after adding the inline favicon.
 
 Build size note:
 
-- Client build produced 3 files in `client/dist`, total about 639 KB raw.
-- Main JS was about 634.53 KB minified / 169.87 KB gzip.
+- Client build produced 3 files in `client/dist`, total about 650 KB raw.
+- Main JS was about 644.58 KB minified / 172.42 KB gzip.
 - Vite warned that the JS chunk is over 500 KB, mainly from Three.js + Colyseus. No large textures, models, audio, FBX, GLB, or splat files are loaded by the game.
 
 Audit note:
@@ -73,7 +75,9 @@ Audit note:
 - Login/signup: none.
 - Free-to-play gate: none.
 - Loading screen: none.
-- Multiplayer: Colyseus `magic_duel`, max 2 clients.
+- Multiplayer: Colyseus `magic_match`, mode-filtered `1v1` and `2v2`.
+- 1v1: required players `2`, max clients `2`.
+- 2v2: required players `4`, max clients `4`, teams assigned `A/B/A/B`, friendly fire disabled.
 - Voice commands: `ignis`, `gelu`, `lux`, `umbra`.
 - Keyboard fallback: `1`, `2`, `3`, `4`.
 - Server authority: HP, mana, cooldowns, projectile hits, damage, and dash bounds.

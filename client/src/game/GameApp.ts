@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SPELL_IDS, type SpellId } from '../../../shared/spells';
-import type { MoveInput } from '../../../shared/types';
+import type { MatchMode, MoveInput } from '../../../shared/types';
 import { ThirdPersonCamera } from '../camera/ThirdPersonCamera';
 import { NetworkClient } from '../network/NetworkClient';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
@@ -9,6 +9,7 @@ import { SpellVfxManager } from '../spells/SpellVfxManager';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { VoiceCommandManager } from '../voice/VoiceCommandManager';
 import { buildArena } from '../world/Arena';
+import { LobbyScene } from '../world/LobbyScene';
 
 interface ProjectileSnapshot {
   id: string;
@@ -17,6 +18,8 @@ interface ProjectileSnapshot {
   y: number;
   z: number;
 }
+
+type SceneMode = 'LOBBY' | 'QUEUE' | 'MATCH' | 'RESULTS';
 
 export class GameApp {
   private shell: HTMLDivElement;
@@ -29,17 +32,22 @@ export class GameApp {
   private ui: DebugOverlay;
   private voice = new VoiceCommandManager();
   private network: NetworkClient;
+  private lobby: LobbyScene | null = null;
+  private arenaGroup: THREE.Group | null = null;
   private players = new Map<string, LocalPlayerController | RemotePlayerController>();
   private playerSnapshots = new Map<string, PlayerSnapshot>();
   private projectileSnapshots: ProjectileSnapshot[] = [];
   private keys = new Set<string>();
   private localName = `Mage ${Math.floor(Math.random() * 900 + 100)}`;
   private aimYaw = 0;
+  private sceneMode: SceneMode = 'LOBBY';
+  private selectedMode: MatchMode | null = null;
   private phase = 'WAITING';
   private localControllerId: string | null = null;
   private localPlayerBound = false;
   private controlsEnabled = false;
   private lastMoveSent = 0;
+  private queueToken = 0;
   private animationId = 0;
 
   constructor(private root: HTMLElement) {
@@ -61,7 +69,7 @@ export class GameApp {
   start(): void {
     this.setupScene();
     this.bindEvents();
-    this.connect();
+    this.enterLobby();
     this.loop();
   }
 
@@ -84,7 +92,6 @@ export class GameApp {
     ember.position.set(-5, 2.6, 4);
     this.scene.add(ember);
 
-    buildArena(this.scene);
     this.camera.position.set(0, 7, 9);
   }
 
@@ -103,6 +110,8 @@ export class GameApp {
 
     this.ui.onCast = (spellId) => this.cast(spellId);
     this.ui.onVoiceToggle = () => this.voice.toggle();
+    this.ui.onCancelQueue = () => this.returnToLobby();
+    this.ui.onReturnLobby = () => this.returnToLobby();
     this.voice.onSpell = (spellId, raw) => {
       this.ui.showToast(raw.trim());
       this.cast(spellId);
@@ -111,16 +120,6 @@ export class GameApp {
 
     this.network.onState = (state) => this.applyState(state);
     this.network.onEvent = (type, payload) => this.handleNetEvent(type, payload);
-  }
-
-  private async connect(): Promise<void> {
-    try {
-      await this.network.connect(this.localName);
-      this.ui.showToast('Room joined');
-    } catch (error) {
-      this.ui.showToast('Server offline');
-      console.error(error);
-    }
   }
 
   private onKey(event: KeyboardEvent, down: boolean): void {
@@ -132,6 +131,27 @@ export class GameApp {
     }
 
     if (!down || event.repeat) return;
+    if (key === 'e' && this.sceneMode === 'LOBBY') {
+      const portal = this.lobby?.nearestPortal();
+      if (portal) {
+        event.preventDefault();
+        this.enterQueue(portal.mode);
+      }
+      return;
+    }
+
+    if (key === 'escape' && this.sceneMode === 'QUEUE') {
+      this.returnToLobby();
+      return;
+    }
+
+    if (key === 'escape' && this.sceneMode === 'RESULTS') {
+      this.returnToLobby();
+      return;
+    }
+
+    if (this.sceneMode !== 'MATCH') return;
+
     const spell = SPELL_IDS.find((id) => event.key === String(SPELL_IDS.indexOf(id) + 1));
     if (spell) {
       event.preventDefault();
@@ -140,11 +160,17 @@ export class GameApp {
   }
 
   private cast(spellId: SpellId): void {
+    if (this.sceneMode !== 'MATCH') return;
     this.network.cast(spellId);
   }
 
   private applyState(state: any): void {
     this.phase = state.phase ?? this.phase;
+    this.selectedMode = state.mode ?? this.selectedMode;
+    if ((this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY') && this.phase === 'PLAYING') {
+      this.enterMatch();
+    }
+
     this.playerSnapshots.clear();
     const players = Array.from(state.players?.values?.() ?? []) as PlayerSnapshot[];
     const activeIds = new Set<string>();
@@ -152,7 +178,9 @@ export class GameApp {
     for (const player of players) {
       activeIds.add(player.id);
       this.playerSnapshots.set(player.id, player);
-      this.ensurePlayerController(player);
+      if (this.sceneMode === 'MATCH') {
+        this.ensurePlayerController(player);
+      }
     }
 
     for (const [id, controller] of this.players) {
@@ -165,12 +193,22 @@ export class GameApp {
     this.projectileSnapshots = Array.from(state.projectiles?.values?.() ?? []) as ProjectileSnapshot[];
     this.vfx.syncProjectiles(this.projectileSnapshots);
     this.syncControlState();
+
+    if (this.sceneMode === 'MATCH' && this.phase === 'ENDED') {
+      this.enterResults();
+    }
   }
 
   private handleNetEvent(type: string, payload: any): void {
     if (type === 'phase') {
       this.phase = payload.phase;
       this.syncControlState();
+      if ((this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY') && payload.phase === 'PLAYING') {
+        this.enterMatch();
+      }
+      if (this.sceneMode === 'MATCH' && payload.phase === 'ENDED') {
+        this.enterResults();
+      }
       if (payload.message) this.ui.showToast(payload.message);
     }
     if (type === 'spell_confirmed') {
@@ -188,30 +226,30 @@ export class GameApp {
     this.animationId = requestAnimationFrame(() => this.loop());
     const dt = Math.min(0.05, this.clock.getDelta());
 
-    for (const [id, snapshot] of this.playerSnapshots) {
-      const controller = this.players.get(id);
-      controller?.update(snapshot, dt, id === this.network.localSessionId);
-    }
-
-    const local = this.getLocalSnapshot();
-    if (local) {
-      this.cameraRig.update(this.camera, new THREE.Vector3(local.x, local.y, local.z), this.aimYaw, dt);
-    }
-
+    this.updateScene(dt);
     this.sendMoveIfNeeded();
     this.vfx.update(dt);
+    const local = this.getLocalSnapshot();
+    const portal = this.lobby?.nearestPortal() ?? null;
     this.ui.update({
+      scene: this.sceneMode,
+      selectedMode: this.selectedMode,
       phase: this.phase,
       status: this.network.status,
       roomId: (this.network.room as any)?.id ?? (this.network.room as any)?.roomId ?? '',
       local,
       playerCount: this.playerSnapshots.size,
+      requiredPlayers: this.getRequiredPlayers(),
+      teamId: local?.teamId ?? null,
       projectileCount: this.projectileSnapshots.length,
       voiceActive: this.voice.active,
       voiceText: this.voice.transcript,
       localSessionId: this.network.localSessionId,
       localPlayerBound: this.localPlayerBound,
-      controlsEnabled: this.controlsEnabled
+      controlsEnabled: this.controlsEnabled,
+      portalPrompt: this.sceneMode === 'LOBBY' && portal ? `Press E: ${portal.label}` : '',
+      queueActive: this.sceneMode === 'QUEUE',
+      resultsActive: this.sceneMode === 'RESULTS'
     });
     this.renderer.render(this.scene, this.camera);
   }
@@ -238,6 +276,37 @@ export class GameApp {
     return id ? this.playerSnapshots.get(id) : undefined;
   }
 
+  private updateScene(dt: number): void {
+    const input = this.currentInput();
+    if (this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE') {
+      this.lobby?.update(input, dt);
+      if (this.lobby) {
+        this.cameraRig.update(this.camera, this.lobby.getPlayerPosition(), this.lobby.getPlayerRotation(), dt);
+      }
+      return;
+    }
+
+    for (const [id, snapshot] of this.playerSnapshots) {
+      const controller = this.players.get(id);
+      controller?.update(snapshot, dt, id === this.network.localSessionId);
+    }
+
+    const local = this.getLocalSnapshot();
+    if (local) {
+      this.cameraRig.update(this.camera, new THREE.Vector3(local.x, local.y, local.z), this.aimYaw, dt);
+    }
+  }
+
+  private currentInput(): MoveInput {
+    return {
+      forward: this.keys.has('w') || this.keys.has('arrowup'),
+      backward: this.keys.has('s') || this.keys.has('arrowdown'),
+      left: this.keys.has('a') || this.keys.has('arrowleft'),
+      right: this.keys.has('d') || this.keys.has('arrowright'),
+      rotY: this.aimYaw
+    };
+  }
+
   private ensurePlayerController(player: PlayerSnapshot): void {
     const localId = this.network.localSessionId;
     const shouldBeLocal = player.id === localId;
@@ -251,8 +320,8 @@ export class GameApp {
     }
 
     const controller = shouldBeLocal
-      ? new LocalPlayerController(this.scene, true)
-      : new RemotePlayerController(this.scene, false);
+      ? new LocalPlayerController(this.scene, true, player.teamId ?? 'A')
+      : new RemotePlayerController(this.scene, false, player.teamId ?? 'A');
     controller.setName(player.name);
     this.players.set(player.id, controller);
 
@@ -265,11 +334,100 @@ export class GameApp {
 
   private syncControlState(): void {
     this.localPlayerBound = Boolean(this.getLocalSnapshot());
-    this.controlsEnabled = this.network.connected && this.localPlayerBound && this.phase === 'PLAYING';
+    this.controlsEnabled = this.sceneMode === 'MATCH' && this.network.connected && this.localPlayerBound && this.phase === 'PLAYING';
 
     if (!this.controlsEnabled) {
       this.keys.clear();
     }
+  }
+
+  private enterLobby(): void {
+    this.queueToken++;
+    this.sceneMode = 'LOBBY';
+    this.selectedMode = null;
+    this.phase = 'WAITING';
+    this.controlsEnabled = false;
+    this.localPlayerBound = false;
+    this.clearMatchScene();
+    this.network.leave();
+    if (!this.lobby) {
+      this.lobby = new LobbyScene(this.scene);
+    }
+    this.ui.showToast('Choose a portal');
+  }
+
+  private async enterQueue(mode: MatchMode): Promise<void> {
+    const token = ++this.queueToken;
+    this.sceneMode = 'QUEUE';
+    this.selectedMode = mode;
+    this.phase = 'WAITING';
+    this.playerSnapshots.clear();
+    this.projectileSnapshots = [];
+    this.clearMatchScene();
+    this.ui.showToast(`Finding ${mode}`);
+    this.network.leave();
+    const nextNetwork = new NetworkClient(resolveServerUrl());
+    nextNetwork.onState = (state) => this.applyState(state);
+    nextNetwork.onEvent = (type, payload) => this.handleNetEvent(type, payload);
+    this.network = nextNetwork;
+    try {
+      await nextNetwork.connect(this.localName, mode);
+      if (token !== this.queueToken || this.network !== nextNetwork || this.sceneMode !== 'QUEUE') {
+        nextNetwork.leave();
+      }
+    } catch (error) {
+      if (token !== this.queueToken) return;
+      this.ui.showToast('Queue failed');
+      console.error(error);
+      this.returnToLobby();
+    }
+  }
+
+  private enterMatch(): void {
+    if (this.sceneMode === 'MATCH') return;
+    this.sceneMode = 'MATCH';
+    this.lobby?.dispose();
+    this.lobby = null;
+    this.arenaGroup = buildArena(this.scene);
+    this.syncControlState();
+    this.ui.showToast(`${this.selectedMode ?? 'Match'} started`);
+  }
+
+  private enterResults(): void {
+    this.sceneMode = 'RESULTS';
+    this.controlsEnabled = false;
+    this.keys.clear();
+    this.ui.showToast('Match ended');
+  }
+
+  private returnToLobby(): void {
+    this.enterLobby();
+  }
+
+  private clearMatchScene(): void {
+    for (const controller of this.players.values()) {
+      controller.dispose(this.scene);
+    }
+    this.players.clear();
+    this.localControllerId = null;
+    this.playerSnapshots.clear();
+    this.projectileSnapshots = [];
+    if (this.arenaGroup) {
+      this.scene.remove(this.arenaGroup);
+      this.arenaGroup.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        mesh.geometry?.dispose?.();
+        const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+        else material?.dispose?.();
+      });
+      this.arenaGroup = null;
+    }
+  }
+
+  private getRequiredPlayers(): number {
+    const state = this.network.room?.state as any;
+    return Number(state?.requiredPlayers ?? (this.selectedMode === '2v2' ? 4 : 2));
   }
 
   private resize(): void {

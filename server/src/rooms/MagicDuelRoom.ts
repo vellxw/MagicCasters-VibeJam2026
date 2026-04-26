@@ -4,31 +4,48 @@ import { SPELLS, isSpellId, type SpellId } from '../../../shared/spells.js';
 import {
   ARENA_BOUNDS,
   PLAYER_RADIUS,
-  ROOM_NAME,
   TICK_DT,
   TICK_MS,
+  type MatchConfig,
+  type MatchMode,
   type MoveInput
 } from '../../../shared/types.js';
 import { GameState } from '../schema/GameState.js';
 import { PlayerState } from '../schema/PlayerState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { applyMovement, regenerateMana } from '../systems/MovementSystem.js';
+import {
+  assignTeamId,
+  getMatchConfig,
+  getSpawnForSlot,
+  normalizeMatchMode,
+  shouldDamagePlayer,
+  shouldLockRoom,
+  shouldStartMatch
+} from '../systems/MatchSystem.js';
 import { applyProjectileDamage, executeSpellCast } from '../systems/SpellSystem.js';
 
 interface JoinOptions {
   name?: string;
+  mode?: MatchMode;
 }
-
-const RESET_AFTER_MS = 2800;
 
 export class MagicDuelRoom extends Room<GameState> {
   maxClients = 2;
 
   private inputs = new Map<string, MoveInput>();
-  private resetAt = 0;
+  private mode: MatchMode = '1v1';
+  private config: MatchConfig = getMatchConfig('1v1');
 
-  onCreate(): void {
+  onCreate(options?: JoinOptions): void {
+    this.mode = normalizeMatchMode(options?.mode);
+    this.config = getMatchConfig(this.mode);
+    this.maxClients = this.config.maxPlayers;
     this.setState(new GameState());
+    this.state.mode = this.mode;
+    this.state.requiredPlayers = this.config.requiredPlayers;
+    this.state.maxPlayers = this.config.maxPlayers;
+    this.state.message = `${this.mode} queue`;
     this.setSimulationInterval(() => this.tick(), TICK_MS);
 
     this.onMessage('move', (client, input: MoveInput) => {
@@ -41,46 +58,55 @@ export class MagicDuelRoom extends Room<GameState> {
   }
 
   onJoin(client: Client, options?: JoinOptions): void {
-    const player = new PlayerState(client.sessionId, options?.name, this.state.players.size);
+    const slotIndex = this.state.players.size;
+    const teamId = assignTeamId(this.mode, slotIndex);
+    const player = new PlayerState(client.sessionId, options?.name, teamId, slotIndex);
     this.state.players.set(client.sessionId, player);
     this.inputs.set(client.sessionId, emptyInput());
+    this.updatePlayerCount();
 
-    if (this.state.players.size >= 2) {
-      this.startDuel('Duel started');
+    if (shouldStartMatch(this.state.playerCount, this.config)) {
+      this.startDuel(`${this.mode} match started`);
     } else {
       this.state.phase = 'WAITING';
-      this.state.message = 'Waiting for rival';
-      this.broadcast('phase', { phase: this.state.phase, message: this.state.message });
+      this.state.message = `Finding ${this.mode} match`;
+      this.broadcastPhase();
     }
+
+    this.syncLockState();
   }
 
   onLeave(client: Client): void {
     this.state.players.delete(client.sessionId);
     this.inputs.delete(client.sessionId);
     this.clearProjectiles();
+    this.updatePlayerCount();
 
     const remaining = Array.from(this.state.players.values());
     if (remaining.length > 0) {
-      remaining[0].resetForDuel(0);
       this.state.phase = 'WAITING';
       this.state.winnerId = '';
-      this.state.message = 'Rival left. Waiting for another mage.';
-      this.broadcast('phase', { phase: this.state.phase, message: this.state.message });
+      this.state.message = 'A mage left. Returning to queue.';
+      this.reassignWaitingPlayers();
+      this.broadcastPhase();
+      this.unlock();
     }
   }
 
   private startDuel(message: string): void {
     let index = 0;
     for (const player of this.state.players.values()) {
-      player.resetForDuel(index);
+      const teamId = assignTeamId(this.mode, index);
+      player.resetForMatch(getSpawnForSlot(this.mode, index), teamId);
       index++;
     }
     this.clearProjectiles();
-    this.resetAt = 0;
+    this.updatePlayerCount();
     this.state.phase = 'PLAYING';
     this.state.winnerId = '';
     this.state.message = message;
-    this.broadcast('phase', { phase: this.state.phase, message });
+    this.lock();
+    this.broadcastPhase();
   }
 
   private handleCast(client: Client, rawSpellId: string): void {
@@ -92,7 +118,7 @@ export class MagicDuelRoom extends Room<GameState> {
       return;
     }
 
-    const targets = Array.from(this.state.players.values()).filter((player) => player.id !== caster.id);
+    const targets = Array.from(this.state.players.values()).filter((player) => shouldDamagePlayer(caster, player));
     const now = Date.now();
     const result = executeSpellCast({
       caster,
@@ -139,9 +165,6 @@ export class MagicDuelRoom extends Room<GameState> {
     const now = Date.now();
 
     if (this.state.phase === 'ENDED') {
-      if (this.resetAt > 0 && now >= this.resetAt && this.state.players.size === 2) {
-        this.startDuel('Rematch started');
-      }
       return;
     }
 
@@ -183,7 +206,8 @@ export class MagicDuelRoom extends Room<GameState> {
       }
 
       for (const player of this.state.players.values()) {
-        if (player.id === projectile.ownerId || player.hp <= 0) continue;
+        const owner = this.state.players.get(projectile.ownerId);
+        if (!owner || !shouldDamagePlayer(owner, player)) continue;
         const distance = Math.hypot(projectile.x - player.x, projectile.z - player.z);
         const verticalOk = projectile.y >= player.y && projectile.y <= player.y + 2.2;
         if (verticalOk && distance <= PLAYER_RADIUS + projectile.radius) {
@@ -208,16 +232,48 @@ export class MagicDuelRoom extends Room<GameState> {
     const winner = Array.from(this.state.players.values()).find((player) => player.id !== defeated.id);
     this.state.phase = 'ENDED';
     this.state.winnerId = winner?.id ?? '';
-    this.state.message = winner ? `${winner.name} wins` : 'Duel ended';
-    this.resetAt = Date.now() + RESET_AFTER_MS;
+    this.state.message = winner ? `Team ${winner.teamId} wins` : 'Duel ended';
     this.clearProjectiles();
-    this.broadcast('phase', { phase: this.state.phase, message: this.state.message, winnerId: this.state.winnerId });
+    this.lock();
+    this.broadcastPhase();
   }
 
   private clearProjectiles(): void {
     for (const id of Array.from(this.state.projectiles.keys())) {
       this.state.projectiles.delete(id);
     }
+  }
+
+  private updatePlayerCount(): void {
+    this.state.playerCount = this.state.players.size;
+  }
+
+  private reassignWaitingPlayers(): void {
+    let index = 0;
+    for (const player of this.state.players.values()) {
+      player.resetForMatch(getSpawnForSlot(this.mode, index), assignTeamId(this.mode, index));
+      index++;
+    }
+  }
+
+  private syncLockState(): void {
+    if (shouldLockRoom(this.state.phase, this.state.playerCount, this.config)) {
+      this.lock();
+    } else {
+      this.unlock();
+    }
+  }
+
+  private broadcastPhase(): void {
+    this.broadcast('phase', {
+      phase: this.state.phase,
+      message: this.state.message,
+      mode: this.state.mode,
+      playerCount: this.state.playerCount,
+      requiredPlayers: this.state.requiredPlayers,
+      maxPlayers: this.state.maxPlayers,
+      winnerId: this.state.winnerId
+    });
   }
 }
 

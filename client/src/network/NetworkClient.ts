@@ -1,5 +1,5 @@
 import { Client, type Room } from 'colyseus.js';
-import { ROOM_NAME, type MoveInput } from '../../../shared/types';
+import { ROOM_NAME, type MatchMode, type MoveInput } from '../../../shared/types';
 import type { SpellId } from '../../../shared/spells';
 
 export type NetRoom = Room;
@@ -16,9 +16,9 @@ export class NetworkClient {
     this.client = new Client(endpoint);
   }
 
-  async connect(name: string): Promise<void> {
+  async connect(name: string, mode: MatchMode): Promise<void> {
     this.status = 'connecting';
-    this.room = await this.client.joinOrCreate(ROOM_NAME, { name });
+    this.room = await this.client.joinOrCreate(ROOM_NAME, { name, mode });
     this.status = 'connected';
 
     this.room.onStateChange((state: any) => {
@@ -46,5 +46,11 @@ export class NetworkClient {
 
   cast(spellId: SpellId): void {
     this.room?.send('cast', { spellId });
+  }
+
+  leave(): void {
+    this.room?.leave();
+    this.room = null;
+    this.status = 'offline';
   }
 }

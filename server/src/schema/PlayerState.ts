@@ -1,11 +1,12 @@
 import { Schema, type } from '@colyseus/schema';
-import { MAX_HP, MAX_MANA, SPAWNS } from '../../../shared/types.js';
+import { MAX_HP, MAX_MANA, SPAWNS, type TeamId } from '../../../shared/types.js';
 import type { SpellId } from '../../../shared/spells.js';
 import type { ServerPlayer } from '../systems/SpellSystem.js';
 
 export class PlayerState extends Schema implements ServerPlayer {
   @type('string') id = '';
   @type('string') name = 'Mage';
+  @type('string') teamId: TeamId = 'A';
   @type('number') x = 0;
   @type('number') y = 0;
   @type('number') z = 0;
@@ -23,13 +24,14 @@ export class PlayerState extends Schema implements ServerPlayer {
   cooldowns: Partial<Record<SpellId, number>> = {};
   castingUntil = 0;
 
-  constructor(id?: string, name?: string, spawnIndex = 0) {
+  constructor(id?: string, name?: string, teamId: TeamId = 'A', spawnIndex = 0) {
     super();
     if (!id) return;
 
     const spawn = SPAWNS[spawnIndex % SPAWNS.length];
     this.id = id;
     this.name = sanitizeName(name);
+    this.teamId = teamId;
     this.x = spawn.x;
     this.y = spawn.y;
     this.z = spawn.z;
@@ -37,7 +39,11 @@ export class PlayerState extends Schema implements ServerPlayer {
   }
 
   resetForDuel(spawnIndex: number): void {
-    const spawn = SPAWNS[spawnIndex % SPAWNS.length];
+    this.resetForMatch(SPAWNS[spawnIndex % SPAWNS.length], this.teamId);
+  }
+
+  resetForMatch(spawn: { x: number; y: number; z: number; rotY: number }, teamId: TeamId): void {
+    this.teamId = teamId;
     this.x = spawn.x;
     this.y = spawn.y;
     this.z = spawn.z;
