@@ -2,9 +2,10 @@ import { createServer } from 'node:http';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { ROOM_NAME } from '../../shared/types.js';
+import { resolveServerPort, serveClient } from './http/staticClient.js';
 import { MagicDuelRoom } from './rooms/MagicDuelRoom.js';
 
-const port = Number(process.env.SERVER_PORT ?? 3001);
+const port = resolveServerPort(process.env);
 
 const httpServer = createServer((request, response) => {
   if (request.url === '/health') {
@@ -13,8 +14,7 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
-  response.writeHead(200, { 'content-type': 'text/plain' });
-  response.end('VibeJam Magic Duel Colyseus server');
+  serveClient(request, response);
 });
 
 const gameServer = new Server({
@@ -26,6 +26,6 @@ const gameServer = new Server({
 gameServer.define(ROOM_NAME, MagicDuelRoom);
 
 httpServer.listen(port, () => {
-  console.log(`[server] Colyseus listening on ws://localhost:${port}`);
+  console.log(`[server] HTTP + Colyseus listening on port ${port}`);
   console.log(`[server] Room: ${ROOM_NAME}`);
 });

@@ -246,5 +246,8 @@ function resolveServerUrl(): string {
   const envUrl = import.meta.env.VITE_COLYSEUS_URL as string | undefined;
   if (envUrl) return envUrl;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${location.hostname}:3001`;
+  if (location.port === '5173') {
+    return `${protocol}//${location.hostname}:3001`;
+  }
+  return `${protocol}//${location.host}`;
 }

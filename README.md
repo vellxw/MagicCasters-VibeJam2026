@@ -33,6 +33,7 @@ npm run dev:client
 npm run test --workspace server
 npm run typecheck
 npm run build
+npm run start
 ```
 
 ## Controls
@@ -47,11 +48,30 @@ Voice casting uses browser `SpeechRecognition` / `webkitSpeechRecognition` when 
 ## Environment
 
 ```bash
+PORT=3001
 SERVER_PORT=3001
 VITE_COLYSEUS_URL=ws://localhost:3001
 ```
 
-For deployment, set `VITE_COLYSEUS_URL` to the public WebSocket URL for the Colyseus server.
+For local Vite development, the client defaults to `ws://localhost:3001`. In production, when the built client is served by the Colyseus server, the client defaults to the same origin (`wss://your-domain` on HTTPS), so Render does not need `VITE_COLYSEUS_URL`.
+
+## Render Deployment
+
+Use a Render Web Service connected to the repo branch.
+
+Build Command:
+
+```bash
+npm install && npm run build
+```
+
+Start Command:
+
+```bash
+npm run start
+```
+
+The root `start` script runs the compiled Colyseus server. The server reads `process.env.PORT`, serves `client/dist` over HTTP, and hosts Colyseus WebSockets on the same Render URL.
 
 ## Project Layout
 
