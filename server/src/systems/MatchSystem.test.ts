@@ -4,6 +4,7 @@ import {
   getMatchConfig,
   getSpawnForSlot,
   normalizeMatchMode,
+  phaseAfterPlayerLeave,
   shouldDamagePlayer,
   shouldLockRoom,
   shouldStartMatch
@@ -31,6 +32,14 @@ describe('MatchSystem', () => {
     expect(shouldLockRoom('WAITING', 1, getMatchConfig('1v1'))).toBe(false);
     expect(shouldLockRoom('WAITING', 2, getMatchConfig('1v1'))).toBe(true);
     expect(shouldLockRoom('PLAYING', 1, getMatchConfig('2v2'))).toBe(true);
+  });
+
+  it('ends an active match when a player leaves', () => {
+    expect(phaseAfterPlayerLeave('PLAYING', 1)).toBe('ENDED');
+    expect(phaseAfterPlayerLeave('PLAYING', 3)).toBe('ENDED');
+    expect(phaseAfterPlayerLeave('WAITING', 1)).toBe('WAITING');
+    expect(phaseAfterPlayerLeave('ENDED', 1)).toBe('ENDED');
+    expect(phaseAfterPlayerLeave('PLAYING', 0)).toBe('ENDED');
   });
 
   it('spawns teammates near each other and disables friendly fire', () => {

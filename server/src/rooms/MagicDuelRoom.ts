@@ -19,6 +19,7 @@ import {
   getMatchConfig,
   getSpawnForSlot,
   normalizeMatchMode,
+  phaseAfterPlayerLeave,
   shouldDamagePlayer,
   shouldLockRoom,
   shouldStartMatch
@@ -77,6 +78,7 @@ export class MagicDuelRoom extends Room<GameState> {
   }
 
   onLeave(client: Client): void {
+    const previousPhase = this.state.phase;
     this.state.players.delete(client.sessionId);
     this.inputs.delete(client.sessionId);
     this.clearProjectiles();
@@ -84,12 +86,16 @@ export class MagicDuelRoom extends Room<GameState> {
 
     const remaining = Array.from(this.state.players.values());
     if (remaining.length > 0) {
-      this.state.phase = 'WAITING';
+      this.state.phase = phaseAfterPlayerLeave(previousPhase, remaining.length);
       this.state.winnerId = '';
-      this.state.message = 'A mage left. Returning to queue.';
-      this.reassignWaitingPlayers();
+      this.state.message = this.state.phase === 'ENDED'
+        ? 'A mage left the match. Return to lobby.'
+        : 'A mage left. Returning to queue.';
+      if (this.state.phase === 'WAITING') {
+        this.reassignWaitingPlayers();
+      }
       this.broadcastPhase();
-      this.unlock();
+      this.syncLockState();
     }
   }
 

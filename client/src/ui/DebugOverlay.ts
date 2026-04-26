@@ -18,6 +18,7 @@ export class DebugOverlay {
   private queueModeEl: HTMLElement;
   private queueCountEl: HTMLElement;
   private resultsEl: HTMLElement;
+  private resultsMessageEl: HTMLElement;
   private debugEl: HTMLElement;
   private toastEl: HTMLElement;
   private spellButtons = new Map<SpellId, HTMLButtonElement>();
@@ -51,6 +52,7 @@ export class DebugOverlay {
       </div>
       <div class="results-panel" data-results>
         <strong>Match ended</strong>
+        <span data-results-message>Return to lobby to play again.</span>
         <button type="button" data-return-lobby>Return to lobby</button>
       </div>
       <div class="spell-dock" data-spells></div>
@@ -69,6 +71,7 @@ export class DebugOverlay {
     this.queueModeEl = this.element.querySelector('[data-queue-mode]')!;
     this.queueCountEl = this.element.querySelector('[data-queue-count]')!;
     this.resultsEl = this.element.querySelector('[data-results]')!;
+    this.resultsMessageEl = this.element.querySelector('[data-results-message]')!;
     this.debugEl = this.element.querySelector('[data-debug]')!;
     this.toastEl = this.element.querySelector('[data-toast]')!;
     this.element.querySelector('[data-cancel-queue]')?.addEventListener('click', () => this.onCancelQueue?.());
@@ -112,6 +115,7 @@ export class DebugOverlay {
     portalPrompt: string;
     queueActive: boolean;
     resultsActive: boolean;
+    resultsMessage: string;
   }): void {
     const hp = args.local?.hp ?? 100;
     const mana = args.local?.mana ?? 100;
@@ -129,6 +133,7 @@ export class DebugOverlay {
     this.queueModeEl.textContent = `Mode: ${labelForMode(args.selectedMode)}`;
     this.queueCountEl.textContent = `${args.playerCount} / ${args.requiredPlayers} players`;
     this.resultsEl.dataset.visible = String(args.resultsActive);
+    this.resultsMessageEl.textContent = args.resultsMessage || 'Return to lobby to play again.';
 
     const now = Date.now();
     for (const id of SPELL_IDS) {

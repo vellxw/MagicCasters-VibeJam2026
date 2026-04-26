@@ -33,6 +33,13 @@ export function shouldLockRoom(phase: RoomPhase, playerCount: number, config: Ma
   return phase === 'PLAYING' || phase === 'ENDED' || playerCount >= config.maxPlayers;
 }
 
+export function phaseAfterPlayerLeave(previousPhase: RoomPhase, remainingPlayers: number): RoomPhase {
+  if (previousPhase === 'PLAYING' || previousPhase === 'ENDED' || remainingPlayers <= 0) {
+    return 'ENDED';
+  }
+  return 'WAITING';
+}
+
 export function shouldDamagePlayer(attacker: ServerPlayer, target: ServerPlayer): boolean {
   return attacker.id !== target.id && attacker.teamId !== target.teamId && target.hp > 0;
 }

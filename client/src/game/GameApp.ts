@@ -43,6 +43,7 @@ export class GameApp {
   private sceneMode: SceneMode = 'LOBBY';
   private selectedMode: MatchMode | null = null;
   private phase = 'WAITING';
+  private phaseMessage = '';
   private localControllerId: string | null = null;
   private localPlayerBound = false;
   private controlsEnabled = false;
@@ -166,6 +167,7 @@ export class GameApp {
 
   private applyState(state: any): void {
     this.phase = state.phase ?? this.phase;
+    this.phaseMessage = state.message ?? this.phaseMessage;
     this.selectedMode = state.mode ?? this.selectedMode;
     if ((this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY') && this.phase === 'PLAYING') {
       this.enterMatch();
@@ -202,6 +204,7 @@ export class GameApp {
   private handleNetEvent(type: string, payload: any): void {
     if (type === 'phase') {
       this.phase = payload.phase;
+      this.phaseMessage = payload.message ?? this.phaseMessage;
       this.syncControlState();
       if ((this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY') && payload.phase === 'PLAYING') {
         this.enterMatch();
@@ -249,7 +252,8 @@ export class GameApp {
       controlsEnabled: this.controlsEnabled,
       portalPrompt: this.sceneMode === 'LOBBY' && portal ? `Press E: ${portal.label}` : '',
       queueActive: this.sceneMode === 'QUEUE',
-      resultsActive: this.sceneMode === 'RESULTS'
+      resultsActive: this.sceneMode === 'RESULTS',
+      resultsMessage: this.phaseMessage
     });
     this.renderer.render(this.scene, this.camera);
   }
@@ -346,6 +350,7 @@ export class GameApp {
     this.sceneMode = 'LOBBY';
     this.selectedMode = null;
     this.phase = 'WAITING';
+    this.phaseMessage = '';
     this.controlsEnabled = false;
     this.localPlayerBound = false;
     this.clearMatchScene();
@@ -361,6 +366,7 @@ export class GameApp {
     this.sceneMode = 'QUEUE';
     this.selectedMode = mode;
     this.phase = 'WAITING';
+    this.phaseMessage = `Finding ${mode}`;
     this.playerSnapshots.clear();
     this.projectileSnapshots = [];
     this.clearMatchScene();
@@ -397,7 +403,7 @@ export class GameApp {
     this.sceneMode = 'RESULTS';
     this.controlsEnabled = false;
     this.keys.clear();
-    this.ui.showToast('Match ended');
+    this.ui.showToast(this.phaseMessage || 'Match ended');
   }
 
   private returnToLobby(): void {
