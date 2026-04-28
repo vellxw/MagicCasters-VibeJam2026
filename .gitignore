@@ -10,5 +10,4 @@ server/dist
 logs/
 _legacy_snapshot/
 .playwright-mcp/
-client/public/splats/*.sog
 mobile-landscape-smoke.png
