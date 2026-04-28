@@ -91,6 +91,9 @@ export class GameApp {
   private projectileSnapshots: ProjectileSnapshot[] = [];
   private keys = new Set<string>();
   private jumpQueued = false;
+  private lastJumpActionAt = 0;
+  private dashQueued = false;
+  private dashQueuedAt = 0;
   private localName = `Mage ${Math.floor(Math.random() * 900 + 100)}`;
   private aimYaw = 0;
   private aimPitch = 0;
@@ -286,7 +289,7 @@ export class GameApp {
     if (event.code === 'Space') {
       event.preventDefault();
       if (down && !event.repeat) {
-        this.jumpQueued = true;
+        this.queueJumpOrDash();
       }
     }
 
@@ -409,6 +412,7 @@ export class GameApp {
     const dt = Math.min(0.05, this.clock.getDelta());
 
     this.applyTouchCameraDelta();
+    this.applyTouchAction();
     this.updateScene(dt);
     this.sendMoveIfNeeded();
     this.vfx.update(dt);
@@ -489,14 +493,17 @@ export class GameApp {
     }
   }
 
-  private currentInput(consumeJump = false): MoveInput {
+  private currentInput(consumeActions = false): MoveInput {
     const touch = this.touchControls.getMovement();
+    const jump = consumeActions ? this.consumeJumpQueued() : false;
+    const dash = consumeActions && !jump ? this.consumeDashQueuedIfReady() : false;
     return {
       forward: this.keys.has('w') || this.keys.has('arrowup') || touch.forward,
       backward: this.keys.has('s') || this.keys.has('arrowdown') || touch.backward,
       left: this.keys.has('a') || this.keys.has('arrowleft') || touch.left,
       right: this.keys.has('d') || this.keys.has('arrowright') || touch.right,
-      jump: consumeJump ? this.consumeJumpQueued() : false,
+      jump,
+      dash,
       rotY: this.aimYaw
     };
   }
@@ -505,6 +512,59 @@ export class GameApp {
     const queued = this.jumpQueued;
     this.jumpQueued = false;
     return queued;
+  }
+
+  private consumeDashQueuedIfReady(): boolean {
+    if (!this.dashQueued) return false;
+    if (this.sceneMode !== 'MATCH') {
+      this.dashQueued = false;
+      return false;
+    }
+
+    const waitedMs = performance.now() - this.dashQueuedAt;
+    if (!this.isLocalPlayerAirborne()) {
+      if (waitedMs < 700) return false;
+      this.dashQueued = false;
+      return false;
+    }
+
+    this.dashQueued = false;
+    return true;
+  }
+
+  private queueJumpOrDash(): void {
+    if (this.sceneMode === 'MATCH' && (this.jumpQueued || this.isLocalPlayerAirborne() || this.recentlyRequestedJump())) {
+      this.dashQueued = true;
+      this.dashQueuedAt = performance.now();
+      return;
+    }
+
+    this.jumpQueued = true;
+    this.lastJumpActionAt = performance.now();
+  }
+
+  private recentlyRequestedJump(): boolean {
+    return performance.now() - this.lastJumpActionAt < 500;
+  }
+
+  private applyTouchAction(): void {
+    if (this.touchControls.consumeActionQueued()) {
+      this.queueJumpOrDash();
+    }
+  }
+
+  private isLocalPlayerAirborne(): boolean {
+    const local = this.getLocalSnapshot();
+    if (!local) return false;
+    const floorY = this.getArenaDebugInfo()?.floorY ?? 0;
+    return local.y > floorY + 0.08;
+  }
+
+  private clearQueuedActions(): void {
+    this.jumpQueued = false;
+    this.lastJumpActionAt = 0;
+    this.dashQueued = false;
+    this.dashQueuedAt = 0;
   }
 
   private ensurePlayerController(player: PlayerSnapshot): void {
@@ -545,6 +605,7 @@ export class GameApp {
 
     if (!this.controlsEnabled) {
       this.keys.clear();
+      this.clearQueuedActions();
     }
   }
 
@@ -560,7 +621,7 @@ export class GameApp {
     this.phaseMessage = '';
     this.controlsEnabled = false;
     this.localPlayerBound = false;
-    this.jumpQueued = false;
+    this.clearQueuedActions();
     this.touchControls.reset();
     this.clearMatchScene();
     this.network.leave();
@@ -579,6 +640,7 @@ export class GameApp {
     this.phaseMessage = 'Local splat calibration';
     this.controlsEnabled = true;
     this.localPlayerBound = false;
+    this.clearQueuedActions();
     this.playerSnapshots.clear();
     this.projectileSnapshots = [];
     this.vfx.syncProjectiles([]);
@@ -655,6 +717,7 @@ export class GameApp {
     this.selectedArenaDisplayName = '';
     this.phase = 'WAITING';
     this.phaseMessage = `Finding ${mode}`;
+    this.clearQueuedActions();
     this.playerSnapshots.clear();
     this.projectileSnapshots = [];
     this.touchControls.reset();
@@ -703,7 +766,7 @@ export class GameApp {
     this.sceneMode = 'RESULTS';
     this.controlsEnabled = false;
     this.keys.clear();
-    this.jumpQueued = false;
+    this.clearQueuedActions();
     this.touchControls.reset();
     this.ui.showToast(this.phaseMessage || 'Match ended');
   }

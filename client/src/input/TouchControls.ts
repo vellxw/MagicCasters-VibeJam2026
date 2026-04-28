@@ -12,6 +12,7 @@ const STICK_DEAD_ZONE = 12;
 const MOVE_AXIS_THRESHOLD = 0.38;
 const CAMERA_YAW_SENSITIVITY = 0.0035;
 const CAMERA_PITCH_SENSITIVITY = 0.0028;
+const RIGHT_TAP_MAX_MOVEMENT = 10;
 
 export class TouchControls {
   readonly element: HTMLDivElement;
@@ -22,8 +23,11 @@ export class TouchControls {
   private lookPointerId: number | null = null;
   private movementOrigin: TouchVector = { x: 0, y: 0 };
   private movementDelta: TouchVector = { x: 0, y: 0 };
+  private lookStartPoint: TouchVector = { x: 0, y: 0 };
   private lastLookPoint: TouchVector = { x: 0, y: 0 };
+  private lookHasDragged = false;
   private pendingCameraDelta = { yaw: 0, pitch: 0 };
+  private actionQueued = false;
 
   constructor(parent: HTMLElement) {
     this.element = document.createElement('div');
@@ -56,11 +60,19 @@ export class TouchControls {
     return delta;
   }
 
+  consumeActionQueued(): boolean {
+    const queued = this.actionQueued;
+    this.actionQueued = false;
+    return queued;
+  }
+
   reset(): void {
     this.movementPointerId = null;
     this.lookPointerId = null;
     this.movementDelta = { x: 0, y: 0 };
+    this.lookHasDragged = false;
     this.pendingCameraDelta = { yaw: 0, pitch: 0 };
+    this.actionQueued = false;
     this.hideStick();
   }
 
@@ -84,7 +96,9 @@ export class TouchControls {
 
     if (!isLeftHalf && this.lookPointerId === null) {
       this.lookPointerId = event.pointerId;
+      this.lookStartPoint = point;
       this.lastLookPoint = point;
+      this.lookHasDragged = false;
       this.capturePointer(event.pointerId);
       event.preventDefault();
     }
@@ -106,9 +120,12 @@ export class TouchControls {
     }
 
     if (event.pointerId === this.lookPointerId) {
-      const delta = cameraDeltaFromDrag(point.x - this.lastLookPoint.x, point.y - this.lastLookPoint.y);
-      this.pendingCameraDelta.yaw += delta.yaw;
-      this.pendingCameraDelta.pitch += delta.pitch;
+      if (this.lookHasDragged || !isTapGesture(this.lookStartPoint, point)) {
+        this.lookHasDragged = true;
+        const delta = cameraDeltaFromDrag(point.x - this.lastLookPoint.x, point.y - this.lastLookPoint.y);
+        this.pendingCameraDelta.yaw += delta.yaw;
+        this.pendingCameraDelta.pitch += delta.pitch;
+      }
       this.lastLookPoint = point;
       event.preventDefault();
     }
@@ -122,7 +139,15 @@ export class TouchControls {
     }
 
     if (event.pointerId === this.lookPointerId) {
+      const point = this.pointFromEvent(event);
+      const completedTap = event.type === 'pointerup'
+        && !this.lookHasDragged
+        && isTapGesture(this.lookStartPoint, point);
+      if (completedTap) {
+        this.actionQueued = true;
+      }
       this.lookPointerId = null;
+      this.lookHasDragged = false;
     }
   }
 
@@ -149,6 +174,11 @@ export class TouchControls {
     } catch {
       // Synthetic browser tests may not create capturable pointers; real touches still capture.
     }
+  }
+
+  private pointFromEvent(event: PointerEvent): TouchVector {
+    const bounds = this.element.getBoundingClientRect();
+    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   }
 }
 
@@ -186,6 +216,10 @@ export function cameraDeltaFromDrag(movementX: number, movementY: number): { yaw
     yaw: round(-movementX * CAMERA_YAW_SENSITIVITY),
     pitch: round(-movementY * CAMERA_PITCH_SENSITIVITY)
   };
+}
+
+export function isTapGesture(start: TouchVector, end: TouchVector, maxMovement = RIGHT_TAP_MAX_MOVEMENT): boolean {
+  return Math.hypot(end.x - start.x, end.y - start.y) <= maxMovement;
 }
 
 function round(value: number): number {

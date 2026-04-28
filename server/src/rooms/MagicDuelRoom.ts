@@ -366,7 +366,7 @@ export class MagicDuelRoom extends Room<GameState> {
 }
 
 function emptyInput(): MoveInput {
-  return { forward: false, backward: false, left: false, right: false, jump: false, rotY: 0 };
+  return { forward: false, backward: false, left: false, right: false, jump: false, dash: false, rotY: 0 };
 }
 
 function normalizeInput(input: MoveInput): MoveInput {
@@ -376,6 +376,7 @@ function normalizeInput(input: MoveInput): MoveInput {
     left: Boolean(input?.left),
     right: Boolean(input?.right),
     jump: Boolean(input?.jump),
+    dash: Boolean(input?.dash),
     rotY: typeof input?.rotY === 'number' && Number.isFinite(input.rotY) ? input.rotY : 0
   };
 }

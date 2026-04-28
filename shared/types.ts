@@ -10,6 +10,7 @@ export const PLAYER_SPEED = 5.8;
 export const PLAYER_JUMP_VELOCITY = 6.4;
 export const PLAYER_GRAVITY = 18.5;
 export const PLAYER_CLIMB_SPEED = 3.2;
+export const PLAYER_AIR_DASH_DISTANCE = 2.4;
 export const PLAYER_OBSTACLE_CLEARANCE = 0.04;
 export const PLAYER_SURFACE_SNAP_TOLERANCE = 0.08;
 export const MANA_REGEN_PER_SECOND = 6;
@@ -105,6 +106,7 @@ export interface MoveInput {
   left: boolean;
   right: boolean;
   jump?: boolean;
+  dash?: boolean;
   rotY?: number;
   aimX?: number;
   aimZ?: number;

@@ -12,6 +12,7 @@ export interface ServerPlayer {
   z: number;
   rotY: number;
   velocityY?: number;
+  airDashAvailable?: boolean;
   hp: number;
   mana: number;
   cooldowns: Partial<Record<SpellId, number>>;
@@ -48,6 +49,7 @@ export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer
     z: 0,
     rotY: 0,
     velocityY: 0,
+    airDashAvailable: true,
     hp: MAX_HP,
     mana: MAX_MANA,
     cooldowns: {},

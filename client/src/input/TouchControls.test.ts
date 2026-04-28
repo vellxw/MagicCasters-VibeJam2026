@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cameraDeltaFromDrag,
+  isTapGesture,
   movementFromStickDelta,
   normalizeStickDelta
 } from './TouchControls';
@@ -39,5 +40,13 @@ describe('mobile touch control mapping', () => {
       yaw: -0.14,
       pitch: 0.056
     });
+  });
+
+  it('treats a short right-side touch as an action tap', () => {
+    expect(isTapGesture({ x: 240, y: 80 }, { x: 246, y: 84 })).toBe(true);
+  });
+
+  it('does not treat camera drags as action taps', () => {
+    expect(isTapGesture({ x: 240, y: 80 }, { x: 272, y: 86 })).toBe(false);
   });
 });

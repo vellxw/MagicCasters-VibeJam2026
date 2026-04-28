@@ -2,6 +2,7 @@ import {
   ARENA_BOUNDS,
   MAX_MANA,
   MANA_REGEN_PER_SECOND,
+  PLAYER_AIR_DASH_DISTANCE,
   PLAYER_CLIMB_SPEED,
   PLAYER_GRAVITY,
   PLAYER_JUMP_VELOCITY,
@@ -58,18 +59,27 @@ export function applyMovement(
   }
 
   const bounds = arenaCollision?.bounds ?? ARENA_BOUNDS;
+  const floorY = arenaCollision?.floorY ?? 0;
+  const walls = arenaCollision?.collisionWalls ?? [];
+  const collisionErasers = arenaCollision?.collisionErasers ?? [];
+  const groundY = findStandingSurfaceY(player.x, player.z, player.y, floorY, walls, undefined, undefined, {
+    voxelCollision: voxelCollision ?? null,
+    collisionErasers
+  });
+  const grounded = Math.abs(player.y - groundY) <= 0.02;
+  const dashDistance = consumeAirDash(player, input, grounded, length);
   const resolved = moveWithArenaCollision(
     player.x,
     player.z,
-    player.x + moveX * PLAYER_SPEED * dt,
-    player.z + moveZ * PLAYER_SPEED * dt,
+    player.x + moveX * (PLAYER_SPEED * dt + dashDistance),
+    player.z + moveZ * (PLAYER_SPEED * dt + dashDistance),
     bounds,
-    arenaCollision?.collisionWalls ?? [],
+    walls,
     {
       playerY: player.y,
-      floorY: arenaCollision?.floorY ?? 0,
+      floorY,
       voxelCollision,
-      collisionErasers: arenaCollision?.collisionErasers ?? []
+      collisionErasers
     }
   );
   player.x = clamp(resolved.x, bounds.minX, bounds.maxX);
@@ -98,6 +108,7 @@ function applyJumpAndGravity(
     const climbDirection = (input.forward || input.jump ? 1 : 0) - (input.backward ? 1 : 0);
     player.y = clamp(player.y + climbDirection * PLAYER_CLIMB_SPEED * dt, floorY, maxY);
     player.velocityY = 0;
+    player.airDashAvailable = true;
     return;
   }
 
@@ -111,9 +122,11 @@ function applyJumpAndGravity(
   if (grounded && input.jump) {
     player.y = groundY;
     velocityY = PLAYER_JUMP_VELOCITY;
+    player.airDashAvailable = true;
   } else if (grounded && velocityY <= 0) {
     player.y = groundY;
     velocityY = 0;
+    player.airDashAvailable = true;
   }
 
   if (!grounded || velocityY > 0) {
@@ -137,5 +150,26 @@ function applyJumpAndGravity(
     velocityY = vertical.velocityY;
   }
 
+  const landedGroundY = findStandingSurfaceY(player.x, player.z, player.y, floorY, walls, undefined, undefined, {
+    voxelCollision: voxelCollision ?? null,
+    collisionErasers
+  });
+  if (velocityY === 0 && Math.abs(player.y - landedGroundY) <= 0.02) {
+    player.airDashAvailable = true;
+  }
+
   player.velocityY = velocityY;
+}
+
+function consumeAirDash(player: ServerPlayer, input: MoveInput, grounded: boolean, movementLength: number): number {
+  if (grounded) {
+    player.airDashAvailable = true;
+    return 0;
+  }
+  if (!input.dash || player.airDashAvailable === false || movementLength <= 0) {
+    return 0;
+  }
+
+  player.airDashAvailable = false;
+  return PLAYER_AIR_DASH_DISTANCE;
 }

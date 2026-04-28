@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARENA_BOUNDS, MAX_MANA, PLAYER_SPEED } from '../../../shared/types';
+import { ARENA_BOUNDS, MAX_MANA, PLAYER_AIR_DASH_DISTANCE, PLAYER_SPEED } from '../../../shared/types';
 import { createTestPlayer } from './SpellSystem';
 import { applyMovement, regenerateMana } from './MovementSystem';
 
@@ -127,5 +127,52 @@ describe('MovementSystem', () => {
 
     expect(player.y).toBe(0);
     expect(player.velocityY).toBe(0);
+  });
+
+  it('air dashes once in the current movement direction while airborne', () => {
+    const player = createTestPlayer('air-dasher');
+    player.y = 1;
+    player.velocityY = 0;
+    player.rotY = 0;
+
+    applyMovement(
+      player,
+      { forward: true, backward: false, left: false, right: false, dash: true },
+      0.05
+    );
+
+    expect(player.z).toBeCloseTo(-(PLAYER_SPEED * 0.05 + PLAYER_AIR_DASH_DISTANCE), 5);
+    expect(player.airDashAvailable).toBe(false);
+  });
+
+  it('refreshes the air dash only after the player lands again', () => {
+    const player = createTestPlayer('single-air-dash');
+    player.y = 1;
+    player.velocityY = 0;
+    player.rotY = 0;
+    const dt = 0.05;
+
+    applyMovement(
+      player,
+      { forward: true, backward: false, left: false, right: false, dash: true },
+      dt
+    );
+    const afterFirstDash = player.z;
+
+    applyMovement(
+      player,
+      { forward: true, backward: false, left: false, right: false, dash: true },
+      dt
+    );
+
+    expect(player.z).toBeCloseTo(afterFirstDash - PLAYER_SPEED * dt, 5);
+    expect(player.airDashAvailable).toBe(false);
+
+    for (let index = 0; index < 30; index++) {
+      applyMovement(player, { forward: false, backward: false, left: false, right: false, jump: false }, dt);
+    }
+
+    expect(player.y).toBe(0);
+    expect(player.airDashAvailable).toBe(true);
   });
 });
