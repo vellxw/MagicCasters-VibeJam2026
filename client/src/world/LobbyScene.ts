@@ -1,9 +1,17 @@
 import * as THREE from 'three';
-import type { MatchMode, MoveInput } from '../../../shared/types';
+import {
+  PLAYER_GRAVITY,
+  PLAYER_JUMP_VELOCITY,
+  SPLAT_TEST_ARENA_ID,
+  type ArenaId,
+  type MatchMode,
+  type MoveInput
+} from '../../../shared/types';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
 
 export interface LobbyPortal {
   mode: MatchMode;
+  arenaId?: ArenaId;
   label: string;
   position: THREE.Vector3;
   mesh: THREE.Mesh;
@@ -15,11 +23,13 @@ const LOBBY_BOUNDS = {
   minZ: -5,
   maxZ: 5
 };
+const LOBBY_FLOOR_Y = 0;
 
 export class LobbyScene {
   readonly group = new THREE.Group();
   readonly portals: LobbyPortal[] = [];
   readonly player: LocalPlayerController;
+  private velocityY = 0;
 
   private snapshot: PlayerSnapshot = {
     id: 'lobby-local',
@@ -27,7 +37,7 @@ export class LobbyScene {
     teamId: 'A',
     x: 0,
     y: 0,
-    z: 2.8,
+    z: 4.45,
     rotY: 0,
     hp: 100,
     mana: 100,
@@ -40,6 +50,7 @@ export class LobbyScene {
     this.scene.add(this.group);
     this.buildEnvironment();
     this.player = new LocalPlayerController(this.group, true, 'A');
+    this.player.setFirstPersonHidden(true);
     this.player.setName('You');
     this.player.update(this.snapshot, 1, true);
   }
@@ -64,13 +75,38 @@ export class LobbyScene {
 
     this.snapshot.x = clamp(this.snapshot.x + mx * 4.8 * dt, LOBBY_BOUNDS.minX, LOBBY_BOUNDS.maxX);
     this.snapshot.z = clamp(this.snapshot.z + mz * 4.8 * dt, LOBBY_BOUNDS.minZ, LOBBY_BOUNDS.maxZ);
-    this.snapshot.anim = length > 0 ? 'run' : 'idle';
+    this.applyJump(input, dt);
+    this.snapshot.anim = this.snapshot.y > LOBBY_FLOOR_Y + 0.03 || Math.abs(this.velocityY) > 0.01
+      ? 'jump'
+      : length > 0 ? 'run' : 'idle';
     this.player.update(this.snapshot, dt, true);
 
+    const nearest = this.nearestPortal();
     for (const portal of this.portals) {
       portal.mesh.rotation.y += dt * 0.8;
-      const near = this.nearestPortal()?.mode === portal.mode;
+      const near = nearest === portal;
       portal.mesh.scale.setScalar(near ? 1.12 : 1);
+    }
+  }
+
+  private applyJump(input: MoveInput, dt: number): void {
+    const grounded = this.snapshot.y <= LOBBY_FLOOR_Y + 0.02;
+    if (grounded && input.jump) {
+      this.snapshot.y = LOBBY_FLOOR_Y;
+      this.velocityY = PLAYER_JUMP_VELOCITY;
+    } else if (grounded && this.velocityY <= 0) {
+      this.snapshot.y = LOBBY_FLOOR_Y;
+      this.velocityY = 0;
+    }
+
+    if (!grounded || this.velocityY > 0) {
+      this.velocityY -= PLAYER_GRAVITY * dt;
+      this.snapshot.y += this.velocityY * dt;
+    }
+
+    if (this.snapshot.y <= LOBBY_FLOOR_Y) {
+      this.snapshot.y = LOBBY_FLOOR_Y;
+      this.velocityY = 0;
     }
   }
 
@@ -124,11 +160,22 @@ export class LobbyScene {
     ring.position.y = 0.02;
     this.group.add(ring);
 
-    this.createPortal('1v1', '1v1 Duel', -3.6, -2.2, 0xff6b35);
-    this.createPortal('2v2', '2v2 Team Duel', 3.6, -2.2, 0x7dd3fc);
+    this.createPortal('1v1', '1v1 Duel', -4.4, -2.25, 0xff6b35);
+    this.createPortal('2v2', '2v2 Team Duel', 4.4, -2.25, 0x7dd3fc);
+    this.createPortal('1v1', 'Realistic Arena Test', 0, 1.75, 0xa78bfa, {
+      arenaId: SPLAT_TEST_ARENA_ID,
+      badge: 'EXPERIMENTAL'
+    });
   }
 
-  private createPortal(mode: MatchMode, label: string, x: number, z: number, color: number): void {
+  private createPortal(
+    mode: MatchMode,
+    label: string,
+    x: number,
+    z: number,
+    color: number,
+    options: { arenaId?: ArenaId; badge?: string } = {}
+  ): void {
     const mesh = new THREE.Mesh(
       new THREE.TorusGeometry(0.75, 0.08, 10, 48),
       new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.1, roughness: 0.22 })
@@ -144,29 +191,34 @@ export class LobbyScene {
     base.position.set(x, 0.075, z);
     this.group.add(base);
 
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(label), transparent: true }));
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(label, options.badge), transparent: true }));
     sprite.position.set(x, 2.35, z);
-    sprite.scale.set(2.4, 0.55, 1);
+    sprite.scale.set(options.badge ? 3.1 : 2.4, options.badge ? 0.8 : 0.55, 1);
     this.group.add(sprite);
 
-    this.portals.push({ mode, label, position: new THREE.Vector3(x, 0, z), mesh });
+    this.portals.push({ mode, arenaId: options.arenaId, label, position: new THREE.Vector3(x, 0, z), mesh });
   }
 }
 
-function makeLabelTexture(label: string): THREE.CanvasTexture {
+function makeLabelTexture(label: string, badge?: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 320;
-  canvas.height = 80;
+  canvas.width = 420;
+  canvas.height = badge ? 108 : 80;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = 'rgba(21,18,15,0.78)';
-  ctx.fillRect(0, 10, 320, 60);
+  ctx.fillRect(0, 10, canvas.width, canvas.height - 20);
   ctx.strokeStyle = 'rgba(247,231,198,0.36)';
-  ctx.strokeRect(0.5, 10.5, 319, 59);
+  ctx.strokeRect(0.5, 10.5, canvas.width - 1, canvas.height - 21);
   ctx.fillStyle = '#f7e7c6';
-  ctx.font = 'bold 28px Trebuchet MS, sans-serif';
+  ctx.font = `bold ${label.length > 16 ? 24 : 28}px Trebuchet MS, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label, 160, 40);
+  ctx.fillText(label, canvas.width / 2, badge ? 39 : 40);
+  if (badge) {
+    ctx.fillStyle = '#a78bfa';
+    ctx.font = 'bold 17px Trebuchet MS, sans-serif';
+    ctx.fillText(badge, canvas.width / 2, 72);
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;

@@ -1,0 +1,9 @@
+{
+  "generatedBy": "magic-casters-splat-collision-cli",
+  "arenaId": "maison-provence",
+  "splatFilename": "Maison Provence.sog",
+  "collisionMeshUrl": "/collision/maison-provence.collision.glb",
+  "voxelCollisionUrl": "/collision/maison-provence.voxel.json",
+  "filterBox": "-9.25,-0.75,-7.25,9.25,5,7.25",
+  "generatedAt": "2026-04-27T23:45:48-03:00"
+}

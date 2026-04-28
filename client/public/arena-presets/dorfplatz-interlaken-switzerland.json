@@ -1,0 +1,88 @@
+{
+  "presetId": "dorfplatz-interlaken-switzerland",
+  "presetVersion": 1,
+  "arenaId": "splat-test",
+  "displayName": "Dorfplatz Interlaken Switzerland",
+  "type": "splat",
+  "splatUrl": "/splats/Dorfplatz Interlaken Switzerland.sog",
+  "splatFileSizeBytes": 56040892,
+  "enabledModes": [],
+  "collisionMeshUrl": "/collision/dorfplatz-interlaken-switzerland.collision.glb",
+  "voxelCollisionUrl": "/collision/dorfplatz-interlaken-switzerland.voxel.json",
+  "spawnPoints": [
+    {
+      "x": -5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": -1.5707963268
+    },
+    {
+      "x": 5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": 1.5707963268
+    }
+  ],
+  "spawnPointsByMode": {
+    "1v1": [
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": -1.5707963268
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": 1.5707963268
+      }
+    ],
+    "2v2": [
+      {
+        "x": -5.8,
+        "y": 0,
+        "z": -1.25,
+        "rotY": -1.5707963268
+      },
+      {
+        "x": 5.8,
+        "y": 0,
+        "z": 1.25,
+        "rotY": 1.5707963268
+      },
+      {
+        "x": -5.8,
+        "y": 0,
+        "z": 1.25,
+        "rotY": -1.5707963268
+      },
+      {
+        "x": 5.8,
+        "y": 0,
+        "z": -1.25,
+        "rotY": 1.5707963268
+      }
+    ]
+  },
+  "bounds": {
+    "minX": -8,
+    "maxX": 8,
+    "minZ": -6,
+    "maxZ": 6
+  },
+  "scale": 1,
+  "rotation": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "floorY": 0,
+  "collisionErasers": [],
+  "collisionWalls": []
+}

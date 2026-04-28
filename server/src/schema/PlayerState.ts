@@ -23,6 +23,7 @@ export class PlayerState extends Schema implements ServerPlayer {
 
   cooldowns: Partial<Record<SpellId, number>> = {};
   castingUntil = 0;
+  velocityY = 0;
 
   constructor(id?: string, name?: string, teamId: TeamId = 'A', spawnIndex = 0) {
     super();
@@ -48,6 +49,7 @@ export class PlayerState extends Schema implements ServerPlayer {
     this.y = spawn.y;
     this.z = spawn.z;
     this.rotY = spawn.rotY;
+    this.velocityY = 0;
     this.anim = 'idle';
     this.hp = MAX_HP;
     this.mana = MAX_MANA;

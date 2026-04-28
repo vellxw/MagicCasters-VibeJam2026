@@ -1,0 +1,88 @@
+{
+  "presetId": "maison-provence",
+  "presetVersion": 1,
+  "arenaId": "splat-test",
+  "displayName": "Maison Provence",
+  "type": "splat",
+  "splatUrl": "/splats/Maison Provence.sog",
+  "splatFileSizeBytes": 142759493,
+  "enabledModes": [],
+  "collisionMeshUrl": "/collision/maison-provence.collision.glb",
+  "voxelCollisionUrl": "/collision/maison-provence.voxel.json",
+  "spawnPoints": [
+    {
+      "x": -5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": -1.5707963268
+    },
+    {
+      "x": 5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": 1.5707963268
+    }
+  ],
+  "spawnPointsByMode": {
+    "1v1": [
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": -1.5707963268
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": 1.5707963268
+      }
+    ],
+    "2v2": [
+      {
+        "x": -5.8,
+        "y": 0,
+        "z": -1.25,
+        "rotY": -1.5707963268
+      },
+      {
+        "x": 5.8,
+        "y": 0,
+        "z": 1.25,
+        "rotY": 1.5707963268
+      },
+      {
+        "x": -5.8,
+        "y": 0,
+        "z": 1.25,
+        "rotY": -1.5707963268
+      },
+      {
+        "x": 5.8,
+        "y": 0,
+        "z": -1.25,
+        "rotY": 1.5707963268
+      }
+    ]
+  },
+  "bounds": {
+    "minX": -8,
+    "maxX": 8,
+    "minZ": -6,
+    "maxZ": 6
+  },
+  "scale": 1,
+  "rotation": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "floorY": 0,
+  "collisionErasers": [],
+  "collisionWalls": []
+}

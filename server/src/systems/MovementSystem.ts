@@ -2,12 +2,29 @@ import {
   ARENA_BOUNDS,
   MAX_MANA,
   MANA_REGEN_PER_SECOND,
+  PLAYER_CLIMB_SPEED,
+  PLAYER_GRAVITY,
+  PLAYER_JUMP_VELOCITY,
   PLAYER_SPEED,
+  type ArenaCollisionConfig,
   type MoveInput
 } from '../../../shared/types.js';
+import type { SparseVoxelCollision } from '../../../shared/voxelCollision.js';
+import {
+  findClimbableWall,
+  findStandingSurfaceY,
+  moveWithArenaCollision,
+  resolveArenaVerticalCollision
+} from '../../../shared/arenaCollision.js';
 import { clamp, directionFromRotation, type ServerPlayer } from './SpellSystem.js';
 
-export function applyMovement(player: ServerPlayer, input: MoveInput, dt: number): void {
+export function applyMovement(
+  player: ServerPlayer,
+  input: MoveInput,
+  dt: number,
+  arenaCollision?: ArenaCollisionConfig,
+  voxelCollision?: SparseVoxelCollision | null
+): void {
   const forward = directionFromRotation(player.rotY);
   const right = {
     x: Math.cos(player.rotY),
@@ -40,10 +57,85 @@ export function applyMovement(player: ServerPlayer, input: MoveInput, dt: number
     moveZ /= length;
   }
 
-  player.x = clamp(player.x + moveX * PLAYER_SPEED * dt, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
-  player.z = clamp(player.z + moveZ * PLAYER_SPEED * dt, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
+  const bounds = arenaCollision?.bounds ?? ARENA_BOUNDS;
+  const resolved = moveWithArenaCollision(
+    player.x,
+    player.z,
+    player.x + moveX * PLAYER_SPEED * dt,
+    player.z + moveZ * PLAYER_SPEED * dt,
+    bounds,
+    arenaCollision?.collisionWalls ?? [],
+    {
+      playerY: player.y,
+      floorY: arenaCollision?.floorY ?? 0,
+      voxelCollision,
+      collisionErasers: arenaCollision?.collisionErasers ?? []
+    }
+  );
+  player.x = clamp(resolved.x, bounds.minX, bounds.maxX);
+  player.z = clamp(resolved.z, bounds.minZ, bounds.maxZ);
+
+  applyJumpAndGravity(player, input, dt, arenaCollision, voxelCollision);
 }
 
 export function regenerateMana(player: ServerPlayer, dt: number): void {
   player.mana = Math.min(MAX_MANA, player.mana + MANA_REGEN_PER_SECOND * dt);
+}
+
+function applyJumpAndGravity(
+  player: ServerPlayer,
+  input: MoveInput,
+  dt: number,
+  arenaCollision?: ArenaCollisionConfig,
+  voxelCollision?: SparseVoxelCollision | null
+): void {
+  const floorY = arenaCollision?.floorY ?? 0;
+  const walls = arenaCollision?.collisionWalls ?? [];
+  const collisionErasers = arenaCollision?.collisionErasers ?? [];
+  const climbableWall = findClimbableWall(player.x, player.z, walls);
+  if (climbableWall) {
+    const maxY = floorY + Math.max(0.1, climbableWall.height);
+    const climbDirection = (input.forward || input.jump ? 1 : 0) - (input.backward ? 1 : 0);
+    player.y = clamp(player.y + climbDirection * PLAYER_CLIMB_SPEED * dt, floorY, maxY);
+    player.velocityY = 0;
+    return;
+  }
+
+  const groundY = findStandingSurfaceY(player.x, player.z, player.y, floorY, walls, undefined, undefined, {
+    voxelCollision: voxelCollision ?? null,
+    collisionErasers
+  });
+  const grounded = Math.abs(player.y - groundY) <= 0.02;
+  let velocityY = player.velocityY ?? 0;
+
+  if (grounded && input.jump) {
+    player.y = groundY;
+    velocityY = PLAYER_JUMP_VELOCITY;
+  } else if (grounded && velocityY <= 0) {
+    player.y = groundY;
+    velocityY = 0;
+  }
+
+  if (!grounded || velocityY > 0) {
+    const previousY = player.y;
+    velocityY -= PLAYER_GRAVITY * dt;
+    const vertical = resolveArenaVerticalCollision(
+      player.x,
+      player.z,
+      previousY,
+      player.y + velocityY * dt,
+      velocityY,
+      floorY,
+      walls,
+      undefined,
+      {
+        voxelCollision: voxelCollision ?? null,
+        collisionErasers
+      }
+    );
+    player.y = vertical.y;
+    velocityY = vertical.velocityY;
+  }
+
+  player.velocityY = velocityY;
 }

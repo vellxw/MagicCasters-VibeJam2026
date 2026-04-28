@@ -1,19 +1,28 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { Client } from '@colyseus/core';
 import { Room } from '@colyseus/core';
 import { SPELLS, isSpellId, type SpellId } from '../../../shared/spells.js';
 import {
-  ARENA_BOUNDS,
+  DEFAULT_ARENA_ID,
   PLAYER_RADIUS,
+  SPLAT_TEST_ARENA_ID,
   TICK_DT,
   TICK_MS,
+  type ArenaCollisionConfig,
+  type ArenaId,
   type MatchConfig,
   type MatchMode,
   type MoveInput
 } from '../../../shared/types.js';
+import { circleIntersectsWall, defaultArenaCollisionConfig, normalizeArenaCollisionConfig } from '../../../shared/arenaCollision.js';
+import type { SparseVoxelCollision } from '../../../shared/voxelCollision.js';
 import { GameState } from '../schema/GameState.js';
 import { PlayerState } from '../schema/PlayerState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { applyMovement, regenerateMana } from '../systems/MovementSystem.js';
+import { selectPublishedSplatArenaForMode } from '../systems/ServerSplatMapPool.js';
+import { loadServerVoxelCollisionSync } from '../systems/ServerVoxelCollision.js';
 import {
   assignTeamId,
   getMatchConfig,
@@ -36,17 +45,49 @@ export class MagicDuelRoom extends Room<GameState> {
 
   private inputs = new Map<string, MoveInput>();
   private mode: MatchMode = '1v1';
+  private arenaId: ArenaId = 'lightweight';
+  private arenaPresetId = '';
+  private arenaPresetUrl = '';
+  private arenaDisplayName = '';
   private config: MatchConfig = getMatchConfig('1v1');
+  private arenaCollision: ArenaCollisionConfig = defaultArenaCollisionConfig();
+  private voxelCollision: SparseVoxelCollision | null = null;
 
   onCreate(options?: JoinOptions): void {
     this.mode = normalizeMatchMode(options?.mode);
+    const selectedArena = selectPublishedSplatArenaForMode(this.mode, resolveProjectRoot());
+    if (selectedArena) {
+      this.arenaId = SPLAT_TEST_ARENA_ID;
+      this.arenaPresetId = selectedArena.presetId;
+      this.arenaPresetUrl = selectedArena.presetUrl;
+      this.arenaDisplayName = selectedArena.displayName;
+      this.arenaCollision = normalizeArenaCollisionConfig(selectedArena.collision);
+    } else {
+      this.arenaId = DEFAULT_ARENA_ID;
+      this.arenaPresetId = '';
+      this.arenaPresetUrl = '';
+      this.arenaDisplayName = '';
+      this.arenaCollision = defaultArenaCollisionConfig();
+    }
+    this.voxelCollision = loadServerVoxelCollisionSync(this.arenaCollision.voxelCollisionUrl, resolveProjectRoot());
+    if (this.voxelCollision) {
+      console.log(`[server] Loaded voxel collision ${this.arenaCollision.voxelCollisionUrl}`);
+    } else if (this.arenaCollision.voxelCollisionUrl) {
+      console.warn(`[server] Voxel collision unavailable: ${this.arenaCollision.voxelCollisionUrl}`);
+    }
     this.config = getMatchConfig(this.mode);
     this.maxClients = this.config.maxPlayers;
     this.setState(new GameState());
     this.state.mode = this.mode;
+    this.state.arenaId = this.arenaId;
+    this.state.arenaPresetId = this.arenaPresetId;
+    this.state.arenaPresetUrl = this.arenaPresetUrl;
+    this.state.arenaDisplayName = this.arenaDisplayName;
     this.state.requiredPlayers = this.config.requiredPlayers;
     this.state.maxPlayers = this.config.maxPlayers;
-    this.state.message = `${this.mode} queue`;
+    this.state.message = this.arenaDisplayName
+      ? `${this.mode} queue: ${this.arenaDisplayName}`
+      : `${this.mode} queue`;
     this.setSimulationInterval(() => this.tick(), TICK_MS);
 
     this.onMessage('move', (client, input: MoveInput) => {
@@ -103,7 +144,7 @@ export class MagicDuelRoom extends Room<GameState> {
     let index = 0;
     for (const player of this.state.players.values()) {
       const teamId = assignTeamId(this.mode, index);
-      player.resetForMatch(getSpawnForSlot(this.mode, index), teamId);
+      player.resetForMatch(this.getSpawnForSlot(index), teamId);
       index++;
     }
     this.clearProjectiles();
@@ -181,10 +222,12 @@ export class MagicDuelRoom extends Room<GameState> {
       if (typeof input.rotY === 'number' && Number.isFinite(input.rotY)) {
         player.rotY = input.rotY;
       }
-      applyMovement(player, input, TICK_DT);
+      applyMovement(player, input, TICK_DT, this.arenaCollision, this.voxelCollision);
       regenerateMana(player, TICK_DT);
       player.casting = now < player.castingUntil;
-      player.anim = moving(input) ? 'run' : 'idle';
+      player.anim = player.y > this.arenaCollision.floorY + 0.03 || Math.abs(player.velocityY) > 0.01
+        ? 'jump'
+        : moving(input) ? 'run' : 'idle';
     }
 
     this.updateProjectiles();
@@ -202,10 +245,12 @@ export class MagicDuelRoom extends Room<GameState> {
 
       if (
         projectile.ttl <= 0 ||
-        projectile.x < ARENA_BOUNDS.minX - 1 ||
-        projectile.x > ARENA_BOUNDS.maxX + 1 ||
-        projectile.z < ARENA_BOUNDS.minZ - 1 ||
-        projectile.z > ARENA_BOUNDS.maxZ + 1
+        projectile.x < this.arenaCollision.bounds.minX - 1 ||
+        projectile.x > this.arenaCollision.bounds.maxX + 1 ||
+        projectile.z < this.arenaCollision.bounds.minZ - 1 ||
+        projectile.z > this.arenaCollision.bounds.maxZ + 1 ||
+        this.projectileHitsVoxelCollision(projectile) ||
+        this.projectileHitsCollisionWall(projectile)
       ) {
         removeIds.push(projectile.id);
         continue;
@@ -257,9 +302,42 @@ export class MagicDuelRoom extends Room<GameState> {
   private reassignWaitingPlayers(): void {
     let index = 0;
     for (const player of this.state.players.values()) {
-      player.resetForMatch(getSpawnForSlot(this.mode, index), assignTeamId(this.mode, index));
+      player.resetForMatch(this.getSpawnForSlot(index), assignTeamId(this.mode, index));
       index++;
     }
+  }
+
+  private getSpawnForSlot(slotIndex: number): { x: number; y: number; z: number; rotY: number } {
+    if (this.arenaId === SPLAT_TEST_ARENA_ID) {
+      return this.arenaCollision.spawnPoints[slotIndex % this.arenaCollision.spawnPoints.length]
+        ?? getSpawnForSlot(this.mode, slotIndex);
+    }
+    return getSpawnForSlot(this.mode, slotIndex);
+  }
+
+  private projectileHitsCollisionWall(projectile: ProjectileState): boolean {
+    return this.arenaCollision.collisionWalls.some((wall) => (
+      !wall.climbable &&
+      projectile.y >= this.arenaCollision.floorY &&
+      projectile.y <= this.arenaCollision.floorY + wall.height &&
+      circleIntersectsWall(projectile.x, projectile.z, Math.max(projectile.radius, 0.05), wall)
+    ));
+  }
+
+  private projectileHitsVoxelCollision(projectile: ProjectileState): boolean {
+    if (!this.voxelCollision) return false;
+    const radius = Math.max(projectile.radius, 0.05);
+    const points = [
+      [projectile.x, projectile.y, projectile.z],
+      [projectile.x + radius, projectile.y, projectile.z],
+      [projectile.x - radius, projectile.y, projectile.z],
+      [projectile.x, projectile.y, projectile.z + radius],
+      [projectile.x, projectile.y, projectile.z - radius]
+    ] as const;
+    return points.some(([x, y, z]) => this.voxelCollision?.isWorldSolid(x, y, z, {
+      floorY: this.arenaCollision.floorY,
+      erasers: this.arenaCollision.collisionErasers ?? []
+    }) ?? false);
   }
 
   private syncLockState(): void {
@@ -278,13 +356,17 @@ export class MagicDuelRoom extends Room<GameState> {
       playerCount: this.state.playerCount,
       requiredPlayers: this.state.requiredPlayers,
       maxPlayers: this.state.maxPlayers,
+      arenaId: this.state.arenaId,
+      arenaPresetId: this.state.arenaPresetId,
+      arenaPresetUrl: this.state.arenaPresetUrl,
+      arenaDisplayName: this.state.arenaDisplayName,
       winnerId: this.state.winnerId
     });
   }
 }
 
 function emptyInput(): MoveInput {
-  return { forward: false, backward: false, left: false, right: false, rotY: 0 };
+  return { forward: false, backward: false, left: false, right: false, jump: false, rotY: 0 };
 }
 
 function normalizeInput(input: MoveInput): MoveInput {
@@ -293,10 +375,22 @@ function normalizeInput(input: MoveInput): MoveInput {
     backward: Boolean(input?.backward),
     left: Boolean(input?.left),
     right: Boolean(input?.right),
+    jump: Boolean(input?.jump),
     rotY: typeof input?.rotY === 'number' && Number.isFinite(input.rotY) ? input.rotY : 0
   };
 }
 
 function moving(input: MoveInput): boolean {
   return input.forward || input.backward || input.left || input.right;
+}
+
+function resolveProjectRoot(): string {
+  const cwd = process.cwd();
+  if (existsSync(resolve(cwd, 'client', 'public', 'arena-presets'))) {
+    return cwd;
+  }
+  if (existsSync(resolve(cwd, '..', 'client', 'public', 'arena-presets'))) {
+    return resolve(cwd, '..');
+  }
+  return cwd;
 }

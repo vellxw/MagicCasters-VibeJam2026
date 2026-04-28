@@ -5,6 +5,10 @@ import { ProjectileState } from './ProjectileState.js';
 
 export class GameState extends Schema {
   @type('string') mode = '1v1';
+  @type('string') arenaId = 'lightweight';
+  @type('string') arenaPresetId = '';
+  @type('string') arenaPresetUrl = '';
+  @type('string') arenaDisplayName = '';
   @type('number') requiredPlayers = 2;
   @type('number') maxPlayers = 2;
   @type('number') playerCount = 0;

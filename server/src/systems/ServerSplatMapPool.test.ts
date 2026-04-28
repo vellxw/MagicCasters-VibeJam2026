@@ -1,0 +1,151 @@
+import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { selectPublishedSplatArenaForMode } from './ServerSplatMapPool';
+
+describe('server published splat map pool', () => {
+  it('loads a mode-compatible preset and resolves mode-specific spawns', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'business',
+      maps: [
+        { presetId: 'business', displayName: 'Business', presetUrl: '/arena-presets/business.json', splatUrl: '/splats/business.sog', enabledModes: ['1v1'] },
+        { presetId: 'teams', displayName: 'Teams', presetUrl: '/arena-presets/teams.json', splatUrl: '/splats/teams.sog', enabledModes: ['2v2'] }
+      ]
+    }));
+    await writeFile(join(presetDir, 'teams.json'), JSON.stringify({
+      presetId: 'teams',
+      arenaId: 'splat-test',
+      displayName: 'Teams',
+      type: 'splat',
+      splatUrl: '/splats/teams.sog',
+      collisionMeshUrl: null,
+      voxelCollisionUrl: null,
+      spawnPoints: [
+        { x: -1, y: 0, z: 0, rotY: -1 },
+        { x: 1, y: 0, z: 0, rotY: 1 }
+      ],
+      spawnPointsByMode: {
+        '2v2': [
+          { x: -4, y: 0, z: -1, rotY: -1 },
+          { x: 4, y: 0, z: 1, rotY: 1 },
+          { x: -4, y: 0, z: 1, rotY: -1 },
+          { x: 4, y: 0, z: -1, rotY: 1 }
+        ]
+      },
+      bounds: { minX: -8, maxX: 8, minZ: -6, maxZ: 6 },
+      scale: 1,
+      rotation: { x: 0, y: 0, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: 0,
+      collisionErasers: [],
+      collisionWalls: []
+    }));
+
+    const selected = selectPublishedSplatArenaForMode('2v2', root, () => 0);
+    expect(selected?.presetId).toBe('teams');
+    expect(selected?.collision.spawnPoints).toHaveLength(4);
+    expect(selected?.presetUrl).toBe('/arena-presets/teams.json');
+  });
+
+  it('falls back to lightweight when no map is enabled for the mode', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-empty-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'business',
+      maps: [
+        { presetId: 'business', displayName: 'Business', presetUrl: '/arena-presets/business.json', splatUrl: '/splats/business.sog', enabledModes: ['1v1'] }
+      ]
+    }));
+
+    expect(selectPublishedSplatArenaForMode('2v2', root, () => 0)).toBeNull();
+  });
+
+  it('skips presets whose voxel collision asset is missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-missing-voxel-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'broken',
+      maps: [
+        { presetId: 'broken', displayName: 'Broken', presetUrl: '/arena-presets/broken.json', splatUrl: '/splats/broken.sog', enabledModes: ['1v1'] }
+      ]
+    }));
+    await writeFile(join(presetDir, 'broken.json'), JSON.stringify({
+      presetId: 'broken',
+      arenaId: 'splat-test',
+      displayName: 'Broken',
+      type: 'splat',
+      splatUrl: '/splats/broken.sog',
+      collisionMeshUrl: null,
+      voxelCollisionUrl: '/collision/broken.voxel.json',
+      spawnPoints: [
+        { x: -1, y: 0, z: 0, rotY: -1 },
+        { x: 1, y: 0, z: 0, rotY: 1 }
+      ],
+      bounds: { minX: -8, maxX: 8, minZ: -6, maxZ: 6 },
+      scale: 1,
+      rotation: { x: 0, y: 0, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: 0,
+      collisionErasers: [],
+      collisionWalls: []
+    }));
+
+    expect(selectPublishedSplatArenaForMode('1v1', root, () => 0)).toBeNull();
+  });
+
+  it('preserves authored spawn points without snapping', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-spawn-preserve-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    const collisionDir = join(root, 'client', 'public', 'collision');
+    await mkdir(presetDir, { recursive: true });
+    await mkdir(collisionDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'snap',
+      maps: [
+        { presetId: 'snap', displayName: 'Snap', presetUrl: '/arena-presets/snap.json', splatUrl: '/splats/snap.sog', enabledModes: ['1v1'] }
+      ]
+    }));
+    await writeFile(join(presetDir, 'snap.json'), JSON.stringify({
+      presetId: 'snap',
+      arenaId: 'splat-test',
+      displayName: 'Snap',
+      type: 'splat',
+      splatUrl: '/splats/snap.sog',
+      collisionMeshUrl: null,
+      voxelCollisionUrl: '/collision/snap.voxel.json',
+      spawnPoints: [
+        { x: 1.5, y: 0.75, z: 1.5, rotY: 0 },
+        { x: 2.5, y: 0.75, z: 2.5, rotY: 0 }
+      ],
+      bounds: { minX: -8, maxX: 8, minZ: -6, maxZ: 6 },
+      scale: 1,
+      rotation: { x: 0, y: 0, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: -2,
+      collisionErasers: [],
+      collisionWalls: []
+    }));
+    await writeFile(join(collisionDir, 'snap.voxel.json'), JSON.stringify({
+      version: '1.1',
+      gridBounds: { min: [0, 0, 0], max: [4, 4, 4] },
+      sceneBounds: { min: [0, 0, 0], max: [4, 4, 4] },
+      voxelResolution: 1,
+      leafSize: 4,
+      treeDepth: 0,
+      numInteriorNodes: 0,
+      numMixedLeaves: 1,
+      nodeCount: 1,
+      leafDataCount: 2
+    }));
+    await writeFile(join(collisionDir, 'snap.voxel.bin'), Buffer.from(new Uint32Array([0, 1 << 17, 0]).buffer));
+
+    const selected = selectPublishedSplatArenaForMode('1v1', root, () => 0);
+    expect(selected?.collision.spawnPoints[0]?.y).toBe(0.75);
+  });
+});

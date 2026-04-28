@@ -22,10 +22,16 @@ body,
 #app {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   background: var(--ink);
   color: var(--paper);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button {
@@ -35,12 +41,129 @@ button {
 .game-shell {
   position: fixed;
   inset: 0;
+  background: var(--ink);
 }
 
 .game-shell canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.game-canvas {
+  z-index: 1;
+}
+
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.touch-stick {
+  position: absolute;
+  width: 108px;
+  height: 108px;
+  border: 1px solid rgba(247, 231, 198, 0.26);
+  border-radius: 999px;
+  background: rgba(247, 231, 198, 0.08);
+  box-shadow: inset 0 0 30px rgba(247, 231, 198, 0.08), 0 10px 28px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.92);
+  transition: opacity 100ms ease-out, transform 100ms ease-out;
+}
+
+.touch-stick[data-active="true"] {
+  opacity: 0.72;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.touch-stick__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(247, 231, 198, 0.24);
+  border: 1px solid rgba(247, 231, 198, 0.34);
+  box-shadow: 0 0 24px rgba(245, 196, 94, 0.16);
+  transform: translate(-50%, -50%);
+}
+
+.mobile-start,
+.portrait-blocker {
+  display: none;
+}
+
+.mobile-start {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: radial-gradient(circle at 50% 42%, rgba(94, 29, 20, 0.74), rgba(21, 18, 15, 0.94) 62%);
+}
+
+.mobile-start button {
+  display: grid;
+  gap: 7px;
+  min-width: min(340px, calc(100vw - 48px));
+  min-height: 76px;
+  padding: 15px 20px;
+  border: 1px solid rgba(245, 196, 94, 0.56);
+  background: rgba(247, 231, 198, 0.13);
+  color: var(--paper);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
+}
+
+.mobile-start button strong {
+  color: var(--gold);
+  font-size: 18px;
+}
+
+.mobile-start button span {
+  color: rgba(247, 231, 198, 0.78);
+  font-size: 13px;
+}
+
+.portrait-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  place-items: center;
+  padding: 24px;
+  background: #15120f;
+  color: var(--paper);
+  text-align: center;
+}
+
+.portrait-blocker::before {
+  content: "Gira el celular";
+  display: block;
+  color: var(--gold);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.portrait-blocker::after {
+  content: "Este duelo se juega en pantalla completa y con el teléfono de costado.";
+  display: block;
+  max-width: 300px;
+  margin-top: 10px;
+  color: rgba(247, 231, 198, 0.78);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.splat-canvas {
+  z-index: 0;
+  pointer-events: none;
 }
 
 .hud {
@@ -144,6 +267,9 @@ button {
   position: absolute;
   left: 50%;
   bottom: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transform: translateX(-50%);
   padding: 9px 13px;
   border: 1px solid rgba(245, 196, 94, 0.48);
@@ -152,11 +278,16 @@ button {
   font-size: 14px;
   font-weight: 800;
   opacity: 0;
+  pointer-events: auto;
   transition: opacity 120ms ease-out;
 }
 
 .interaction-prompt[data-visible="true"] {
   opacity: 1;
+}
+
+.interaction-prompt button {
+  display: none;
 }
 
 .queue-panel,
@@ -265,11 +396,43 @@ button {
   background: var(--leaf);
 }
 
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  opacity: 0.72;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(247, 231, 198, 0.82);
+  box-shadow: 0 0 7px rgba(245, 196, 94, 0.35);
+}
+
+.crosshair::before {
+  left: 7px;
+  top: 1px;
+  width: 2px;
+  height: 14px;
+}
+
+.crosshair::after {
+  left: 1px;
+  top: 7px;
+  width: 14px;
+  height: 2px;
+}
+
 .debug {
   position: absolute;
   right: 14px;
   bottom: 84px;
-  width: 210px;
+  width: 260px;
   padding: 9px 10px;
   border: 1px solid rgba(247, 231, 198, 0.16);
   background: rgba(21, 18, 15, 0.58);
@@ -278,6 +441,162 @@ button {
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-line;
+}
+
+.calibration-panel {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  display: none;
+  width: min(440px, calc(100vw - 28px));
+  max-height: min(76vh, 720px);
+  padding: 11px;
+  border: 1px solid rgba(247, 231, 198, 0.2);
+  background: rgba(21, 18, 15, 0.84);
+  color: var(--paper);
+  z-index: 6;
+  pointer-events: auto;
+  overflow: auto;
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.34);
+}
+
+.calibration-panel[data-visible="true"] {
+  display: grid;
+  gap: 10px;
+}
+
+.calibration-panel__header,
+.calibration-panel__actions,
+.calibration-panel__wall-header,
+.calibration-panel__wall-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calibration-panel__header,
+.calibration-panel__wall-header {
+  justify-content: space-between;
+}
+
+.calibration-panel__header strong,
+.calibration-panel__wall-header strong {
+  color: var(--gold);
+  font-size: 15px;
+}
+
+.calibration-panel__status {
+  max-height: 156px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid rgba(247, 231, 198, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(247, 231, 198, 0.78);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.calibration-panel__map,
+.calibration-panel__walls {
+  display: grid;
+  gap: 4px;
+  color: rgba(247, 231, 198, 0.76);
+  font-size: 12px;
+}
+
+.calibration-panel__map select,
+.calibration-panel__wall-header select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(247, 231, 198, 0.18);
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--paper);
+  padding: 5px 8px;
+}
+
+.calibration-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.calibration-panel__walls {
+  padding-top: 8px;
+  border-top: 1px solid rgba(247, 231, 198, 0.12);
+}
+
+.calibration-panel__wall-header select {
+  width: 190px;
+}
+
+.calibration-panel__wall-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.calibration-field {
+  display: grid;
+  gap: 3px;
+  color: rgba(247, 231, 198, 0.74);
+  font-size: 11px;
+}
+
+.calibration-field input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid rgba(247, 231, 198, 0.18);
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--paper);
+  font: 12px Consolas, "Courier New", monospace;
+  padding: 4px 6px;
+}
+
+.calibration-panel button {
+  min-height: 32px;
+  border: 1px solid rgba(247, 231, 198, 0.2);
+  color: var(--paper);
+  background: rgba(247, 231, 198, 0.11);
+}
+
+.calibration-panel__actions,
+.calibration-panel__wall-actions {
+  flex-wrap: wrap;
+}
+
+.calibration-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(247, 231, 198, 0.16);
+  color: rgba(247, 231, 198, 0.78);
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+}
+
+.calibration-panel__toggle input {
+  margin: 0;
+}
+
+.calibration-panel__toggle:has(input:disabled) {
+  opacity: 0.48;
+}
+
+.calibration-panel__actions button:first-child {
+  color: var(--ink);
+  background: var(--gold);
+}
+
+.calibration-panel__feedback {
+  min-height: 16px;
+  color: rgba(247, 231, 198, 0.72);
+  font-size: 12px;
 }
 
 .toast {
@@ -332,10 +651,138 @@ button {
     display: none;
   }
 
+  .calibration-panel {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-height: 62vh;
+  }
+
+  .calibration-panel__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calibration-panel__wall-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .interaction-prompt {
     bottom: 24px;
     width: max-content;
     max-width: calc(100vw - 28px);
     text-align: center;
+  }
+}
+
+@media (pointer: coarse) {
+  .touch-layer {
+    pointer-events: auto;
+  }
+
+  .mobile-start[data-ready="false"] {
+    display: grid;
+  }
+
+  .mobile-start[data-ready="true"] {
+    display: none;
+  }
+
+  .hud__top {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .status-stack {
+    min-width: 184px;
+    max-width: 260px;
+    padding: 8px 10px;
+  }
+
+  .phase-chip {
+    max-width: 210px;
+    padding: 7px 9px;
+    font-size: 12px;
+    text-align: right;
+  }
+
+  .spell-dock {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    display: grid;
+    width: min(320px, 46vw);
+    transform: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .spell-button {
+    height: 58px;
+    padding: 8px 9px;
+  }
+
+  .spell-button b {
+    font-size: 13px;
+  }
+
+  .spell-button span {
+    font-size: 11px;
+  }
+
+  .voice-button {
+    display: none;
+  }
+
+  .debug {
+    display: none;
+  }
+
+  .interaction-prompt {
+    bottom: max(18px, env(safe-area-inset-bottom));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .interaction-prompt span {
+    display: none;
+  }
+
+  .interaction-prompt button {
+    display: block;
+    min-width: 168px;
+    min-height: 48px;
+    padding: 0 16px;
+    border: 1px solid rgba(245, 196, 94, 0.58);
+    color: var(--ink);
+    background: var(--gold);
+    font-weight: 800;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+  }
+
+  .queue-panel,
+  .results-panel {
+    top: 50%;
+    width: min(340px, calc(100vw - 40px));
+  }
+
+  .queue-panel button,
+  .results-panel button {
+    min-height: 46px;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .portrait-blocker {
+    display: grid;
+  }
+
+  .mobile-start {
+    display: none !important;
   }
 }

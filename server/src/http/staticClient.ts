@@ -10,10 +10,14 @@ const CONTENT_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.glb': 'model/gltf-binary',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.ply': 'application/octet-stream',
+  '.sog': 'application/octet-stream',
   '.webp': 'image/webp',
-  '.wasm': 'application/wasm'
+  '.wasm': 'application/wasm',
+  '.bin': 'application/octet-stream'
 };
 
 export function resolveServerPort(env: NodeJS.ProcessEnv | Record<string, string | undefined>): number {
@@ -67,7 +71,7 @@ export function serveClient(request: IncomingMessage, response: ServerResponse, 
   const extension = extname(assetPath).toLowerCase();
   response.writeHead(200, {
     'content-type': CONTENT_TYPES[extension] ?? 'application/octet-stream',
-    'cache-control': extension === '.html' ? 'no-store' : 'public, max-age=31536000, immutable'
+    'cache-control': cacheControlForExtension(extension)
   });
 
   if (request.method === 'HEAD') {
@@ -80,7 +84,7 @@ export function serveClient(request: IncomingMessage, response: ServerResponse, 
 
 function safePathname(url: string | undefined): string {
   try {
-    return new URL(url ?? '/', 'http://localhost').pathname;
+    return decodeURIComponent(new URL(url ?? '/', 'http://localhost').pathname);
   } catch {
     return '/';
   }
@@ -96,4 +100,9 @@ function hasTraversalSegment(url: string | undefined): boolean {
   } catch {
     return true;
   }
+}
+
+function cacheControlForExtension(extension: string): string {
+  if (extension === '.html' || extension === '.sog') return 'no-store';
+  return 'public, max-age=31536000, immutable';
 }

@@ -3,6 +3,7 @@ import {
   assignTeamId,
   getMatchConfig,
   getSpawnForSlot,
+  normalizeArenaId,
   normalizeMatchMode,
   phaseAfterPlayerLeave,
   shouldDamagePlayer,
@@ -16,6 +17,13 @@ describe('MatchSystem', () => {
     expect(getMatchConfig('1v1')).toEqual({ mode: '1v1', maxPlayers: 2, requiredPlayers: 2 });
     expect(getMatchConfig('2v2')).toEqual({ mode: '2v2', maxPlayers: 4, requiredPlayers: 4 });
     expect(normalizeMatchMode('unknown')).toBe('1v1');
+  });
+
+  it('normalizes optional arena metadata without changing default rooms', () => {
+    expect(normalizeArenaId(undefined)).toBe('lightweight');
+    expect(normalizeArenaId('')).toBe('lightweight');
+    expect(normalizeArenaId('splat-test')).toBe('splat-test');
+    expect(normalizeArenaId('other-splat')).toBe('lightweight');
   });
 
   it('assigns teams in alternating order for both modes', () => {

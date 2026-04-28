@@ -1,8 +1,9 @@
 import { SPELL_IDS, SPELLS, type SpellId } from '../../../shared/spells';
-import type { MatchMode } from '../../../shared/types';
+import type { ArenaId, MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
+import type { ArenaDebugInfo } from '../world/ArenaProvider';
 
-type SceneMode = 'LOBBY' | 'QUEUE' | 'MATCH' | 'RESULTS';
+type SceneMode = 'LOBBY' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
 
 export class DebugOverlay {
   readonly element: HTMLDivElement;
@@ -14,6 +15,8 @@ export class DebugOverlay {
   private phaseEl: HTMLElement;
   private dockEl: HTMLElement;
   private promptEl: HTMLElement;
+  private promptTextEl: HTMLElement;
+  private promptButtonEl: HTMLButtonElement;
   private queueEl: HTMLElement;
   private queueModeEl: HTMLElement;
   private queueCountEl: HTMLElement;
@@ -28,6 +31,7 @@ export class DebugOverlay {
   onVoiceToggle?: () => void;
   onCancelQueue?: () => void;
   onReturnLobby?: () => void;
+  onPortalAction?: () => void;
 
   constructor(root: HTMLElement) {
     this.element = document.createElement('div');
@@ -43,7 +47,10 @@ export class DebugOverlay {
         </div>
         <div class="phase-chip" data-phase>Entering arena</div>
       </div>
-      <div class="interaction-prompt" data-prompt></div>
+      <div class="interaction-prompt" data-prompt>
+        <span data-prompt-text></span>
+        <button type="button" data-portal-action></button>
+      </div>
       <div class="queue-panel" data-queue>
         <strong>Finding match...</strong>
         <span data-queue-mode>Mode</span>
@@ -56,6 +63,7 @@ export class DebugOverlay {
         <button type="button" data-return-lobby>Return to lobby</button>
       </div>
       <div class="spell-dock" data-spells></div>
+      <div class="crosshair" aria-hidden="true"></div>
       <div class="debug" data-debug></div>
       <div class="toast" data-toast></div>
     `;
@@ -67,6 +75,8 @@ export class DebugOverlay {
     this.phaseEl = this.element.querySelector('[data-phase]')!;
     this.dockEl = this.element.querySelector('[data-spells]')!;
     this.promptEl = this.element.querySelector('[data-prompt]')!;
+    this.promptTextEl = this.element.querySelector('[data-prompt-text]')!;
+    this.promptButtonEl = this.element.querySelector('[data-portal-action]')!;
     this.queueEl = this.element.querySelector('[data-queue]')!;
     this.queueModeEl = this.element.querySelector('[data-queue-mode]')!;
     this.queueCountEl = this.element.querySelector('[data-queue-count]')!;
@@ -76,6 +86,7 @@ export class DebugOverlay {
     this.toastEl = this.element.querySelector('[data-toast]')!;
     this.element.querySelector('[data-cancel-queue]')?.addEventListener('click', () => this.onCancelQueue?.());
     this.element.querySelector('[data-return-lobby]')?.addEventListener('click', () => this.onReturnLobby?.());
+    this.promptButtonEl.addEventListener('click', () => this.onPortalAction?.());
 
     for (const id of SPELL_IDS) {
       const spell = SPELLS[id];
@@ -99,6 +110,7 @@ export class DebugOverlay {
   update(args: {
     scene: SceneMode;
     selectedMode: MatchMode | null;
+    selectedArenaId: ArenaId;
     phase: string;
     status: string;
     roomId: string;
@@ -112,10 +124,13 @@ export class DebugOverlay {
     localSessionId: string | null;
     localPlayerBound: boolean;
     controlsEnabled: boolean;
+    cameraPitch: number;
     portalPrompt: string;
+    portalActionLabel: string;
     queueActive: boolean;
     resultsActive: boolean;
     resultsMessage: string;
+    arenaDebug: ArenaDebugInfo | null;
   }): void {
     const hp = args.local?.hp ?? 100;
     const mana = args.local?.mana ?? 100;
@@ -127,10 +142,11 @@ export class DebugOverlay {
     this.phaseEl.textContent = messageForPhase(args.scene, args.phase, args.playerCount, args.requiredPlayers);
     this.voiceButton.dataset.active = String(args.voiceActive);
     this.dockEl.dataset.active = String(args.scene === 'MATCH');
-    this.promptEl.textContent = args.portalPrompt;
+    this.promptTextEl.textContent = args.portalPrompt;
+    this.promptButtonEl.textContent = args.portalActionLabel ? `Entrar: ${args.portalActionLabel}` : 'Entrar';
     this.promptEl.dataset.visible = String(Boolean(args.portalPrompt));
     this.queueEl.dataset.visible = String(args.queueActive);
-    this.queueModeEl.textContent = `Mode: ${labelForMode(args.selectedMode)}`;
+    this.queueModeEl.textContent = `Mode: ${labelForSelection(args.selectedMode, args.selectedArenaId)}`;
     this.queueCountEl.textContent = `${args.playerCount} / ${args.requiredPlayers} players`;
     this.resultsEl.dataset.visible = String(args.resultsActive);
     this.resultsMessageEl.textContent = args.resultsMessage || 'Return to lobby to play again.';
@@ -149,6 +165,7 @@ export class DebugOverlay {
       `scene ${args.scene.toLowerCase()}`,
       `net ${args.status}`,
       `selected ${args.selectedMode ?? 'none'}`,
+      `arena ${args.selectedArenaId}`,
       `room ${args.roomId ? args.roomId.slice(0, 6) : 'none'}`,
       `mode ${args.selectedMode ?? 'none'}`,
       `team ${args.teamId ?? 'none'}`,
@@ -158,7 +175,9 @@ export class DebugOverlay {
       `session ${args.localSessionId?.slice(0, 6) ?? 'none'}`,
       `local ${args.localPlayerBound ? 'yes' : 'no'}`,
       `controls ${args.controlsEnabled ? 'yes' : 'no'}`,
-      args.local ? `pos ${args.local.x.toFixed(2)},${args.local.z.toFixed(2)}` : 'pos none',
+      `camera first-person pitch ${toDegrees(args.cameraPitch)}`,
+      ...arenaDebugLines(args.arenaDebug),
+      args.local ? `pos ${args.local.x.toFixed(2)},${args.local.y.toFixed(2)},${args.local.z.toFixed(2)}` : 'pos none',
       `voice ${args.voiceActive ? 'on' : 'off'}`,
       args.voiceText ? `heard ${args.voiceText.slice(0, 24)}` : ''
     ].filter(Boolean).join('\n');
@@ -172,6 +191,10 @@ export class DebugOverlay {
       this.toastEl.dataset.visible = 'false';
     }, 1300);
   }
+}
+
+function toDegrees(value: number): string {
+  return `${Math.round(value * 180 / Math.PI)}deg`;
 }
 
 function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
@@ -189,6 +212,7 @@ function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
 
 function messageForPhase(scene: SceneMode, phase: string, count: number, required: number): string {
   if (scene === 'LOBBY') return 'Choose a duel portal';
+  if (scene === 'CALIBRATION') return 'Splat calibration';
   if (scene === 'QUEUE') return `Queue ${count}/${required}`;
   if (scene === 'RESULTS') return 'Return to lobby';
   if (phase === 'PLAYING') return 'Duel live';
@@ -197,8 +221,40 @@ function messageForPhase(scene: SceneMode, phase: string, count: number, require
   return 'Binding room';
 }
 
-function labelForMode(mode: MatchMode | null): string {
+function labelForSelection(mode: MatchMode | null, arenaId: ArenaId): string {
+  if (arenaId === 'splat-test') return 'Realistic Arena Test';
   if (mode === '2v2') return '2v2 Team Duel';
   if (mode === '1v1') return '1v1 Duel';
   return 'Portal';
+}
+
+function arenaDebugLines(info: ArenaDebugInfo | null): string[] {
+  if (!info) return [];
+  return [
+    `splat ${info.splatLoadStatus}`,
+    `splatUrl ${shortUrl(info.splatUrl)}`,
+    `splatSize ${formatBytes(info.splatFileSizeBytes)}`,
+    `collision ${info.collisionStatus === 'loaded' ? 'mesh' : info.collisionStatus} debug ${info.collisionDebugVisible ? 'on' : 'off'}`,
+    `occlusion ${info.occlusionStatus ?? 'none'}`,
+    `voxel ${info.voxelCollisionStatus ?? 'none'} ${info.voxelCollisionUrl ? shortUrl(info.voxelCollisionUrl) : 'none'}`,
+    `scale ${info.scale}`,
+    `offset ${vectorLine(info.offset)}`,
+    `rotation ${vectorLine(info.rotation)}`,
+    `floorY ${info.floorY}`,
+    `bounds x${info.bounds.minX}..${info.bounds.maxX} z${info.bounds.minZ}..${info.bounds.maxZ}`,
+    `walls ${info.collisionWallCount ?? 0} erasers ${info.collisionEraserCount ?? 0}`
+  ];
+}
+
+function vectorLine(value: { x: number; y: number; z: number }): string {
+  return `${value.x},${value.y},${value.z}`;
+}
+
+function shortUrl(value: string): string {
+  return value.length > 34 ? `...${value.slice(-31)}` : value;
+}
+
+function formatBytes(value: number | undefined): string {
+  if (!value) return 'unknown';
+  return `${(value / (1024 * 1024)).toFixed(2)} MiB`;
 }

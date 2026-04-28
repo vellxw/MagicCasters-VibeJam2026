@@ -1,0 +1,105 @@
+import {
+  TEAM_SPAWNS,
+  type ArenaSpawnPoint,
+  type MatchMode
+} from './types.js';
+
+export interface SplatMapPoolEntry {
+  presetId: string;
+  displayName: string;
+  presetUrl: string;
+  splatUrl: string;
+  splatFileSizeBytes?: number;
+  enabledModes?: MatchMode[];
+}
+
+export interface SplatMapPoolCatalog {
+  defaultPresetId?: string;
+  maps: SplatMapPoolEntry[];
+}
+
+export interface SplatSpawnSource {
+  enabledModes?: unknown;
+  spawnPoints?: unknown;
+  spawnPointsByMode?: unknown;
+}
+
+export const MATCH_MODE_VALUES: MatchMode[] = ['1v1', '2v2'];
+
+export function resolveEnabledModes(value: Pick<SplatSpawnSource, 'enabledModes'>): MatchMode[] {
+  if (!Array.isArray(value.enabledModes)) return ['1v1'];
+  const modes: MatchMode[] = [];
+  for (const mode of value.enabledModes) {
+    if ((mode === '1v1' || mode === '2v2') && !modes.includes(mode)) {
+      modes.push(mode);
+    }
+  }
+  return modes;
+}
+
+export function enabledSplatMapsForMode(catalog: SplatMapPoolCatalog, mode: MatchMode): SplatMapPoolEntry[] {
+  return Array.isArray(catalog.maps)
+    ? catalog.maps.filter((entry) => resolveEnabledModes(entry).includes(mode))
+    : [];
+}
+
+export function selectRandomSplatMapForMode(
+  catalog: SplatMapPoolCatalog,
+  mode: MatchMode,
+  random: () => number = Math.random
+): SplatMapPoolEntry | null {
+  const maps = enabledSplatMapsForMode(catalog, mode);
+  if (maps.length === 0) return null;
+  const index = Math.max(0, Math.min(maps.length - 1, Math.floor(random() * maps.length)));
+  return maps[index] ?? maps[0] ?? null;
+}
+
+export function resolveSpawnPointsForMode(source: SplatSpawnSource, mode: MatchMode): ArenaSpawnPoint[] {
+  const required = requiredSpawnCountForMode(mode);
+  const modeSpawns = normalizeSpawnArray(readModeSpawns(source.spawnPointsByMode, mode));
+  const legacySpawns = normalizeSpawnArray(source.spawnPoints);
+  const fallbackSpawns = TEAM_SPAWNS[mode].map((spawn) => ({ ...spawn }));
+  const resolved = (modeSpawns.length > 0 ? modeSpawns : legacySpawns).slice(0, required);
+
+  while (resolved.length < required) {
+    resolved.push({ ...fallbackSpawns[resolved.length % fallbackSpawns.length] });
+  }
+
+  return resolved.map((spawn) => ({ ...spawn }));
+}
+
+export function spawnPointsByModeForPreset(source: SplatSpawnSource): Partial<Record<MatchMode, ArenaSpawnPoint[]>> {
+  return {
+    '1v1': resolveSpawnPointsForMode(source, '1v1'),
+    '2v2': resolveSpawnPointsForMode(source, '2v2')
+  };
+}
+
+export function requiredSpawnCountForMode(mode: MatchMode): number {
+  return mode === '2v2' ? 4 : 2;
+}
+
+function readModeSpawns(value: unknown, mode: MatchMode): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return (value as Record<string, unknown>)[mode];
+}
+
+function normalizeSpawnArray(value: unknown): ArenaSpawnPoint[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => normalizeSpawnPoint(entry)).filter((entry): entry is ArenaSpawnPoint => Boolean(entry));
+}
+
+function normalizeSpawnPoint(value: unknown): ArenaSpawnPoint | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  return {
+    x: finiteNumber(data.x, 0),
+    y: finiteNumber(data.y, 0),
+    z: finiteNumber(data.z, 0),
+    rotY: finiteNumber(data.rotY, 0)
+  };
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}

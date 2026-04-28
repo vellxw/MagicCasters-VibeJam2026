@@ -94,4 +94,4 @@ docs/     migration notes, multiplayer, voice, compliance, final report
 - Required widget is included in `client/index.html`.
 - The old prototype is copied under `_legacy_snapshot/original-prototype-copy` for read-only reference.
 - No old prototype code was integrated wholesale.
-- SuperSplat / Gaussian Splat is intentionally not part of this jam build.
+- The lightweight arena remains the default. A lazy, optional SuperSplat spike is documented in `docs/supersplat-arena.md` and exposed only through the experimental `Realistic Arena Test` portal.

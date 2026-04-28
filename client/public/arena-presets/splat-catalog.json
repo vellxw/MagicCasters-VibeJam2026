@@ -1,0 +1,65 @@
+{
+  "defaultPresetId": "businesspark-belp-1og-ost",
+  "maps": [
+    {
+      "presetId": "atrium-godiva-10m-sh3-spirulae-splat",
+      "displayName": "Atrium Godiva (10M SH3, spirulae-splat)",
+      "presetUrl": "/arena-presets/atrium-godiva-10m-sh3-spirulae-splat.json",
+      "splatUrl": "/splats/Atrium Godiva (10M SH3, spirulae-splat).sog",
+      "splatFileSizeBytes": 128754525,
+      "enabledModes": []
+    },
+    {
+      "presetId": "businesspark-belp-1og-ost",
+      "displayName": "Businesspark Belp 1OG Ost",
+      "presetUrl": "/arena-presets/businesspark-belp-1og-ost.json",
+      "splatUrl": "/splats/businesspark-belp-1og-ost.sog",
+      "splatFileSizeBytes": 14381152,
+      "enabledModes": [
+        "1v1"
+      ]
+    },
+    {
+      "presetId": "dorfplatz-interlaken-switzerland",
+      "displayName": "Dorfplatz Interlaken Switzerland",
+      "presetUrl": "/arena-presets/dorfplatz-interlaken-switzerland.json",
+      "splatUrl": "/splats/Dorfplatz Interlaken Switzerland.sog",
+      "splatFileSizeBytes": 56040892,
+      "enabledModes": []
+    },
+    {
+      "presetId": "maison-provence",
+      "displayName": "Maison Provence",
+      "presetUrl": "/arena-presets/maison-provence.json",
+      "splatUrl": "/splats/Maison Provence.sog",
+      "splatFileSizeBytes": 142759493,
+      "enabledModes": []
+    },
+    {
+      "presetId": "moscow-novoslobodskaya-dollhouse",
+      "displayName": "Moscow Novoslobodskaya Dollhouse",
+      "presetUrl": "/arena-presets/moscow-novoslobodskaya-dollhouse.json",
+      "splatUrl": "/splats/moscow-novoslobodskaya-dollhouse.sog",
+      "splatFileSizeBytes": 7143460,
+      "enabledModes": []
+    },
+    {
+      "presetId": "smart-room-colmap-lfs",
+      "displayName": "Smart room colmap LFS",
+      "presetUrl": "/arena-presets/smart-room-colmap-lfs.json",
+      "splatUrl": "/splats/Smart_room_colmap_LFS.sog",
+      "splatFileSizeBytes": 6648422,
+      "enabledModes": [
+        "1v1"
+      ]
+    },
+    {
+      "presetId": "virtueller-3d-rundgang-tammenshof",
+      "displayName": "Virtueller 3d Rundgang Tammenshof",
+      "presetUrl": "/arena-presets/virtueller-3d-rundgang-tammenshof.json",
+      "splatUrl": "/splats/Virtueller 3d Rundgang Tammenshof.sog",
+      "splatFileSizeBytes": 145981816,
+      "enabledModes": []
+    }
+  ]
+}

@@ -16,4 +16,11 @@ describe('static client helpers', () => {
     expect(getClientAssetPath('/duel/room', clientDist)).toBe(join(clientDist, 'index.html'));
     expect(getClientAssetPath('/../package.json', clientDist)).toBe(join(clientDist, 'index.html'));
   });
+
+  it('decodes URL-encoded static asset names before resolving client paths', () => {
+    const clientDist = resolve('repo/client/dist');
+
+    expect(getClientAssetPath('/splats/Dorfplatz%20Interlaken%20Switzerland.sog', clientDist))
+      .toBe(join(clientDist, 'splats', 'Dorfplatz Interlaken Switzerland.sog'));
+  });
 });

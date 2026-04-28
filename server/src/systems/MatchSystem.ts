@@ -1,6 +1,9 @@
 import {
+  DEFAULT_ARENA_ID,
   MATCH_CONFIGS,
+  SPLAT_TEST_ARENA_ID,
   TEAM_SPAWNS,
+  type ArenaId,
   type MatchConfig,
   type MatchMode,
   type RoomPhase,
@@ -10,6 +13,10 @@ import type { ServerPlayer } from './SpellSystem.js';
 
 export function normalizeMatchMode(value: unknown): MatchMode {
   return value === '2v2' ? '2v2' : '1v1';
+}
+
+export function normalizeArenaId(value: unknown): ArenaId {
+  return value === SPLAT_TEST_ARENA_ID ? SPLAT_TEST_ARENA_ID : DEFAULT_ARENA_ID;
 }
 
 export function getMatchConfig(mode: MatchMode): MatchConfig {

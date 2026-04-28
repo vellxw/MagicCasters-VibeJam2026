@@ -11,6 +11,7 @@ export interface ServerPlayer {
   y: number;
   z: number;
   rotY: number;
+  velocityY?: number;
   hp: number;
   mana: number;
   cooldowns: Partial<Record<SpellId, number>>;
@@ -46,6 +47,7 @@ export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer
     y: 0,
     z: 0,
     rotY: 0,
+    velocityY: 0,
     hp: MAX_HP,
     mana: MAX_MANA,
     cooldowns: {},

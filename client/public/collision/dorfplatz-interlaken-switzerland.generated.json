@@ -1,0 +1,8 @@
+{
+  "generatedBy": "magic-casters-dev-api",
+  "arenaId": "dorfplatz-interlaken-switzerland",
+  "splatFilename": "Dorfplatz Interlaken Switzerland.sog",
+  "collisionMeshUrl": "/collision/dorfplatz-interlaken-switzerland.collision.glb",
+  "voxelCollisionUrl": "/collision/dorfplatz-interlaken-switzerland.voxel.json",
+  "generatedAt": "2026-04-28T03:21:01.132Z"
+}

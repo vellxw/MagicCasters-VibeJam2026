@@ -26,13 +26,29 @@ export class LocalPlayerController {
   private body: THREE.Mesh;
   private hat: THREE.Mesh;
   private ring: THREE.Mesh;
+  private groundShadow: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
   private nameSprite: THREE.Sprite;
+  private firstPersonHidden = false;
+  private shadowGroundY = Number.NaN;
 
   constructor(scene: THREE.Object3D, local: boolean, teamId: string = 'A') {
     this.group = new THREE.Group();
     const teamColor = teamId === 'B' ? 0x2d9e9b : 0xd95030;
     const bodyColor = local ? teamColor : teamColor;
     const trimColor = local ? 0xf5c45e : teamId === 'B' ? 0x7dd3fc : 0xffb07c;
+
+    this.groundShadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.72, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0x050403,
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false
+      })
+    );
+    this.groundShadow.rotation.x = -Math.PI / 2;
+    this.groundShadow.renderOrder = 4;
+    scene.add(this.groundShadow);
 
     this.body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.35, 0.95, 5, 10),
@@ -45,7 +61,7 @@ export class LocalPlayerController {
       })
     );
     this.body.position.y = 0.85;
-    this.body.castShadow = true;
+    this.body.castShadow = false;
     this.group.add(this.body);
 
     this.hat = new THREE.Mesh(
@@ -53,7 +69,7 @@ export class LocalPlayerController {
       new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.46, emissive: trimColor, emissiveIntensity: 0.22 })
     );
     this.hat.position.y = 1.62;
-    this.hat.castShadow = true;
+    this.hat.castShadow = false;
     this.group.add(this.hat);
 
     this.ring = new THREE.Mesh(
@@ -80,7 +96,8 @@ export class LocalPlayerController {
     this.group.rotation.y = snapshot.rotY;
     this.body.scale.y = snapshot.casting ? 1.08 : 1;
     this.hat.rotation.y += dt * (snapshot.anim === 'run' ? 6 : 1.8);
-    this.ring.visible = snapshot.casting;
+    this.ring.visible = !this.firstPersonHidden && snapshot.casting;
+    this.updateGroundShadow(snapshot, snap);
   }
 
   setName(name: string): void {
@@ -90,8 +107,17 @@ export class LocalPlayerController {
     material.needsUpdate = true;
   }
 
+  setFirstPersonHidden(hidden: boolean): void {
+    this.firstPersonHidden = hidden;
+    this.body.visible = !hidden;
+    this.hat.visible = !hidden;
+    this.nameSprite.visible = !hidden;
+    this.ring.visible = false;
+  }
+
   dispose(scene: THREE.Object3D): void {
     scene.remove(this.group);
+    scene.remove(this.groundShadow);
     this.group.traverse((object) => {
       const mesh = object as THREE.Mesh;
       mesh.geometry?.dispose?.();
@@ -99,6 +125,22 @@ export class LocalPlayerController {
       if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
       else material?.dispose?.();
     });
+    this.groundShadow.geometry.dispose();
+    this.groundShadow.material.dispose();
+  }
+
+  private updateGroundShadow(snapshot: PlayerSnapshot, snap: boolean): void {
+    if (Number.isNaN(this.shadowGroundY) || snapshot.y <= this.shadowGroundY + 0.08 || snapshot.anim !== 'jump') {
+      this.shadowGroundY = snapshot.y;
+    }
+
+    const airborneHeight = Math.max(0, snapshot.y - this.shadowGroundY);
+    const alpha = THREE.MathUtils.clamp(0.24 - airborneHeight * 0.08, 0.08, 0.24);
+    const scale = THREE.MathUtils.clamp(1 + airborneHeight * 0.12, 1, 1.28);
+
+    this.groundShadow.position.set(this.group.position.x, this.shadowGroundY + 0.018, this.group.position.z);
+    this.groundShadow.scale.set(scale, scale, 1);
+    this.groundShadow.material.opacity = alpha;
   }
 }
 
