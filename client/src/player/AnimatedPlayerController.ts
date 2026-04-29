@@ -86,6 +86,7 @@ export class AnimatedPlayerController {
     this.mixer = new THREE.AnimationMixer(this.modelRoot);
     for (const clip of gltf.animations) {
       const action = this.mixer.clipAction(clip);
+      action.loop = THREE.LoopOnce;
       action.clampWhenFinished = true;
       this.actions.set(clip.name, action);
     }
@@ -145,6 +146,14 @@ export class AnimatedPlayerController {
   private playAnim(name: string): void {
     const action = this.actions.get(name);
     if (!action || action === this.currentAction) return;
+
+    if (name === 'BaileVictoria') {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+    } else {
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+    }
 
     if (this.currentAction) {
       this.currentAction.fadeOut(0.15);

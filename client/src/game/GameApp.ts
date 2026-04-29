@@ -1121,6 +1121,7 @@ export class GameApp {
       this.previewActions.clear();
       for (const clip of gltf.animations) {
         const action = this.previewMixer.clipAction(clip);
+        action.loop = THREE.LoopOnce;
         action.clampWhenFinished = true;
         this.previewActions.set(clip.name, action);
       }
