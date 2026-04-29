@@ -32,6 +32,7 @@ export class DebugOverlay {
   onCancelQueue?: () => void;
   onReturnLobby?: () => void;
   onPortalAction?: () => void;
+  onQualitySettings?: () => void;
 
   constructor(root: HTMLElement) {
     this.element = document.createElement('div');
@@ -45,7 +46,10 @@ export class DebugOverlay {
             <div class="bar bar--mana"><span data-mana></span></div>
           </div>
         </div>
-        <div class="phase-chip" data-phase>Entering arena</div>
+        <div class="hud__top-right">
+          <button type="button" class="quality-chip" data-quality-settings>⚙ Calidad</button>
+          <div class="phase-chip" data-phase>Entering arena</div>
+        </div>
       </div>
       <div class="interaction-prompt" data-prompt>
         <span data-prompt-text></span>
@@ -87,6 +91,7 @@ export class DebugOverlay {
     this.element.querySelector('[data-cancel-queue]')?.addEventListener('click', () => this.onCancelQueue?.());
     this.element.querySelector('[data-return-lobby]')?.addEventListener('click', () => this.onReturnLobby?.());
     this.promptButtonEl.addEventListener('click', () => this.onPortalAction?.());
+    this.element.querySelector('[data-quality-settings]')?.addEventListener('click', () => this.onQualitySettings?.());
 
     for (const id of SPELL_IDS) {
       const spell = SPELLS[id];

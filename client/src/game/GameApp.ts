@@ -30,7 +30,10 @@ import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } f
 import { SpellVfxManager } from '../spells/SpellVfxManager';
 import { CharacterSelectOverlay } from '../ui/CharacterSelectOverlay';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import { QualityPicker } from '../ui/QualityPicker';
+import { QualitySettingsModal } from '../ui/QualitySettingsModal';
 import { SplatCalibrationOverlay } from '../ui/SplatCalibrationOverlay';
+import { resolveEffectiveTier, saveGraphicsTier, tierToSplatQuality, splatQualityToTier, type GraphicsTier } from '../utils/GraphicsSettings';
 import { VoiceCommandManager } from '../voice/VoiceCommandManager';
 import { createArenaProvider, type ArenaDebugInfo, type ArenaRuntime } from '../world/ArenaProvider';
 import {
@@ -112,7 +115,7 @@ export class GameApp {
   private selectedArenaPresetId = '';
   private selectedArenaPresetUrl = '';
   private selectedArenaDisplayName = '';
-  private selectedSplatQuality: SplatQuality = 'high';
+  private selectedSplatQuality: SplatQuality = tierToSplatQuality(resolveEffectiveTier());
   private selectedCharacterClass: CharacterClass = 'arcanist';
   private phase = 'WAITING';
   private phaseMessage = '';
@@ -132,6 +135,9 @@ export class GameApp {
   private previewToken = 0;
   private gltfCache = new Map<CharacterClass, CharacterGltf>();
   private gltfLoads = new Map<CharacterClass, Promise<CharacterGltf | null>>();
+  private qualityPicker: QualityPicker | null = null;
+  private qualityModal: QualitySettingsModal | null = null;
+  private initialQualitySelected = false;
 
   constructor(private root: HTMLElement) {
     this.shell = document.createElement('div');
@@ -169,7 +175,7 @@ export class GameApp {
     if (new URLSearchParams(window.location.search).get('calibrateSplat') === '1') {
       void this.enterCalibration();
     } else {
-      this.enterLobby();
+      this.promptInitialQualityIfNeeded();
     }
     this.loop();
   }
@@ -222,6 +228,7 @@ export class GameApp {
     this.ui.onCancelQueue = () => this.returnToLobby();
     this.ui.onReturnLobby = () => this.returnToLobby();
     this.ui.onPortalAction = () => this.activateNearestPortal();
+    this.ui.onQualitySettings = () => this.openQualityModal();
     this.calibrationUi.onChange = (settings, options) => this.applyCalibrationSettings(settings, options);
     this.calibrationUi.onBeforeReset = (settings) => this.backupCalibrationSettings(settings, 'before-reset');
     this.calibrationUi.onSelectMap = (presetId) => void this.switchCalibrationPreset(presetId, this.selectedSplatQuality);
@@ -680,6 +687,36 @@ export class GameApp {
 
   private playCastVfx(spellId: SpellId, playerId: string): void {
     this.vfx.playAtAttachPoint(`${spellId}_cast`, playerId, 'caster_hand_right');
+  }
+
+  private promptInitialQualityIfNeeded(): void {
+    if (this.initialQualitySelected) {
+      this.enterLobby();
+      return;
+    }
+    const saved = localStorage.getItem('mc_graphics_tier');
+    if (saved) {
+      this.initialQualitySelected = true;
+      this.enterLobby();
+      return;
+    }
+    this.qualityPicker = new QualityPicker(this.root);
+    this.qualityPicker.onSelect = (tier, remember) => {
+      if (remember) {
+        saveGraphicsTier(tier);
+      }
+      this.initialQualitySelected = true;
+      this.selectedSplatQuality = tierToSplatQuality(tier === 'auto' ? resolveEffectiveTier() : tier);
+      this.qualityPicker?.dispose();
+      this.qualityPicker = null;
+      this.enterLobby();
+    };
+    this.qualityPicker.show();
+  }
+
+  private openQualityModal(): void {
+    const currentTier: GraphicsTier = (localStorage.getItem('mc_graphics_tier') as GraphicsTier | null) ?? 'auto';
+    this.qualityModal = new QualitySettingsModal(this.root, currentTier);
   }
 
   private syncControlState(): void {
