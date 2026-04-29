@@ -27,6 +27,7 @@ export class AnimatedPlayerController {
   private ring: THREE.Mesh;
   private firstPersonHidden = false;
   private shadowGroundY = Number.NaN;
+  private defeatAnimationFinished = false;
 
   static create(
     scene: THREE.Object3D,
@@ -105,6 +106,14 @@ export class AnimatedPlayerController {
       this.mixer.update(dt);
     }
 
+    // Reset model root offset after defeat animation finishes
+    if (this.modelRoot && this.currentAction && !this.currentAction.isRunning() && !this.defeatAnimationFinished) {
+      if (this.currentAction.getClip().name === 'DerrotaCaida') {
+        this.modelRoot.position.set(0, 0, 0);
+        this.defeatAnimationFinished = true;
+      }
+    }
+
     const animName = ANIM_MAP[snapshot.anim] ?? 'reposo';
     this.playAnim(animName);
 
@@ -160,6 +169,10 @@ export class AnimatedPlayerController {
     }
     action.reset().fadeIn(0.15).play();
     this.currentAction = action;
+
+    if (name !== 'DerrotaCaida') {
+      this.defeatAnimationFinished = false;
+    }
   }
 
   private updateGroundShadow(snapshot: PlayerSnapshot, snap: boolean): void {
