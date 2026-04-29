@@ -1,0 +1,43 @@
+{
+  "id": "ice_bolt_impact",
+  "name": "Ice Bolt Impact",
+  "duration": 0.6,
+  "loop": false,
+  "attachTo": "world",
+  "layers": [
+    {
+      "type": "mesh",
+      "geometry": { "type": "ring", "params": [0.1, 0.3, 32] },
+      "material": {
+        "type": "basic",
+        "color": "#38bdf8",
+        "transparent": true,
+        "opacity": { "value": 0.7, "curve": "easeOut", "duration": 0.6 },
+        "side": "double"
+      },
+      "scale": { "value": 3.5, "curve": "easeOut", "duration": 0.6 }
+    },
+    {
+      "type": "particles",
+      "count": 50,
+      "emissionRate": 50,
+      "emissionShape": "sphere",
+      "emissionShapeParams": [0.1],
+      "lifetime": { "min": 0.2, "max": 0.6 },
+      "color": { "start": "#e0f2fe", "end": "#0284c7" },
+      "size": { "start": 0.12, "end": 0.03 },
+      "opacity": { "start": 1, "end": 0 },
+      "velocity": { "initial": [0, 3, 0], "spread": 5, "radial": true },
+      "gravity": [0, -6, 0],
+      "burst": true
+    },
+    {
+      "type": "light",
+      "lightType": "point",
+      "color": "#bae6fd",
+      "intensity": { "value": 6, "curve": "easeOut", "duration": 0.4 },
+      "distance": 6,
+      "decay": 2
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[
+  "fireball_projectile",
+  "fireball_impact",
+  "fireball_cast",
+  "ice_bolt_projectile",
+  "ice_bolt_impact",
+  "ice_bolt_cast",
+  "light_burst_cast",
+  "light_burst_impact",
+  "portal_spin"
+]

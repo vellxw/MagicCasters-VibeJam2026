@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { SPELLS, type SpellId } from '../../../shared/spells';
+import { VfxRuntime } from '../vfx/VfxRuntime';
+import { VfxLibrary } from '../vfx/VfxLibrary';
+import { VfxLoader } from '../vfx/VfxLoader';
+import type { AttachPoint } from '../vfx/types';
 
 interface ProjectileSnapshot {
   id: string;
@@ -9,65 +13,147 @@ interface ProjectileSnapshot {
   z: number;
 }
 
+interface ActiveProjectile {
+  id: string;
+  instanceId?: string;
+  spellId: SpellId;
+  isVfx: boolean;
+}
+
 export class SpellVfxManager {
-  private projectiles = new Map<string, THREE.Mesh>();
+  private runtime: VfxRuntime | null = null;
+  private projectiles = new Map<string, ActiveProjectile>();
+  private playerAttachPoints = new Map<string, THREE.Object3D>();
   private bursts: Array<{ mesh: THREE.Mesh; ttl: number; max: number }> = [];
+  private tempVec = new THREE.Vector3();
+  private fallbackProjectiles = new Map<string, THREE.Mesh>();
 
   constructor(private scene: THREE.Scene) {}
+
+  async preload(): Promise<void> {
+    if (this.runtime) return;
+    const library = new VfxLibrary();
+    const loader = new VfxLoader();
+    this.runtime = new VfxRuntime(this.scene, library, loader);
+    await this.runtime.preloadFromIndex();
+  }
+
+  reset(): void {
+    this.runtime?.stopAll();
+    for (const mesh of this.fallbackProjectiles.values()) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    this.fallbackProjectiles.clear();
+    for (const burst of this.bursts) {
+      this.scene.remove(burst.mesh);
+      burst.mesh.geometry.dispose();
+      (burst.mesh.material as THREE.Material).dispose();
+    }
+    this.bursts = [];
+    this.projectiles.clear();
+  }
+
+  setPlayerAttachPoint(playerId: string, name: AttachPoint, object: THREE.Object3D): void {
+    this.playerAttachPoints.set(`${playerId}:${name}`, object);
+  }
+
+  playAtAttachPoint(vfxId: string, playerId: string, attachPoint: AttachPoint): void {
+    const obj = this.playerAttachPoints.get(`${playerId}:${attachPoint}`);
+    if (!obj) return;
+    if (!this.runtime) {
+      // Fallback: nothing for cast if runtime not ready
+      return;
+    }
+    try {
+      this.runtime.play(vfxId, { targetObject: obj, attachTo: attachPoint });
+    } catch (err) {
+      console.warn(`[SpellVfxManager] Failed to play VFX "${vfxId}" at attach point:`, err);
+    }
+  }
 
   syncProjectiles(projectiles: ProjectileSnapshot[]): void {
     const active = new Set<string>();
 
     for (const projectile of projectiles) {
       active.add(projectile.id);
-      let mesh = this.projectiles.get(projectile.id);
-      if (!mesh) {
-        const spell = SPELLS[projectile.spellId] ?? SPELLS.fireball;
-        mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(projectile.spellId === 'ice_bolt' ? 0.18 : 0.24, 12, 12),
-          new THREE.MeshStandardMaterial({
-            color: spell.color,
-            emissive: spell.color,
-            emissiveIntensity: 1.8,
-            roughness: 0.2
-          })
-        );
-        this.scene.add(mesh);
-        this.projectiles.set(projectile.id, mesh);
+      let existing = this.projectiles.get(projectile.id);
+      if (!existing) {
+        const vfxId = `${projectile.spellId}_projectile`;
+        let instanceId: string | undefined;
+        let isVfx = false;
+        if (this.runtime) {
+          try {
+            instanceId = this.runtime.play(vfxId, {
+              attachTo: 'projectile',
+              position: new THREE.Vector3(projectile.x, projectile.y, projectile.z),
+              loop: true
+            });
+            isVfx = true;
+          } catch (err) {
+            console.warn(`[SpellVfxManager] Projectile VFX fallback for "${vfxId}":`, err);
+          }
+        }
+        if (!instanceId) {
+          instanceId = this.createFallbackProjectile(projectile);
+        }
+        existing = { id: projectile.id, instanceId, spellId: projectile.spellId, isVfx };
+        this.projectiles.set(projectile.id, existing);
       }
-      mesh.position.set(projectile.x, projectile.y, projectile.z);
+      this.tempVec.set(projectile.x, projectile.y, projectile.z);
+      if (existing.isVfx && this.runtime && existing.instanceId) {
+        this.runtime.setInstancePosition(existing.instanceId, this.tempVec);
+      } else if (existing.instanceId) {
+        const mesh = this.fallbackProjectiles.get(existing.instanceId);
+        if (mesh) mesh.position.copy(this.tempVec);
+      }
     }
 
-    for (const [id, mesh] of this.projectiles) {
+    for (const [id, existing] of this.projectiles) {
       if (!active.has(id)) {
-        this.spawnBurst(mesh.position, (mesh.material as THREE.MeshStandardMaterial).color.getHex());
-        this.scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
+        if (existing.isVfx && this.runtime) {
+          const instance = this.runtime.getInstance(existing.instanceId ?? '');
+          if (instance) {
+            const impactVfxId = `${existing.spellId}_impact`;
+            try {
+              this.runtime.play(impactVfxId, { position: instance.group.position });
+            } catch (err) {
+              this.spawnFallbackImpact(instance.group.position, existing.spellId);
+            }
+          }
+          this.runtime.stop(existing.instanceId ?? '');
+        } else if (existing.instanceId) {
+          const mesh = this.fallbackProjectiles.get(existing.instanceId);
+          if (mesh) {
+            this.spawnFallbackImpact(mesh.position, existing.spellId);
+            this.scene.remove(mesh);
+            mesh.geometry.dispose();
+            (mesh.material as THREE.Material).dispose();
+            this.fallbackProjectiles.delete(existing.instanceId);
+          }
+        }
         this.projectiles.delete(id);
       }
     }
   }
 
   confirmSpell(spellId: SpellId, x: number, y: number, z: number): void {
-    const spell = SPELLS[spellId];
-    const geometry = spell.kind === 'dash'
-      ? new THREE.TorusGeometry(0.72, 0.03, 8, 48)
-      : new THREE.RingGeometry(0.34, 0.62, 48);
-    const material = new THREE.MeshBasicMaterial({
-      color: spell.color,
-      transparent: true,
-      opacity: 0.85,
-      side: THREE.DoubleSide
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y + 0.08, z);
-    mesh.rotation.x = -Math.PI / 2;
-    this.scene.add(mesh);
-    this.bursts.push({ mesh, ttl: 0.42, max: 0.42 });
+    const vfxId = `${spellId}_impact`;
+    if (this.runtime) {
+      try {
+        this.runtime.play(vfxId, { position: new THREE.Vector3(x, y, z) });
+        return;
+      } catch (err) {
+        console.warn(`[SpellVfxManager] Impact VFX fallback for "${vfxId}":`, err);
+      }
+    }
+    this.spawnFallbackImpact(new THREE.Vector3(x, y, z), spellId);
   }
 
   update(dt: number): void {
+    this.runtime?.update(dt);
+
     for (let i = this.bursts.length - 1; i >= 0; i--) {
       const burst = this.bursts[i];
       burst.ttl -= dt;
@@ -84,13 +170,43 @@ export class SpellVfxManager {
     }
   }
 
-  private spawnBurst(position: THREE.Vector3, color: number): void {
+  private createFallbackProjectile(projectile: ProjectileSnapshot): string {
+    const spell = SPELLS[projectile.spellId] ?? SPELLS.fireball;
+    const id = THREE.MathUtils.generateUUID();
     const mesh = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.28, 0),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72, wireframe: true })
+      new THREE.SphereGeometry(projectile.spellId === 'ice_bolt' ? 0.18 : 0.24, 12, 12),
+      new THREE.MeshStandardMaterial({
+        color: spell.color,
+        emissive: spell.color,
+        emissiveIntensity: 1.8,
+        roughness: 0.2
+      })
     );
-    mesh.position.copy(position);
+    mesh.position.set(projectile.x, projectile.y, projectile.z);
     this.scene.add(mesh);
-    this.bursts.push({ mesh, ttl: 0.3, max: 0.3 });
+    this.fallbackProjectiles.set(id, mesh);
+    return id;
+  }
+
+  private spawnFallbackImpact(position: THREE.Vector3, spellId: SpellId): void {
+    const spell = SPELLS[spellId] ?? SPELLS.fireball;
+    const geometry = spell.kind === 'dash'
+      ? new THREE.TorusGeometry(0.72, 0.03, 8, 48)
+      : new THREE.IcosahedronGeometry(0.28, 0);
+    const material = new THREE.MeshBasicMaterial({
+      color: spell.color,
+      transparent: true,
+      opacity: 0.72,
+      wireframe: spell.kind !== 'dash'
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    if (spell.kind === 'dash') {
+      mesh.rotation.x = -Math.PI / 2;
+      this.bursts.push({ mesh, ttl: 0.42, max: 0.42 });
+    } else {
+      this.bursts.push({ mesh, ttl: 0.3, max: 0.3 });
+    }
+    this.scene.add(mesh);
   }
 }

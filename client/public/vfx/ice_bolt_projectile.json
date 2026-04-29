@@ -1,0 +1,45 @@
+{
+  "id": "ice_bolt_projectile",
+  "name": "Ice Bolt Projectile",
+  "duration": 2.0,
+  "loop": true,
+  "attachTo": "projectile",
+  "layers": [
+    {
+      "type": "mesh",
+      "geometry": { "type": "sphere", "params": [0.18, 16, 16] },
+      "material": {
+        "type": "standard",
+        "color": "#7dd3fc",
+        "emissive": "#a5f3fc",
+        "emissiveIntensity": 3.0,
+        "transparent": true,
+        "opacity": 0.85,
+        "roughness": 0.1,
+        "metalness": 0.3
+      },
+      "scale": { "value": 1.0, "curve": "pulse", "duration": 0.5 }
+    },
+    {
+      "type": "light",
+      "lightType": "point",
+      "color": "#7dd3fc",
+      "intensity": { "value": 2.5, "curve": "pulse", "duration": 0.6 },
+      "distance": 4,
+      "decay": 2
+    },
+    {
+      "type": "particles",
+      "count": 50,
+      "emissionRate": 50,
+      "emissionShape": "sphere",
+      "emissionShapeParams": [0.15],
+      "lifetime": { "min": 0.3, "max": 0.8 },
+      "color": { "start": "#e0f2fe", "end": "#0ea5e9" },
+      "size": { "start": 0.06, "end": 0.01 },
+      "opacity": { "start": 0.9, "end": 0 },
+      "velocity": { "initial": [0, 0, 0], "spread": 0.8, "radial": true },
+      "drag": 0.3
+    }
+  ]
+}

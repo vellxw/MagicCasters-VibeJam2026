@@ -1,0 +1,43 @@
+{
+  "id": "light_burst_cast",
+  "name": "Light Burst Cast",
+  "duration": 0.45,
+  "loop": false,
+  "attachTo": "caster_root",
+  "layers": [
+    {
+      "type": "mesh",
+      "geometry": { "type": "ring", "params": [0.2, 0.5, 32] },
+      "material": {
+        "type": "basic",
+        "color": "#fef08a",
+        "transparent": true,
+        "opacity": { "value": 0.6, "curve": "easeOut", "duration": 0.45 },
+        "side": "double"
+      },
+      "rotation": [1.5708, 0, 0],
+      "scale": { "value": 5, "curve": "easeOut", "duration": 0.45 }
+    },
+    {
+      "type": "particles",
+      "count": 80,
+      "emissionRate": 80,
+      "emissionShape": "sphere",
+      "emissionShapeParams": [0.2],
+      "lifetime": { "min": 0.1, "max": 0.35 },
+      "color": { "start": "#ffffff", "end": "#fde047" },
+      "size": { "start": 0.2, "end": 0.05 },
+      "opacity": { "start": 1, "end": 0 },
+      "velocity": { "initial": [0, 0, 0], "spread": 6, "radial": true },
+      "burst": true
+    },
+    {
+      "type": "light",
+      "lightType": "point",
+      "color": "#fef9c3",
+      "intensity": { "value": 10, "curve": "easeOut", "duration": 0.3 },
+      "distance": 10,
+      "decay": 2
+    }
+  ]
+}

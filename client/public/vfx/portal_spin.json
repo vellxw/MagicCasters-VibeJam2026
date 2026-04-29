@@ -1,0 +1,62 @@
+{
+  "id": "portal_spin",
+  "name": "Portal Spin",
+  "duration": 0,
+  "loop": true,
+  "attachTo": "world",
+  "layers": [
+    {
+      "type": "mesh",
+      "geometry": { "type": "torus", "params": [1.5, 0.15, 16, 48] },
+      "material": {
+        "type": "standard",
+        "color": "#a855f7",
+        "emissive": "#7c3aed",
+        "emissiveIntensity": 1.5,
+        "transparent": true,
+        "opacity": 0.9,
+        "roughness": 0.2,
+        "metalness": 0.5
+      },
+      "rotation": [1.5708, 0, 0],
+      "animation": { "rotation": { "speed": [0, 0, 1.5] } }
+    },
+    {
+      "type": "mesh",
+      "geometry": { "type": "torus", "params": [1.0, 0.08, 16, 32] },
+      "material": {
+        "type": "standard",
+        "color": "#c084fc",
+        "emissive": "#a855f7",
+        "emissiveIntensity": 1.2,
+        "transparent": true,
+        "opacity": 0.6,
+        "roughness": 0.2,
+        "metalness": 0.5
+      },
+      "rotation": [1.5708, 0, 0],
+      "animation": { "rotation": { "speed": [0, 0, -2.0] } }
+    },
+    {
+      "type": "particles",
+      "count": 60,
+      "emissionRate": 30,
+      "emissionShape": "disc",
+      "emissionShapeParams": [1.2],
+      "lifetime": { "min": 0.8, "max": 1.5 },
+      "color": { "start": "#e9d5ff", "end": "#6b21a8" },
+      "size": { "start": 0.08, "end": 0.02 },
+      "opacity": { "start": 0.8, "end": 0 },
+      "velocity": { "initial": [0, 0.5, 0], "spread": 0.3, "radial": false },
+      "drag": 0.2
+    },
+    {
+      "type": "light",
+      "lightType": "point",
+      "color": "#c084fc",
+      "intensity": { "value": 2, "curve": "pulse", "duration": 2.0 },
+      "distance": 6,
+      "decay": 2
+    }
+  ]
+}

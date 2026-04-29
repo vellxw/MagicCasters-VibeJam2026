@@ -80,6 +80,7 @@ export class AnimatedPlayerController {
     scene.add(this.group);
 
     this.modelRoot = cloneCharacterScene(gltf.scene);
+    this.modelRoot.rotation.y = Math.PI;
     this.group.add(this.modelRoot);
 
     this.mixer = new THREE.AnimationMixer(this.modelRoot);

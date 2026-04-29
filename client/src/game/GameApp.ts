@@ -439,6 +439,7 @@ export class GameApp {
     }
     if (type === 'spell_confirmed') {
       this.vfx.confirmSpell(payload.spellId, payload.x, payload.y, payload.z);
+      this.playCastVfx(payload.spellId, payload.playerId ?? this.network.localSessionId ?? '');
     }
     if (type === 'cast_denied') {
       this.ui.showToast(payload.reason ?? 'Cast denied');
@@ -629,6 +630,7 @@ export class GameApp {
     controller.setName(player.name);
     controller.setFirstPersonHidden(shouldBeLocal);
     this.players.set(player.id, controller);
+    this.setupVfxAttachPoints(player.id, controller);
 
     if (shouldBeLocal) {
       this.localControllerId = player.id;
@@ -653,6 +655,31 @@ export class GameApp {
     return local
       ? new LocalPlayerController(this.scene, true, player.teamId ?? 'A')
       : new RemotePlayerController(this.scene, false, player.teamId ?? 'A');
+  }
+
+  private setupVfxAttachPoints(playerId: string, controller: PlayerController): void {
+    const root = controller.group;
+
+    const head = new THREE.Group();
+    head.position.set(0, 1.6, 0);
+    root.add(head);
+    this.vfx.setPlayerAttachPoint(playerId, 'caster_head', head);
+
+    const handR = new THREE.Group();
+    handR.position.set(0.4, 0.8, 0);
+    root.add(handR);
+    this.vfx.setPlayerAttachPoint(playerId, 'caster_hand_right', handR);
+
+    const handL = new THREE.Group();
+    handL.position.set(-0.4, 0.8, 0);
+    root.add(handL);
+    this.vfx.setPlayerAttachPoint(playerId, 'caster_hand_left', handL);
+
+    this.vfx.setPlayerAttachPoint(playerId, 'caster_root', root);
+  }
+
+  private playCastVfx(spellId: SpellId, playerId: string): void {
+    this.vfx.playAtAttachPoint(`${spellId}_cast`, playerId, 'caster_hand_right');
   }
 
   private syncControlState(): void {
@@ -887,6 +914,7 @@ export class GameApp {
       onStatus: (message) => this.ui.showToast(message)
     });
     this.syncControlState();
+    void this.vfx.preload();
     this.ui.showToast(this.selectedArenaDisplayName
       ? `${this.selectedMode ?? 'Match'}: ${this.selectedArenaDisplayName}`
       : `${this.selectedMode ?? 'Match'} started`);
@@ -997,6 +1025,7 @@ export class GameApp {
       this.addFallbackPreview(previewGroup, characterClass);
     } else {
       const model = cloneCharacterScene(gltf.scene);
+      model.rotation.y = Math.PI;
       model.position.y = 0.16;
       previewGroup.add(model);
       this.previewMixer = new THREE.AnimationMixer(model);
@@ -1444,6 +1473,7 @@ export class GameApp {
   }
 
   private clearMatchScene(): void {
+    this.vfx.reset();
     for (const controller of this.players.values()) {
       controller.dispose(this.scene);
     }
