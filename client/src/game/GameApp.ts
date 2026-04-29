@@ -1007,11 +1007,15 @@ export class GameApp {
     this.touchControls.reset();
 
     // Play victory/defeat animations
+    const floorY = this.getArenaDebugInfo()?.floorY ?? 0;
     for (const [id, controller] of this.players) {
       const snapshot = this.playerSnapshots.get(id);
       if (!snapshot) continue;
       const isWinner = id === this.winnerId;
       snapshot.anim = isWinner ? 'victory' : 'defeat';
+      if (!isWinner) {
+        snapshot.y = floorY;
+      }
       controller.update(snapshot, 0, true);
     }
 
