@@ -24,6 +24,7 @@ import type { SplatQuality } from '../../../shared/splatMapPool';
 import { FirstPersonCamera, clampPitch } from '../camera/FirstPersonCamera';
 import { TouchControls } from '../input/TouchControls';
 import { NetworkClient } from '../network/NetworkClient';
+import { applyPredictedHorizontalMovement, needsReconciliation } from '../network/PredictedMovement';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
 import { RemotePlayerController } from '../player/RemotePlayerController';
 import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } from '../player/AnimatedPlayerController';
@@ -119,6 +120,7 @@ export class GameApp {
   private selectedCharacterClass: CharacterClass = 'arcanist';
   private phase = 'WAITING';
   private phaseMessage = '';
+  private winnerId = '';
   private localControllerId: string | null = null;
   private localPlayerBound = false;
   private controlsEnabled = false;
@@ -144,11 +146,12 @@ export class GameApp {
     this.shell.className = 'game-shell';
     this.root.appendChild(this.shell);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const tier = resolveEffectiveTier();
+    this.renderer = new THREE.WebGLRenderer({ antialias: tier !== 'low', alpha: true, powerPreference: tier === 'low' ? 'low-power' : 'high-performance' });
     this.renderer.domElement.className = 'game-canvas';
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 'low' ? 0.75 : tier === 'medium' ? 1.0 : 1.75));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = tier !== 'low';
     this.renderer.shadowMap.type = THREE.BasicShadowMap;
     this.renderer.setClearColor(0x15120f);
     this.shell.appendChild(this.renderer.domElement);
@@ -181,15 +184,16 @@ export class GameApp {
   }
 
   private setupScene(): void {
-    this.scene.fog = new THREE.Fog(0x15120f, 16, 42);
+    const tier = resolveEffectiveTier();
+    this.scene.fog = tier === 'low' ? null : new THREE.Fog(0x15120f, 16, 42);
     this.scene.add(new THREE.HemisphereLight(0xf7e7c6, 0x1f2618, 2.2));
 
     const key = new THREE.DirectionalLight(0xffd391, 2.4);
     key.position.set(-4, 8, 5);
-    key.castShadow = true;
-    key.shadow.mapSize.set(512, 512);
+    key.castShadow = tier !== 'low';
+    key.shadow.mapSize.set(tier === 'medium' ? 256 : 512, tier === 'medium' ? 256 : 512);
     key.shadow.camera.near = 1;
-    key.shadow.camera.far = 30;
+    key.shadow.camera.far = tier === 'low' ? 20 : 30;
     key.shadow.camera.left = -18;
     key.shadow.camera.right = 18;
     key.shadow.camera.top = 18;
@@ -198,14 +202,17 @@ export class GameApp {
     key.shadow.bias = -0.0005;
     this.scene.add(key);
 
-    const frost = new THREE.PointLight(0x7dd3fc, 12, 12);
-    frost.position.set(5, 3, -4);
-    this.scene.add(frost);
+    if (tier !== 'low') {
+      const frost = new THREE.PointLight(0x7dd3fc, 12, 12);
+      frost.position.set(5, 3, -4);
+      this.scene.add(frost);
 
-    const ember = new THREE.PointLight(0xff6b35, 10, 10);
-    ember.position.set(-5, 2.6, 4);
-    this.scene.add(ember);
+      const ember = new THREE.PointLight(0xff6b35, 10, 10);
+      ember.position.set(-5, 2.6, 4);
+      this.scene.add(ember);
+    }
 
+    this.camera.far = tier === 'low' ? 40 : 120;
     this.camera.position.set(0, 7, 9);
   }
 
@@ -390,6 +397,7 @@ export class GameApp {
   private applyState(state: any): void {
     this.phase = state.phase ?? this.phase;
     this.phaseMessage = state.message ?? this.phaseMessage;
+    this.winnerId = state.winnerId ?? '';
     this.selectedMode = state.mode ?? this.selectedMode;
     this.selectedArenaId = coerceArenaId(state.arenaId ?? this.selectedArenaId);
     this.selectedArenaPresetId = stringValue(state.arenaPresetId, this.selectedArenaPresetId);
@@ -405,7 +413,31 @@ export class GameApp {
 
     for (const player of players) {
       activeIds.add(player.id);
-      this.playerSnapshots.set(player.id, player);
+
+      // Reconciliación para jugador local con client-side prediction
+      if (player.id === this.network.localSessionId && this.sceneMode === 'MATCH') {
+        const existing = this.playerSnapshots.get(player.id);
+        if (existing && needsReconciliation(existing, player, 0.8)) {
+          this.playerSnapshots.set(player.id, player);
+        } else if (existing) {
+          this.playerSnapshots.set(player.id, {
+            ...existing,
+            y: player.y,
+            hp: player.hp,
+            mana: player.mana,
+            anim: player.anim,
+            casting: player.casting,
+            selectedSpell: player.selectedSpell,
+            rotY: player.rotY,
+            teamId: player.teamId
+          });
+        } else {
+          this.playerSnapshots.set(player.id, player);
+        }
+      } else {
+        this.playerSnapshots.set(player.id, player);
+      }
+
       if (this.sceneMode === 'MATCH') {
         this.ensurePlayerController(player);
       }
@@ -431,6 +463,7 @@ export class GameApp {
     if (type === 'phase') {
       this.phase = payload.phase;
       this.phaseMessage = payload.message ?? this.phaseMessage;
+      this.winnerId = payload.winnerId ?? '';
       this.selectedArenaId = coerceArenaId(payload.arenaId ?? this.selectedArenaId);
       this.selectedArenaPresetId = stringValue(payload.arenaPresetId, this.selectedArenaPresetId);
       this.selectedArenaPresetUrl = stringValue(payload.arenaPresetUrl, this.selectedArenaPresetUrl);
@@ -536,9 +569,17 @@ export class GameApp {
 
     this.arenaRuntime?.update(dt);
 
+    // Client-Side Prediction: aplicar movimiento horizontal inmediato al jugador local
+    const localId = this.network.localSessionId;
+    const localSnapshot = localId ? this.playerSnapshots.get(localId) : undefined;
+    if (localSnapshot && this.controlsEnabled && this.sceneMode === 'MATCH' && this.phase === 'PLAYING') {
+      const input = this.currentInput(true);
+      applyPredictedHorizontalMovement(localSnapshot, input, dt);
+    }
+
     for (const [id, snapshot] of this.playerSnapshots) {
       const controller = this.players.get(id);
-      controller?.update(snapshot, dt, id === this.network.localSessionId);
+      controller?.update(snapshot, dt, id === localId);
     }
 
     const local = this.getLocalSnapshot();
@@ -963,6 +1004,16 @@ export class GameApp {
     this.keys.clear();
     this.clearQueuedActions();
     this.touchControls.reset();
+
+    // Play victory/defeat animations
+    for (const [id, controller] of this.players) {
+      const snapshot = this.playerSnapshots.get(id);
+      if (!snapshot) continue;
+      const isWinner = id === this.winnerId;
+      snapshot.anim = isWinner ? 'victory' : 'defeat';
+      controller.update(snapshot, 0, true);
+    }
+
     this.ui.showToast(this.phaseMessage || 'Match ended');
   }
 
