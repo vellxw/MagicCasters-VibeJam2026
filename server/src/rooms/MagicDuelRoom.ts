@@ -282,9 +282,11 @@ export class MagicDuelRoom extends Room<GameState> {
       applyMovement(player, input, TICK_DT, this.arenaCollision, this.voxelCollision);
       regenerateMana(player, TICK_DT);
       player.casting = now < player.castingUntil;
-      player.anim = player.y > this.arenaCollision.floorY + 0.03 || Math.abs(player.velocityY) > 0.01
-        ? 'jump'
-        : moving(input) ? 'run' : 'idle';
+      player.anim = player.casting
+        ? 'casting'
+        : player.y > this.arenaCollision.floorY + 0.03 || Math.abs(player.velocityY) > 0.01
+          ? 'jump'
+          : moving(input) ? 'run' : 'idle';
     }
 
     this.updateProjectiles();
