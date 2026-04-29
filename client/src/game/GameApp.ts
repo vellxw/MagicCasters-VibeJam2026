@@ -573,7 +573,8 @@ export class GameApp {
     const localId = this.network.localSessionId;
     const localSnapshot = localId ? this.playerSnapshots.get(localId) : undefined;
     if (localSnapshot && this.controlsEnabled && this.sceneMode === 'MATCH' && this.phase === 'PLAYING') {
-      const input = this.currentInput(true);
+      // No consumir acciones aquí; eso lo hace sendMoveIfNeeded
+      const input = this.currentInput(false);
       applyPredictedHorizontalMovement(localSnapshot, input, dt);
     }
 
