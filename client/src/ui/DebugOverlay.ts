@@ -3,7 +3,7 @@ import type { ArenaId, MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
 
-type SceneMode = 'LOBBY' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
+type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
 
 export class DebugOverlay {
   readonly element: HTMLDivElement;
@@ -212,6 +212,7 @@ function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
 
 function messageForPhase(scene: SceneMode, phase: string, count: number, required: number): string {
   if (scene === 'LOBBY') return 'Choose a duel portal';
+  if (scene === 'CHARACTER_SELECT') return 'Choose your mage';
   if (scene === 'CALIBRATION') return 'Splat calibration';
   if (scene === 'QUEUE') return `Queue ${count}/${required}`;
   if (scene === 'RESULTS') return 'Return to lobby';

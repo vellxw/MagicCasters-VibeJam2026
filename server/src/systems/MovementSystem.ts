@@ -58,6 +58,11 @@ export function applyMovement(
     moveZ /= length;
   }
 
+  const now = Date.now();
+  let speedMultiplier = 1;
+  if ((player.speedBoostUntil ?? 0) > now) speedMultiplier *= 2;
+  if ((player.slowedUntil ?? 0) > now) speedMultiplier *= 0.3;
+
   const bounds = arenaCollision?.bounds ?? ARENA_BOUNDS;
   const floorY = arenaCollision?.floorY ?? 0;
   const walls = arenaCollision?.collisionWalls ?? [];
@@ -71,8 +76,8 @@ export function applyMovement(
   const resolved = moveWithArenaCollision(
     player.x,
     player.z,
-    player.x + moveX * (PLAYER_SPEED * dt + dashDistance),
-    player.z + moveZ * (PLAYER_SPEED * dt + dashDistance),
+    player.x + moveX * (PLAYER_SPEED * speedMultiplier * dt + dashDistance),
+    player.z + moveZ * (PLAYER_SPEED * speedMultiplier * dt + dashDistance),
     bounds,
     walls,
     {

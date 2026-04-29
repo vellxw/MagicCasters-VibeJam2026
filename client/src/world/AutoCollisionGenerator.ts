@@ -262,12 +262,14 @@ async function postDevCollisionApiToBaseUrl(
   command: string
 ): Promise<SplatCollisionDevApiResult> {
   try {
+    const requestPreset = makeCollisionGenerationPreset(preset);
     const response = await fetch(`${baseUrl}/api/dev/splat-collision/${action}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        arenaId: preset.presetId,
-        splatUrl: preset.splatUrl,
+        arenaId: requestPreset.arenaId,
+        calibrationGroupId: requestPreset.calibrationGroupId,
+        splatUrl: requestPreset.splatUrl,
         playableFilterBox: buildPlayableFilterBox(preset)
       })
     });
@@ -335,12 +337,36 @@ function resolveDevApiBaseUrls(): string[] {
 }
 
 function fallbackCollisionCommand(preset: SplatArenaPreset): string {
-  const filename = splatFilenameFromUrl(preset.splatUrl) ?? '<arena>.sog';
-  const largeFlag = typeof preset.splatFileSizeBytes === 'number' && preset.splatFileSizeBytes >= 80 * 1024 * 1024
-    ? ' --large'
-    : '';
+  const requestPreset = makeCollisionGenerationPreset(preset);
+  const filename = splatFilenameFromUrl(requestPreset.splatUrl) ?? '<arena>.sog';
   const filterBox = buildPlayableFilterBox(preset);
-  return `npm run splat:collision -- --input "${`client/public/splats/${filename}`}" --arena ${sanitizeArenaId(preset.presetId)}${largeFlag} --filter-box "${filterBox}"`;
+  return [
+    'npm run splat:collision --',
+    `--input "${`client/public/splats/${filename}`}"`,
+    `--arena ${sanitizeArenaId(requestPreset.arenaId)}`,
+    '--large',
+    '--voxel-size 0.3',
+    '--opacity 0.35',
+    '--decimate 1%',
+    '--carve none',
+    '--no-external-fill',
+    '--no-floor-fill',
+    `--filter-box "${filterBox}"`
+  ].join(' ');
+}
+
+function makeCollisionGenerationPreset(preset: SplatArenaPreset): {
+  arenaId: string;
+  calibrationGroupId?: string;
+  splatUrl: string;
+} {
+  const groupId = preset.calibrationGroupId?.trim();
+  const arenaId = sanitizeArenaId(groupId || preset.presetId);
+  return {
+    arenaId,
+    calibrationGroupId: groupId ? sanitizeArenaId(groupId) : undefined,
+    splatUrl: groupId ? `/splats/${sanitizeArenaId(groupId)}-low.sog` : preset.splatUrl
+  };
 }
 
 function buildPlayableFilterBox(preset: SplatArenaPreset): string {

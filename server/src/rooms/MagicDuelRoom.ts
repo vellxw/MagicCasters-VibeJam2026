@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { Client } from '@colyseus/core';
 import { Room } from '@colyseus/core';
 import { SPELLS, isSpellId, type SpellId } from '../../../shared/spells.js';
+import { isCharacterClass, type CharacterClass } from '../../../shared/classes.js';
 import {
   DEFAULT_ARENA_ID,
   PLAYER_RADIUS,
@@ -33,11 +34,12 @@ import {
   shouldLockRoom,
   shouldStartMatch
 } from '../systems/MatchSystem.js';
-import { applyProjectileDamage, executeSpellCast } from '../systems/SpellSystem.js';
+import { applyProjectileDamage, directionAwayFrom, executeSpellCast } from '../systems/SpellSystem.js';
 
 interface JoinOptions {
   name?: string;
   mode?: MatchMode;
+  characterClass?: CharacterClass;
 }
 
 export class MagicDuelRoom extends Room<GameState> {
@@ -102,7 +104,10 @@ export class MagicDuelRoom extends Room<GameState> {
   onJoin(client: Client, options?: JoinOptions): void {
     const slotIndex = this.state.players.size;
     const teamId = assignTeamId(this.mode, slotIndex);
-    const player = new PlayerState(client.sessionId, options?.name, teamId, slotIndex);
+    const characterClass = isCharacterClass(options?.characterClass ?? '')
+      ? options!.characterClass
+      : 'arcanist';
+    const player = new PlayerState(client.sessionId, options?.name, teamId, slotIndex, characterClass);
     this.state.players.set(client.sessionId, player);
     this.inputs.set(client.sessionId, emptyInput());
     this.updatePlayerCount();
@@ -173,7 +178,9 @@ export class MagicDuelRoom extends Room<GameState> {
       spellId: rawSpellId,
       now,
       phase: this.state.phase,
-      nextProjectileId: () => `p_${Math.random().toString(36).slice(2, 10)}`
+      nextProjectileId: () => `p_${Math.random().toString(36).slice(2, 10)}`,
+      arenaCollision: this.arenaCollision,
+      voxelCollision: this.voxelCollision
     });
 
     caster.castingUntil = now + 250;
@@ -203,7 +210,57 @@ export class MagicDuelRoom extends Room<GameState> {
       for (const hit of result.hits) {
         this.broadcast('damage', hit);
       }
+      // Apply class-specific instant spell effects
+      this.applyClassSpellEffects(caster, rawSpellId as SpellId, result.hits.map((h) => h.targetId));
       this.checkForWinner();
+    }
+
+    // Apply class-specific projectile spell effects
+    if (result.kind === 'projectile') {
+      this.applyClassSpellEffects(caster, rawSpellId as SpellId, []);
+    }
+  }
+
+  private applyClassSpellEffects(
+    caster: PlayerState,
+    spellId: SpellId,
+    hitTargetIds: string[]
+  ): void {
+    const now = Date.now();
+    const characterClass = caster.characterClass as CharacterClass;
+
+    if (spellId === 'ice_bolt') {
+      if (characterClass === 'arcanist') {
+        // Espectro Falso: speed boost 2x for 2s
+        caster.speedBoostUntil = now + 2000;
+      } else if (characterClass === 'divine') {
+        // Barrera de Luz: shield absorbs next damage
+        caster.shieldActive = true;
+      }
+    }
+
+    if (spellId === 'light_burst') {
+      if (characterClass === 'arcanist') {
+        // Estallido Umbrío: AOE knockback
+        for (const target of this.state.players.values()) {
+          if (target.id === caster.id || target.hp <= 0) continue;
+          const distance = Math.hypot(target.x - caster.x, target.z - caster.z);
+          if (distance <= 3) {
+            const dir = directionAwayFrom(caster, target);
+            target.x = clamp(target.x + dir.x * 1.5, this.arenaCollision.bounds.minX, this.arenaCollision.bounds.maxX);
+            target.z = clamp(target.z + dir.z * 1.5, this.arenaCollision.bounds.minZ, this.arenaCollision.bounds.maxZ);
+          }
+        }
+      } else if (characterClass === 'divine') {
+        // Sello del Juicio: slow + silence on hit targets
+        for (const targetId of hitTargetIds) {
+          const target = this.state.players.get(targetId);
+          if (target) {
+            target.slowedUntil = now + 1500;
+            target.silencedUntil = now + 1500;
+          }
+        }
+      }
     }
   }
 
@@ -394,4 +451,8 @@ function resolveProjectRoot(): string {
     return resolve(cwd, '..');
   }
   return cwd;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

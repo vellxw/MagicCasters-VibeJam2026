@@ -4,6 +4,7 @@ import type { SpellId } from '../../../shared/spells';
 import {
   applyProjectileDamage,
   createTestPlayer,
+  directionAwayFrom,
   executeSpellCast,
   validateCast
 } from './SpellSystem';
@@ -103,40 +104,67 @@ describe('SpellSystem', () => {
     expect(nearTarget.hp).toBe(84);
     expect(farTarget.hp).toBe(100);
 
-    const dash = executeSpellCast({
-      caster,
-      targets: [],
-      spellId: 'shadow_dash',
-      now: 9000,
-      phase: 'PLAYING',
-      nextProjectileId: () => 'unused'
-    });
-
-    expect(dash.ok).toBe(true);
-    expect(dash.kind).toBe('dash');
-    expect(caster.z).toBe(-4.5);
-
-    caster.x = ARENA_BOUNDS.maxX - 0.5;
-    caster.z = 0;
-    caster.rotY = -Math.PI / 2;
-    caster.cooldowns.shadow_dash = 0;
-    caster.mana = 100;
-
-    executeSpellCast({
-      caster,
-      targets: [],
-      spellId: 'shadow_dash',
-      now: 13000,
-      phase: 'PLAYING',
-      nextProjectileId: () => 'unused'
-    });
-
-    expect(caster.x).toBe(ARENA_BOUNDS.maxX);
-
     expect(applyProjectileDamage(nearTarget, 'ice_bolt')).toEqual({
       damage: 12,
       defeated: false
     });
     expect(nearTarget.hp).toBe(72);
+  });
+
+  it('moves the caster forward when casting shadow dash', () => {
+    const caster = createTestPlayer('caster');
+    caster.x = 0;
+    caster.z = 0;
+    caster.rotY = 0;
+    caster.mana = 100;
+
+    const result = executeSpellCast({
+      caster,
+      targets: [],
+      spellId: 'shadow_dash',
+      now: 7000,
+      phase: 'PLAYING',
+      nextProjectileId: () => 'unused'
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.kind).toBe('instant');
+    expect(caster.mana).toBe(86);
+    expect(caster.cooldowns.shadow_dash).toBe(8600);
+    expect(caster.x).toBe(0);
+    expect(caster.z).toBe(-3.2);
+  });
+
+  it('keeps shadow dash outside arena collision walls', () => {
+    const caster = createTestPlayer('blocked-dasher');
+    caster.x = 0;
+    caster.z = 1.2;
+    caster.rotY = 0;
+    caster.mana = 100;
+
+    const result = executeSpellCast({
+      caster,
+      targets: [],
+      spellId: 'shadow_dash',
+      now: 8000,
+      phase: 'PLAYING',
+      nextProjectileId: () => 'unused',
+      arenaCollision: {
+        bounds: { ...ARENA_BOUNDS },
+        floorY: 0,
+        spawnPoints: [],
+        collisionWalls: [
+          { id: 'dash-wall', x: 0, z: 0, width: 4, depth: 0.5, height: 2, rotY: 0 }
+        ]
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(caster.z).toBeGreaterThanOrEqual(0.69);
+  });
+
+  it('computes horizontal knockback away from the caster', () => {
+    expect(directionAwayFrom({ x: 0, z: 0 }, { x: 0, z: -3 })).toEqual({ x: 0, z: -1 });
+    expect(directionAwayFrom({ x: 0, z: 0 }, { x: 4, z: 0 })).toEqual({ x: 1, z: 0 });
   });
 });

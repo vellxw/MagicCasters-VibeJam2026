@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CharacterClass } from '../../../shared/classes';
 
 export interface PlayerSnapshot {
   id: string;
@@ -13,6 +14,7 @@ export interface PlayerSnapshot {
   casting: boolean;
   selectedSpell: string;
   teamId?: string;
+  characterClass?: CharacterClass;
   fireballReadyAt?: number;
   iceBoltReadyAt?: number;
   lightBurstReadyAt?: number;
@@ -118,6 +120,7 @@ export class LocalPlayerController {
   dispose(scene: THREE.Object3D): void {
     scene.remove(this.group);
     scene.remove(this.groundShadow);
+    (this.nameSprite.material as THREE.SpriteMaterial).map?.dispose();
     this.group.traverse((object) => {
       const mesh = object as THREE.Mesh;
       mesh.geometry?.dispose?.();

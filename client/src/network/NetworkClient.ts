@@ -5,8 +5,29 @@ import {
   type MoveInput
 } from '../../../shared/types';
 import type { SpellId } from '../../../shared/spells';
+import type { CharacterClass } from '../../../shared/classes';
 
 export type NetRoom = Room;
+
+export interface JoinRequest {
+  roomName: typeof ROOM_NAME;
+  options: {
+    name: string;
+    mode: MatchMode;
+    characterClass: CharacterClass;
+  };
+}
+
+export function createJoinOptions(name: string, mode: MatchMode, characterClass: CharacterClass): JoinRequest {
+  return {
+    roomName: ROOM_NAME,
+    options: {
+      name,
+      mode,
+      characterClass
+    }
+  };
+}
 
 export class NetworkClient {
   room: NetRoom | null = null;
@@ -20,12 +41,10 @@ export class NetworkClient {
     this.client = new Client(endpoint);
   }
 
-  async connect(name: string, mode: MatchMode): Promise<void> {
+  async connect(name: string, mode: MatchMode, characterClass: CharacterClass = 'arcanist'): Promise<void> {
     this.status = 'connecting';
-    this.room = await this.client.joinOrCreate(ROOM_NAME, {
-      name,
-      mode
-    });
+    const request = createJoinOptions(name, mode, characterClass);
+    this.room = await this.client.joinOrCreate(request.roomName, request.options);
     this.status = 'connected';
 
     this.room.onStateChange((state: any) => {

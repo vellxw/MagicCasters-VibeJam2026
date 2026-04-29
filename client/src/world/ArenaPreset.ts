@@ -9,9 +9,12 @@ import type {
   MatchMode
 } from '../../../shared/types';
 import {
+  normalizeSplatQuality,
   resolveEnabledModes,
+  resolveSplatQualityEntry,
   resolveSpawnPointsForMode,
-  spawnPointsByModeForPreset
+  spawnPointsByModeForPreset,
+  type SplatQuality
 } from '../../../shared/splatMapPool';
 
 export interface ArenaVector {
@@ -23,6 +26,8 @@ export interface ArenaVector {
 export interface SplatArenaPreset {
   presetId: string;
   presetVersion?: number;
+  calibrationGroupId?: string;
+  quality?: SplatQuality;
   arenaId: ArenaId;
   displayName: string;
   type: 'splat';
@@ -62,6 +67,17 @@ export interface SplatMapEntry {
   splatUrl: string;
   splatFileSizeBytes?: number;
   enabledModes: MatchMode[];
+  calibrationGroupId?: string;
+  quality?: SplatQuality;
+  defaultQuality: SplatQuality;
+  qualities: Partial<Record<SplatQuality, SplatMapQualityEntry>>;
+}
+
+export interface SplatMapQualityEntry {
+  presetId: string;
+  presetUrl: string;
+  splatUrl: string;
+  splatFileSizeBytes?: number;
 }
 
 export interface SplatMapCatalog {
@@ -79,6 +95,7 @@ export interface SplatPresetHistoryEntry {
 
 export const SPLAT_CATALOG_URL = '/arena-presets/splat-catalog.json';
 const ACTIVE_SPLAT_PRESET_KEY = 'magic-casters:active-splat-preset';
+const ACTIVE_SPLAT_QUALITY_KEY = 'magic-casters:active-splat-quality';
 const SPLAT_PRESET_SETTINGS_PREFIX = 'magic-casters:splat-preset:';
 const SPLAT_PRESET_HISTORY_PREFIX = 'magic-casters:splat-preset-history:';
 const SPLAT_PRESET_HISTORY_LIMIT = 5;
@@ -100,14 +117,16 @@ export async function loadSplatMapCatalog(url = SPLAT_CATALOG_URL): Promise<Spla
 }
 
 export async function loadConfiguredSplatArenaPreset(
-  presetId = getStoredSplatPresetId()
-): Promise<{ catalog: SplatMapCatalog; entry: SplatMapEntry; basePreset: SplatArenaPreset; preset: SplatArenaPreset }> {
+  presetId = getStoredSplatPresetId(),
+  quality = getStoredSplatQuality()
+): Promise<{ catalog: SplatMapCatalog; entry: SplatMapEntry; quality: SplatQuality; basePreset: SplatArenaPreset; preset: SplatArenaPreset }> {
   const catalog = await loadSplatMapCatalog();
   const entry = findSplatMapEntry(catalog, presetId);
-  const basePreset = await loadSplatArenaPreset(entry.presetUrl);
-  const savedPreset = loadSavedSplatPreset(basePreset.presetId);
+  const variant = resolveSplatQualityEntry(entry, quality);
+  const basePreset = await loadSplatArenaPreset(variant.presetUrl);
+  const savedPreset = loadSavedSplatPreset(getSplatCalibrationStorageKey(basePreset));
   const preset = savedPreset ? mergeSavedPreset(basePreset, savedPreset) : basePreset;
-  return { catalog, entry, basePreset, preset };
+  return { catalog, entry, quality: variant.quality, basePreset, preset };
 }
 
 export function saveConfiguredSplatArenaPreset(
@@ -116,8 +135,9 @@ export function saveConfiguredSplatArenaPreset(
 ): SplatPresetHistoryEntry | null {
   try {
     const normalized = normalizeSplatArenaPreset(preset);
-    localStorage.setItem(`${SPLAT_PRESET_SETTINGS_PREFIX}${normalized.presetId}`, JSON.stringify(normalized));
-    setStoredSplatPresetId(normalized.presetId);
+    localStorage.setItem(`${SPLAT_PRESET_SETTINGS_PREFIX}${getSplatCalibrationStorageKey(normalized)}`, JSON.stringify(normalized));
+    setStoredSplatPresetId(getSplatCalibrationStorageKey(normalized));
+    setStoredSplatQuality(normalized.quality ?? 'high');
     return pushSplatPresetHistory(normalized, reason);
   } catch (error) {
     console.warn('Unable to save splat preset', error);
@@ -176,6 +196,27 @@ export function setStoredSplatPresetId(presetId: string): void {
   }
 }
 
+export function getStoredSplatQuality(): SplatQuality | undefined {
+  try {
+    const quality = localStorage.getItem(ACTIVE_SPLAT_QUALITY_KEY);
+    return quality === 'low' || quality === 'mid' || quality === 'high' ? quality : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setStoredSplatQuality(quality: SplatQuality): void {
+  try {
+    localStorage.setItem(ACTIVE_SPLAT_QUALITY_KEY, quality);
+  } catch (error) {
+    console.warn('Unable to store active splat quality', error);
+  }
+}
+
+export function getSplatCalibrationStorageKey(preset: Pick<SplatArenaPreset, 'presetId' | 'calibrationGroupId'>): string {
+  return preset.calibrationGroupId?.trim() || preset.presetId;
+}
+
 export function normalizeSplatArenaPreset(value: unknown): SplatArenaPreset {
   const data = asRecord(value);
   const arenaId = data.arenaId === 'splat-test' ? 'splat-test' : 'lightweight';
@@ -192,6 +233,8 @@ export function normalizeSplatArenaPreset(value: unknown): SplatArenaPreset {
   return {
     presetId: asString(data.presetId, 'splat-test'),
     presetVersion: asOptionalNumber(data.presetVersion),
+    calibrationGroupId: asOptionalString(data.calibrationGroupId),
+    quality: asOptionalSplatQuality(data.quality),
     arenaId,
     displayName: asString(data.displayName, 'Realistic Arena Test'),
     type: 'splat',
@@ -231,13 +274,27 @@ function normalizeSplatMapCatalog(value: unknown): SplatMapCatalog {
 function normalizeSplatMapEntry(value: unknown): SplatMapEntry {
   const data = asRecord(value);
   const presetId = requiredString(data.presetId, 'presetId');
+  const defaultQuality = normalizeSplatQuality(data.defaultQuality ?? data.quality, 'high');
+  const qualities = asSplatQualities(data.qualities);
+  if (Object.keys(qualities).length === 0) {
+    qualities[defaultQuality] = {
+      presetId,
+      presetUrl: requiredString(data.presetUrl, 'presetUrl'),
+      splatUrl: requiredString(data.splatUrl, 'splatUrl'),
+      splatFileSizeBytes: asOptionalNumber(data.splatFileSizeBytes)
+    };
+  }
   return {
     presetId,
     displayName: asString(data.displayName, presetId),
     presetUrl: requiredString(data.presetUrl, 'presetUrl'),
     splatUrl: requiredString(data.splatUrl, 'splatUrl'),
     splatFileSizeBytes: asOptionalNumber(data.splatFileSizeBytes),
-    enabledModes: resolveEnabledModes(data)
+    enabledModes: resolveEnabledModes(data),
+    calibrationGroupId: asOptionalString(data.calibrationGroupId),
+    quality: asOptionalSplatQuality(data.quality),
+    defaultQuality,
+    qualities
   };
 }
 
@@ -263,9 +320,9 @@ function pushSplatPresetHistory(preset: SplatArenaPreset, reason: SplatPresetSav
     savedAt: new Date().toISOString(),
     preset
   };
-  const history = loadSplatPresetHistory(preset.presetId);
+  const history = loadSplatPresetHistory(getSplatCalibrationStorageKey(preset));
   const nextHistory = [entry, ...history].slice(0, SPLAT_PRESET_HISTORY_LIMIT);
-  localStorage.setItem(`${SPLAT_PRESET_HISTORY_PREFIX}${preset.presetId}`, JSON.stringify(nextHistory));
+  localStorage.setItem(`${SPLAT_PRESET_HISTORY_PREFIX}${getSplatCalibrationStorageKey(preset)}`, JSON.stringify(nextHistory));
   return entry;
 }
 
@@ -311,15 +368,15 @@ export function mergeSplatArenaPresetForRuntime(basePreset: SplatArenaPreset, sa
     spawnPoints: savedPreset.spawnPoints.map((spawn) => ({ ...spawn })),
     spawnPointsByMode: cloneSpawnPointsByMode(savedPreset.spawnPointsByMode),
     enabledModes: [...savedPreset.enabledModes],
-    collisionMeshUrl: savedPreset.collisionMeshUrl ?? basePreset.collisionMeshUrl,
-    voxelCollisionUrl: savedPreset.voxelCollisionUrl ?? basePreset.voxelCollisionUrl,
+    collisionMeshUrl: basePreset.collisionMeshUrl ?? savedPreset.collisionMeshUrl,
+    voxelCollisionUrl: basePreset.voxelCollisionUrl ?? savedPreset.voxelCollisionUrl,
     collisionErasers: savedPreset.collisionErasers.map((eraser) => ({ ...eraser })),
     collisionWalls: savedPreset.collisionWalls.map((wall) => ({ ...wall }))
   };
 }
 
 export function splatPresetIsCompatibleWithBase(basePreset: SplatArenaPreset, savedPreset: SplatArenaPreset): boolean {
-  if (basePreset.presetId !== savedPreset.presetId) return false;
+  if (getSplatCalibrationStorageKey(basePreset) !== getSplatCalibrationStorageKey(savedPreset)) return false;
   if (basePreset.presetVersion === undefined) return true;
   return savedPreset.presetVersion === basePreset.presetVersion;
 }
@@ -421,8 +478,38 @@ function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
 function asNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function asOptionalSplatQuality(value: unknown): SplatQuality | undefined {
+  return value === 'low' || value === 'mid' || value === 'high' ? value : undefined;
+}
+
+function asSplatQualities(value: unknown): Partial<Record<SplatQuality, SplatMapQualityEntry>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const data = value as Record<string, unknown>;
+  const qualities: Partial<Record<SplatQuality, SplatMapQualityEntry>> = {};
+  for (const quality of ['low', 'mid', 'high'] as const) {
+    const entry = data[quality];
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const presetId = record.presetId;
+    const presetUrl = record.presetUrl;
+    const splatUrl = record.splatUrl;
+    if (typeof presetId !== 'string' || typeof presetUrl !== 'string' || typeof splatUrl !== 'string') continue;
+    qualities[quality] = {
+      presetId,
+      presetUrl,
+      splatUrl,
+      splatFileSizeBytes: asOptionalNumber(record.splatFileSizeBytes)
+    };
+  }
+  return qualities;
 }
 
 function asVoxelCollisionUrl(value: unknown): string | null {

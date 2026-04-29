@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, normalize, resolve, sep } from 'node:path';
 import { normalizeArenaCollisionConfig } from '../../../shared/arenaCollision.js';
 import {
+  resolveSplatQualityEntry,
   selectRandomSplatMapForMode,
   resolveSpawnPointsForMode,
+  type SplatMapQualityEntry,
   type SplatMapPoolCatalog,
   type SplatMapPoolEntry
 } from '../../../shared/splatMapPool.js';
@@ -29,8 +31,9 @@ export function selectPublishedSplatArenaForMode(
   while (candidates.length > 0) {
     const selected = selectRandomSplatMapForMode({ ...catalog, maps: candidates }, mode, random);
     if (!selected) return null;
+    const selectedVariant = resolveSplatQualityEntry(selected);
 
-    const preset = readPublishedSplatPreset(root, selected);
+    const preset = readPublishedSplatPreset(root, selectedVariant);
     if (preset) {
       const collision = stabilizedCollisionConfigFromPublishedPreset(preset, mode, root);
       if (!collision) {
@@ -42,7 +45,7 @@ export function selectPublishedSplatArenaForMode(
       return {
         presetId: stringField(preset.presetId, selected.presetId),
         displayName: stringField(preset.displayName, selected.displayName),
-        presetUrl: selected.presetUrl,
+        presetUrl: selectedVariant.presetUrl,
         collision
       };
     }
@@ -70,7 +73,7 @@ function readPublishedSplatCatalog(root: string): SplatMapPoolCatalog | null {
   }
 }
 
-function readPublishedSplatPreset(root: string, entry: SplatMapPoolEntry): Record<string, unknown> | null {
+function readPublishedSplatPreset(root: string, entry: Pick<SplatMapPoolEntry | SplatMapQualityEntry, 'presetId' | 'presetUrl'>): Record<string, unknown> | null {
   const filename = basename(entry.presetUrl);
   if (!filename.endsWith('.json') || filename.includes('..')) return null;
   const path = findArenaPresetAsset(root, filename);

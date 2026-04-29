@@ -1,65 +1,185 @@
 {
-  "defaultPresetId": "businesspark-belp-1og-ost",
+  "defaultPresetId": "celestial-marble-crystal-palace",
   "maps": [
     {
-      "presetId": "atrium-godiva-10m-sh3-spirulae-splat",
-      "displayName": "Atrium Godiva (10M SH3, spirulae-splat)",
-      "presetUrl": "/arena-presets/atrium-godiva-10m-sh3-spirulae-splat.json",
-      "splatUrl": "/splats/Atrium Godiva (10M SH3, spirulae-splat).sog",
-      "splatFileSizeBytes": 128754525,
-      "enabledModes": []
+      "presetId": "celestial-marble-crystal-palace",
+      "calibrationGroupId": "celestial-marble-crystal-palace",
+      "displayName": "Celestial Marble Crystal Palace",
+      "presetUrl": "/arena-presets/celestial-marble-crystal-palace-high.json",
+      "splatUrl": "/splats/celestial-marble-crystal-palace-high.sog",
+      "splatFileSizeBytes": 24817657,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "celestial-marble-crystal-palace-low",
+          "presetUrl": "/arena-presets/celestial-marble-crystal-palace-low.json",
+          "splatUrl": "/splats/celestial-marble-crystal-palace-low.sog",
+          "splatFileSizeBytes": 6752400
+        },
+        "mid": {
+          "presetId": "celestial-marble-crystal-palace-mid",
+          "presetUrl": "/arena-presets/celestial-marble-crystal-palace-mid.json",
+          "splatUrl": "/splats/celestial-marble-crystal-palace-mid.sog",
+          "splatFileSizeBytes": 13532663
+        },
+        "high": {
+          "presetId": "celestial-marble-crystal-palace-high",
+          "presetUrl": "/arena-presets/celestial-marble-crystal-palace-high.json",
+          "splatUrl": "/splats/celestial-marble-crystal-palace-high.sog",
+          "splatFileSizeBytes": 24817657
+        }
+      }
     },
     {
-      "presetId": "businesspark-belp-1og-ost",
-      "displayName": "Businesspark Belp 1OG Ost",
-      "presetUrl": "/arena-presets/businesspark-belp-1og-ost.json",
-      "splatUrl": "/splats/businesspark-belp-1og-ost.sog",
-      "splatFileSizeBytes": 14381152,
-      "enabledModes": [
-        "1v1"
-      ]
+      "presetId": "grand-medieval-castle-courtyard",
+      "calibrationGroupId": "grand-medieval-castle-courtyard",
+      "displayName": "Grand Medieval Castle Courtyard",
+      "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-high.json",
+      "splatUrl": "/splats/grand-medieval-castle-courtyard-high.sog",
+      "splatFileSizeBytes": 23949683,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "grand-medieval-castle-courtyard-low",
+          "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-low.json",
+          "splatUrl": "/splats/grand-medieval-castle-courtyard-low.sog",
+          "splatFileSizeBytes": 6452858
+        },
+        "mid": {
+          "presetId": "grand-medieval-castle-courtyard-mid",
+          "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-mid.json",
+          "splatUrl": "/splats/grand-medieval-castle-courtyard-mid.sog",
+          "splatFileSizeBytes": 12930384
+        },
+        "high": {
+          "presetId": "grand-medieval-castle-courtyard-high",
+          "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-high.json",
+          "splatUrl": "/splats/grand-medieval-castle-courtyard-high.sog",
+          "splatFileSizeBytes": 23949683
+        }
+      }
     },
     {
-      "presetId": "dorfplatz-interlaken-switzerland",
-      "displayName": "Dorfplatz Interlaken Switzerland",
-      "presetUrl": "/arena-presets/dorfplatz-interlaken-switzerland.json",
-      "splatUrl": "/splats/Dorfplatz Interlaken Switzerland.sog",
-      "splatFileSizeBytes": 56040892,
-      "enabledModes": []
+      "presetId": "ruined-palace-of-purple-crystals",
+      "calibrationGroupId": "ruined-palace-of-purple-crystals",
+      "displayName": "Ruined Palace of Purple Crystals",
+      "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-high.json",
+      "splatUrl": "/splats/ruined-palace-of-purple-crystals-high.sog",
+      "splatFileSizeBytes": 24261514,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "ruined-palace-of-purple-crystals-low",
+          "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-low.json",
+          "splatUrl": "/splats/ruined-palace-of-purple-crystals-low.sog",
+          "splatFileSizeBytes": 6647102
+        },
+        "mid": {
+          "presetId": "ruined-palace-of-purple-crystals-mid",
+          "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-mid.json",
+          "splatUrl": "/splats/ruined-palace-of-purple-crystals-mid.sog",
+          "splatFileSizeBytes": 13231700
+        },
+        "high": {
+          "presetId": "ruined-palace-of-purple-crystals-high",
+          "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-high.json",
+          "splatUrl": "/splats/ruined-palace-of-purple-crystals-high.sog",
+          "splatFileSizeBytes": 24261514
+        }
+      }
     },
     {
-      "presetId": "maison-provence",
-      "displayName": "Maison Provence",
-      "presetUrl": "/arena-presets/maison-provence.json",
-      "splatUrl": "/splats/Maison Provence.sog",
-      "splatFileSizeBytes": 142759493,
-      "enabledModes": []
+      "presetId": "the-arcane-ritual-library",
+      "calibrationGroupId": "the-arcane-ritual-library",
+      "displayName": "The Arcane Ritual Library",
+      "presetUrl": "/arena-presets/the-arcane-ritual-library-high.json",
+      "splatUrl": "/splats/the-arcane-ritual-library-high.sog",
+      "splatFileSizeBytes": 23931955,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "the-arcane-ritual-library-low",
+          "presetUrl": "/arena-presets/the-arcane-ritual-library-low.json",
+          "splatUrl": "/splats/the-arcane-ritual-library-low.sog",
+          "splatFileSizeBytes": 6644263
+        },
+        "mid": {
+          "presetId": "the-arcane-ritual-library-mid",
+          "presetUrl": "/arena-presets/the-arcane-ritual-library-mid.json",
+          "splatUrl": "/splats/the-arcane-ritual-library-mid.sog",
+          "splatFileSizeBytes": 13329223
+        },
+        "high": {
+          "presetId": "the-arcane-ritual-library-high",
+          "presetUrl": "/arena-presets/the-arcane-ritual-library-high.json",
+          "splatUrl": "/splats/the-arcane-ritual-library-high.sog",
+          "splatFileSizeBytes": 23931955
+        }
+      }
     },
     {
-      "presetId": "moscow-novoslobodskaya-dollhouse",
-      "displayName": "Moscow Novoslobodskaya Dollhouse",
-      "presetUrl": "/arena-presets/moscow-novoslobodskaya-dollhouse.json",
-      "splatUrl": "/splats/moscow-novoslobodskaya-dollhouse.sog",
-      "splatFileSizeBytes": 7143460,
-      "enabledModes": []
+      "presetId": "the-dark-gothic-citadel-bridge",
+      "calibrationGroupId": "the-dark-gothic-citadel-bridge",
+      "displayName": "The Dark Gothic Citadel Bridge",
+      "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-high.json",
+      "splatUrl": "/splats/the-dark-gothic-citadel-bridge-high.sog",
+      "splatFileSizeBytes": 23989949,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "the-dark-gothic-citadel-bridge-low",
+          "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-low.json",
+          "splatUrl": "/splats/the-dark-gothic-citadel-bridge-low.sog",
+          "splatFileSizeBytes": 6600897
+        },
+        "mid": {
+          "presetId": "the-dark-gothic-citadel-bridge-mid",
+          "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-mid.json",
+          "splatUrl": "/splats/the-dark-gothic-citadel-bridge-mid.sog",
+          "splatFileSizeBytes": 13174849
+        },
+        "high": {
+          "presetId": "the-dark-gothic-citadel-bridge-high",
+          "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-high.json",
+          "splatUrl": "/splats/the-dark-gothic-citadel-bridge-high.sog",
+          "splatFileSizeBytes": 23989949
+        }
+      }
     },
     {
-      "presetId": "smart-room-colmap-lfs",
-      "displayName": "Smart room colmap LFS",
-      "presetUrl": "/arena-presets/smart-room-colmap-lfs.json",
-      "splatUrl": "/splats/Smart_room_colmap_LFS.sog",
-      "splatFileSizeBytes": 6648422,
-      "enabledModes": [
-        "1v1"
-      ]
-    },
-    {
-      "presetId": "virtueller-3d-rundgang-tammenshof",
-      "displayName": "Virtueller 3d Rundgang Tammenshof",
-      "presetUrl": "/arena-presets/virtueller-3d-rundgang-tammenshof.json",
-      "splatUrl": "/splats/Virtueller 3d Rundgang Tammenshof.sog",
-      "splatFileSizeBytes": 145981816,
-      "enabledModes": []
+      "presetId": "the-dragon-gate-bridge",
+      "calibrationGroupId": "the-dragon-gate-bridge",
+      "displayName": "The Dragon Gate Bridge",
+      "presetUrl": "/arena-presets/the-dragon-gate-bridge-high.json",
+      "splatUrl": "/splats/the-dragon-gate-bridge-high.sog",
+      "splatFileSizeBytes": 24616928,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "the-dragon-gate-bridge-low",
+          "presetUrl": "/arena-presets/the-dragon-gate-bridge-low.json",
+          "splatUrl": "/splats/the-dragon-gate-bridge-low.sog",
+          "splatFileSizeBytes": 6687730
+        },
+        "mid": {
+          "presetId": "the-dragon-gate-bridge-mid",
+          "presetUrl": "/arena-presets/the-dragon-gate-bridge-mid.json",
+          "splatUrl": "/splats/the-dragon-gate-bridge-mid.sog",
+          "splatFileSizeBytes": 13382581
+        },
+        "high": {
+          "presetId": "the-dragon-gate-bridge-high",
+          "presetUrl": "/arena-presets/the-dragon-gate-bridge-high.json",
+          "splatUrl": "/splats/the-dragon-gate-bridge-high.sog",
+          "splatFileSizeBytes": 24616928
+        }
+      }
     }
   ]
 }

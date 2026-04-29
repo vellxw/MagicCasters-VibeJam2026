@@ -145,6 +145,31 @@ describe('MovementSystem', () => {
     expect(player.airDashAvailable).toBe(false);
   });
 
+  it('keeps air dash outside arena collision walls', () => {
+    const player = createTestPlayer('blocked-air-dasher');
+    player.x = 0;
+    player.y = 1;
+    player.z = 1.2;
+    player.velocityY = 0;
+    player.rotY = 0;
+
+    applyMovement(
+      player,
+      { forward: true, backward: false, left: false, right: false, dash: true },
+      0.05,
+      {
+        bounds: { ...ARENA_BOUNDS },
+        floorY: 0,
+        spawnPoints: [],
+        collisionWalls: [
+          { id: 'dash-wall', x: 0, z: 0, width: 4, depth: 0.5, height: 2, rotY: 0 }
+        ]
+      }
+    );
+
+    expect(player.z).toBeGreaterThanOrEqual(0.69);
+  });
+
   it('refreshes the air dash only after the player lands again', () => {
     const player = createTestPlayer('single-air-dash');
     player.y = 1;

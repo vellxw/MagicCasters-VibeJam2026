@@ -1,6 +1,7 @@
 import { Schema, type } from '@colyseus/schema';
 import { MAX_HP, MAX_MANA, SPAWNS, type TeamId } from '../../../shared/types.js';
 import type { SpellId } from '../../../shared/spells.js';
+import type { CharacterClass } from '../../../shared/classes.js';
 import type { ServerPlayer } from '../systems/SpellSystem.js';
 
 export class PlayerState extends Schema implements ServerPlayer {
@@ -16,17 +17,26 @@ export class PlayerState extends Schema implements ServerPlayer {
   @type('number') mana = MAX_MANA;
   @type('boolean') casting = false;
   @type('string') selectedSpell = '';
+  @type('string') characterClass: CharacterClass = 'arcanist';
   @type('number') fireballReadyAt = 0;
   @type('number') iceBoltReadyAt = 0;
   @type('number') lightBurstReadyAt = 0;
   @type('number') shadowDashReadyAt = 0;
-
+  @type('boolean') shieldActive = false;
+  @type('number') silencedUntil = 0;
+  @type('number') slowedUntil = 0;
+  @type('number') speedBoostUntil = 0;
   cooldowns: Partial<Record<SpellId, number>> = {};
   castingUntil = 0;
   velocityY = 0;
-  airDashAvailable = true;
 
-  constructor(id?: string, name?: string, teamId: TeamId = 'A', spawnIndex = 0) {
+  constructor(
+    id?: string,
+    name?: string,
+    teamId: TeamId = 'A',
+    spawnIndex = 0,
+    characterClass: CharacterClass = 'arcanist'
+  ) {
     super();
     if (!id) return;
 
@@ -34,6 +44,7 @@ export class PlayerState extends Schema implements ServerPlayer {
     this.id = id;
     this.name = sanitizeName(name);
     this.teamId = teamId;
+    this.characterClass = characterClass;
     this.x = spawn.x;
     this.y = spawn.y;
     this.z = spawn.z;
@@ -51,12 +62,15 @@ export class PlayerState extends Schema implements ServerPlayer {
     this.z = spawn.z;
     this.rotY = spawn.rotY;
     this.velocityY = 0;
-    this.airDashAvailable = true;
     this.anim = 'idle';
     this.hp = MAX_HP;
     this.mana = MAX_MANA;
     this.casting = false;
     this.selectedSpell = '';
+    this.shieldActive = false;
+    this.silencedUntil = 0;
+    this.slowedUntil = 0;
+    this.speedBoostUntil = 0;
     this.cooldowns = {};
     this.castingUntil = 0;
     this.syncCooldownFields();

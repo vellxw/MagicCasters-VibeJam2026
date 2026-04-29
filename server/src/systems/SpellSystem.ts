@@ -1,7 +1,9 @@
-import { ARENA_BOUNDS, MAX_HP, MAX_MANA, type PublicProjectileState, type RoomPhase, type TeamId } from '../../../shared/types.js';
+import { ARENA_BOUNDS, MAX_HP, MAX_MANA, type ArenaCollisionConfig, type PublicProjectileState, type RoomPhase, type TeamId } from '../../../shared/types.js';
+import { moveWithArenaCollision } from '../../../shared/arenaCollision.js';
 import { isSpellId, SPELLS, type SpellId } from '../../../shared/spells.js';
+import type { SparseVoxelCollision } from '../../../shared/voxelCollision.js';
 
-export type CastFailureReason = 'unknown_spell' | 'wrong_phase' | 'defeated' | 'no_mana' | 'cooldown';
+export type CastFailureReason = 'unknown_spell' | 'wrong_phase' | 'defeated' | 'no_mana' | 'cooldown' | 'silenced';
 
 export interface ServerPlayer {
   id: string;
@@ -12,12 +14,16 @@ export interface ServerPlayer {
   z: number;
   rotY: number;
   velocityY?: number;
-  airDashAvailable?: boolean;
   hp: number;
   mana: number;
   cooldowns: Partial<Record<SpellId, number>>;
   casting: boolean;
   selectedSpell: string;
+  shieldActive?: boolean;
+  silencedUntil?: number;
+  slowedUntil?: number;
+  speedBoostUntil?: number;
+  airDashAvailable?: boolean;
 }
 
 export type CastValidation =
@@ -27,8 +33,7 @@ export type CastValidation =
 export type CastResult =
   | { ok: false; reason: CastFailureReason }
   | { ok: true; kind: 'projectile'; spellId: SpellId; projectile: PublicProjectileState }
-  | { ok: true; kind: 'instant'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> }
-  | { ok: true; kind: 'dash'; spellId: SpellId; x: number; z: number };
+  | { ok: true; kind: 'instant'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> };
 
 export interface ExecuteCastArgs {
   caster: ServerPlayer;
@@ -37,6 +42,8 @@ export interface ExecuteCastArgs {
   now: number;
   phase: RoomPhase;
   nextProjectileId: () => string;
+  arenaCollision?: ArenaCollisionConfig;
+  voxelCollision?: SparseVoxelCollision | null;
 }
 
 export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer {
@@ -49,7 +56,6 @@ export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer
     z: 0,
     rotY: 0,
     velocityY: 0,
-    airDashAvailable: true,
     hp: MAX_HP,
     mana: MAX_MANA,
     cooldowns: {},
@@ -69,6 +75,10 @@ export function validateCast(player: ServerPlayer, spellId: SpellId | string, no
 
   if (player.hp <= 0) {
     return { ok: false, reason: 'defeated' };
+  }
+
+  if ((player.silencedUntil ?? 0) > now) {
+    return { ok: false, reason: 'silenced' };
   }
 
   const spell = SPELLS[spellId];
@@ -95,27 +105,35 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
   args.caster.casting = true;
   args.caster.selectedSpell = validation.spellId;
 
-  if (spell.kind === 'dash') {
-    const direction = directionFromRotation(args.caster.rotY);
-    args.caster.x = clamp(args.caster.x + direction.x * spell.range, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
-    args.caster.z = clamp(args.caster.z + direction.z * spell.range, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
-    return {
-      ok: true,
-      kind: 'dash',
-      spellId: validation.spellId,
-      x: args.caster.x,
-      z: args.caster.z
-    };
-  }
-
-  if (spell.kind === 'instant') {
+  if (spell.kind === 'instant' || spell.kind === 'dash') {
     const hits: Array<{ targetId: string; damage: number; hp: number }> = [];
-    for (const target of args.targets) {
-      if (target.id === args.caster.id || target.hp <= 0) continue;
-      const distance = Math.hypot(target.x - args.caster.x, target.z - args.caster.z);
-      if (distance <= spell.range) {
-        const damage = applyDamage(target, spell.damage);
-        hits.push({ targetId: target.id, damage, hp: target.hp });
+    if (spell.kind === 'dash') {
+      const direction = directionFromRotation(args.caster.rotY);
+      const bounds = args.arenaCollision?.bounds ?? ARENA_BOUNDS;
+      const resolved = moveWithArenaCollision(
+        args.caster.x,
+        args.caster.z,
+        args.caster.x + direction.x * spell.range,
+        args.caster.z + direction.z * spell.range,
+        bounds,
+        args.arenaCollision?.collisionWalls ?? [],
+        {
+          playerY: args.caster.y,
+          floorY: args.arenaCollision?.floorY ?? 0,
+          voxelCollision: args.voxelCollision ?? null,
+          collisionErasers: args.arenaCollision?.collisionErasers ?? []
+        }
+      );
+      args.caster.x = round(clamp(resolved.x, bounds.minX, bounds.maxX));
+      args.caster.z = round(clamp(resolved.z, bounds.minZ, bounds.maxZ));
+    } else {
+      for (const target of args.targets) {
+        if (target.id === args.caster.id || target.hp <= 0) continue;
+        const distance = Math.hypot(target.x - args.caster.x, target.z - args.caster.z);
+        if (distance <= spell.range) {
+          const damage = applyDamage(target, spell.damage);
+          hits.push({ targetId: target.id, damage, hp: target.hp });
+        }
       }
     }
     return { ok: true, kind: 'instant', spellId: validation.spellId, hits };
@@ -160,11 +178,26 @@ export function directionFromRotation(rotY: number): { x: number; z: number } {
   };
 }
 
+export function directionAwayFrom(
+  from: { x: number; z: number },
+  to: { x: number; z: number }
+): { x: number; z: number } {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const length = Math.hypot(dx, dz);
+  if (length <= 0.000001) return { x: 0, z: 0 };
+  return { x: round(dx / length), z: round(dz / length) };
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function applyDamage(target: ServerPlayer, amount: number): number {
+export function applyDamage(target: ServerPlayer, amount: number): number {
+  if (target.shieldActive) {
+    target.shieldActive = false;
+    return 0;
+  }
   const before = target.hp;
   target.hp = Math.max(0, target.hp - amount);
   return before - target.hp;

@@ -1,0 +1,89 @@
+{
+  "presetId": "the-dark-gothic-citadel-bridge-mid",
+  "calibrationGroupId": "the-dark-gothic-citadel-bridge",
+  "quality": "mid",
+  "arenaId": "splat-test",
+  "displayName": "The Dark Gothic Citadel Bridge (MID)",
+  "type": "splat",
+  "splatUrl": "/splats/the-dark-gothic-citadel-bridge-mid.sog",
+  "splatFileSizeBytes": 13174849,
+  "enabledModes": [],
+  "collisionMeshUrl": null,
+  "voxelCollisionUrl": null,
+  "spawnPoints": [
+    {
+      "x": -5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": -1.5707963267948966
+    },
+    {
+      "x": 5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": 1.5707963267948966
+    }
+  ],
+  "spawnPointsByMode": {
+    "1v1": [
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": -1.5707963267948966
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": 1.5707963267948966
+      }
+    ],
+    "2v2": [
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": -1.25,
+        "rotY": -1.5707963267948966
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": 1.25,
+        "rotY": 1.5707963267948966
+      },
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": 1.25,
+        "rotY": -1.5707963267948966
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": -1.25,
+        "rotY": 1.5707963267948966
+      }
+    ]
+  },
+  "bounds": {
+    "minX": -8,
+    "maxX": 8,
+    "minZ": -6,
+    "maxZ": 6
+  },
+  "scale": 1,
+  "rotation": {
+    "x": 180,
+    "y": 180,
+    "z": 0
+  },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "floorY": 0,
+  "collisionErasers": [],
+  "collisionWalls": []
+}

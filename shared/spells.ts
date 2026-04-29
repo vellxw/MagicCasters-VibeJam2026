@@ -69,17 +69,106 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
     label: 'Shadow Dash',
     incantation: 'umbra',
     key: '4',
-    manaCost: 20,
-    cooldownMs: 4000,
+    manaCost: 14,
+    cooldownMs: 1600,
     kind: 'dash',
     damage: 0,
-    range: 4.5,
+    range: 3.2,
     radius: 0,
     speed: 0,
-    ttl: 0.3,
+    ttl: 0,
     color: 0xa78bfa
   }
 };
+
+export interface ClassSpellVariant {
+  id: SpellId;
+  label: string;
+  incantation: string;
+  description: string;
+  color: number;
+}
+
+import type { CharacterClass } from './classes.js';
+
+export const CLASS_SPELL_VARIANTS: Record<
+  CharacterClass,
+  Record<SpellId, ClassSpellVariant>
+> = {
+  arcanist: {
+    fireball: {
+      id: 'fireball',
+      label: 'Fuego Abisal',
+      incantation: 'abyssus',
+      description:
+        'Proyectil arcano de fuego violeta oscuro. Rapido, letal y perfecto para presionar.',
+      color: 0x7c3aed
+    },
+    ice_bolt: {
+      id: 'ice_bolt',
+      label: 'Espectro Falso',
+      incantation: 'umbra',
+      description:
+        'Aumenta tu velocidad y dejas una silueta residual que confunde al enemigo.',
+      color: 0x4c1d95
+    },
+    light_burst: {
+      id: 'light_burst',
+      label: 'Estallido Umbrio',
+      incantation: 'nox',
+      description:
+        'Explosion circular de energia oscura que empuja a los enemigos cercanos.',
+      color: 0x1e1b4b
+    },
+    shadow_dash: {
+      id: 'shadow_dash',
+      label: 'Paso Sombrio',
+      incantation: 'umbra',
+      description: 'Impulso breve en el aire para reposicionarte entre sombras.',
+      color: 0xa78bfa
+    }
+  },
+  divine: {
+    fireball: {
+      id: 'fireball',
+      label: 'Rayo Divino',
+      incantation: 'fulgur',
+      description:
+        'Rayo electrico sagrado que viaja veloz hacia el enemigo. Preciso y devastador.',
+      color: 0xf59e0b
+    },
+    ice_bolt: {
+      id: 'ice_bolt',
+      label: 'Barrera de Luz',
+      incantation: 'scutum',
+      description:
+        'Escudo celestial que absorbe completamente el proximo ataque recibido.',
+      color: 0x60a5fa
+    },
+    light_burst: {
+      id: 'light_burst',
+      label: 'Sello del Juicio',
+      incantation: 'judicium',
+      description:
+        'Sello divino que ralentiza y silencia al enemigo impactado. Ideal para cortar combos.',
+      color: 0xfef08a
+    },
+    shadow_dash: {
+      id: 'shadow_dash',
+      label: 'Impulso Celestial',
+      incantation: 'caelum',
+      description: 'Desplazamiento aereo corto envuelto en luz defensiva.',
+      color: 0x93c5fd
+    }
+  }
+};
+
+export function getClassSpellVariant(
+  spellId: SpellId,
+  characterClass: CharacterClass
+): ClassSpellVariant {
+  return CLASS_SPELL_VARIANTS[characterClass][spellId];
+}
 
 export function isSpellId(value: string): value is SpellId {
   return (SPELL_IDS as readonly string[]).includes(value);

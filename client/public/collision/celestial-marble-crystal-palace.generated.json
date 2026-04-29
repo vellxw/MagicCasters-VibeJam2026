@@ -1,0 +1,10 @@
+{
+  "generatedBy": "magic-casters-dev-api",
+  "arenaId": "celestial-marble-crystal-palace",
+  "calibrationGroupId": "celestial-marble-crystal-palace",
+  "splatFilename": "celestial-marble-crystal-palace-low.sog",
+  "collisionMeshUrl": "/collision/celestial-marble-crystal-palace.collision.glb",
+  "voxelCollisionUrl": "/collision/celestial-marble-crystal-palace.voxel.json",
+  "playableFilterBox": "-9.25,-0.75,-7.25,9.25,5,7.25",
+  "generatedAt": "2026-04-29T05:45:00.000Z"
+}

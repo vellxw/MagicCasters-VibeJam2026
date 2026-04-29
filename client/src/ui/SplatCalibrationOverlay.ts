@@ -1,6 +1,7 @@
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import { countAutoCollisionWalls, isAutoCollisionWall } from '../../../shared/autoCollisionWalls';
 import type { ArenaCollisionWall, MatchMode } from '../../../shared/types';
+import type { SplatQuality } from '../../../shared/splatMapPool';
 import {
   requiredSpawnCountForMode,
   resolveSpawnPointsForMode
@@ -98,6 +99,7 @@ export class SplatCalibrationOverlay {
   private wallInputs = new Map<WallFieldName, HTMLInputElement>();
   private eraserInputs = new Map<WallFieldName, HTMLInputElement>();
   private mapSelect: HTMLSelectElement;
+  private qualitySelect: HTMLSelectElement;
   private wallSelect: HTMLSelectElement;
   private eraserSelect: HTMLSelectElement;
   private collisionDebugInput: HTMLInputElement;
@@ -120,6 +122,7 @@ export class SplatCalibrationOverlay {
   onChange?: (settings: SplatCalibrationSettings, options?: CalibrationChangeOptions) => void;
   onBeforeReset?: (settings: SplatCalibrationSettings) => void;
   onSelectMap?: (presetId: string) => void;
+  onSelectQuality?: (quality: SplatQuality) => void;
   onSave?: () => void;
   onPublish?: () => void;
   onRestoreLast?: () => void;
@@ -143,6 +146,10 @@ export class SplatCalibrationOverlay {
       <label class="calibration-panel__map">
         <span>Map</span>
         <select data-calibration-map></select>
+      </label>
+      <label class="calibration-panel__map">
+        <span>Quality</span>
+        <select data-calibration-quality></select>
       </label>
       <div class="calibration-panel__map">
         <span>Use map in</span>
@@ -257,13 +264,18 @@ export class SplatCalibrationOverlay {
     this.statusEl = this.element.querySelector('[data-calibration-status]')!;
     this.feedbackEl = this.element.querySelector('[data-calibration-feedback]')!;
     this.mapSelect = this.element.querySelector('[data-calibration-map]')!;
+    this.qualitySelect = this.element.querySelector('[data-calibration-quality]')!;
     this.wallSelect = this.element.querySelector('[data-calibration-wall]')!;
     this.eraserSelect = this.element.querySelector('[data-calibration-eraser]')!;
     this.collisionDebugInput = this.element.querySelector('[data-calibration-collision-debug]')!;
     this.mode1v1Input = this.element.querySelector('[data-calibration-mode-1v1]')!;
     this.mode2v2Input = this.element.querySelector('[data-calibration-mode-2v2]')!;
     this.spawnModeSelect = this.element.querySelector('[data-calibration-spawn-mode]')!;
-    this.mapSelect.addEventListener('change', () => this.onSelectMap?.(this.mapSelect.value));
+    this.mapSelect.addEventListener('change', () => {
+      this.syncQualitySelect();
+      this.onSelectMap?.(this.mapSelect.value);
+    });
+    this.qualitySelect.addEventListener('change', () => this.onSelectQuality?.(this.qualitySelect.value as SplatQuality));
     this.mode1v1Input.addEventListener('change', () => this.handleEnabledModesChange());
     this.mode2v2Input.addEventListener('change', () => this.handleEnabledModesChange());
     this.spawnModeSelect.addEventListener('change', () => this.handleSpawnModeChange(this.spawnModeSelect.value === '2v2' ? '2v2' : '1v1'));
@@ -314,7 +326,7 @@ export class SplatCalibrationOverlay {
     this.element.querySelector('[data-calibration-auto-clear]')?.addEventListener('click', () => this.onClearAutoCollision?.());
   }
 
-  setMaps(maps: SplatMapEntry[], selectedPresetId: string): void {
+  setMaps(maps: SplatMapEntry[], selectedPresetId: string, selectedQuality: SplatQuality = 'high'): void {
     this.maps = maps;
     this.mapSelect.innerHTML = '';
     for (const map of maps) {
@@ -324,6 +336,27 @@ export class SplatCalibrationOverlay {
       this.mapSelect.appendChild(option);
     }
     this.mapSelect.value = selectedPresetId;
+    this.qualitySelect.value = selectedQuality;
+    this.syncQualitySelect(selectedQuality);
+  }
+
+  private syncQualitySelect(preferredQuality?: SplatQuality): void {
+    const map = this.maps.find((entry) => entry.presetId === this.mapSelect.value) ?? this.maps[0];
+    const current = preferredQuality ?? this.qualitySelect.value as SplatQuality;
+    const qualities = map?.qualities ?? {};
+    const available = (['low', 'mid', 'high'] as const).filter((quality) => qualities[quality]);
+    const fallback = map?.defaultQuality ?? 'high';
+    const selected = available.includes(current) ? current : available.includes(fallback) ? fallback : available[0] ?? 'high';
+
+    this.qualitySelect.innerHTML = '';
+    for (const quality of available.length ? available : [selected]) {
+      const option = document.createElement('option');
+      option.value = quality;
+      option.textContent = quality.toUpperCase();
+      this.qualitySelect.appendChild(option);
+    }
+    this.qualitySelect.value = selected;
+    this.qualitySelect.disabled = available.length <= 1;
   }
 
   show(
@@ -337,9 +370,28 @@ export class SplatCalibrationOverlay {
     this.spawnEditMode = '1v1';
     this.syncActiveSpawnModeFromState();
     if (this.maps.length === 0) {
-      this.setMaps([{ presetId: preset.presetId, displayName: preset.displayName, presetUrl: '', splatUrl: preset.splatUrl, splatFileSizeBytes: preset.splatFileSizeBytes, enabledModes: [...preset.enabledModes] }], preset.presetId);
+      this.setMaps([{
+        presetId: preset.calibrationGroupId ?? preset.presetId,
+        displayName: preset.displayName,
+        presetUrl: '',
+        splatUrl: preset.splatUrl,
+        splatFileSizeBytes: preset.splatFileSizeBytes,
+        enabledModes: [...preset.enabledModes],
+        calibrationGroupId: preset.calibrationGroupId,
+        quality: preset.quality,
+        defaultQuality: preset.quality ?? 'high',
+        qualities: {
+          [preset.quality ?? 'high']: {
+            presetId: preset.presetId,
+            presetUrl: '',
+            splatUrl: preset.splatUrl,
+            splatFileSizeBytes: preset.splatFileSizeBytes
+          }
+        }
+      }], preset.calibrationGroupId ?? preset.presetId, preset.quality ?? 'high');
     } else {
-      this.mapSelect.value = preset.presetId;
+      this.mapSelect.value = preset.calibrationGroupId ?? preset.presetId;
+      this.syncQualitySelect(preset.quality ?? 'high');
     }
     this.syncInputs();
     this.syncModeInputs();

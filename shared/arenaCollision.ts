@@ -119,13 +119,16 @@ export function moveWithArenaCollision(
     }
   }
 
-  for (const wall of walls) {
-    if (wall.climbable) continue;
-    if (!wallBlocksAtPlayerHeight(wall, collisionOptions)) continue;
-    const resolved = resolveCircleFromWall(x, z, radius, wall);
-    x = resolved.x;
-    z = resolved.z;
-  }
+  const wallResolved = moveThroughCollisionWalls(
+    clamp(currentX, normalizedBounds.minX, normalizedBounds.maxX),
+    clamp(currentZ, normalizedBounds.minZ, normalizedBounds.maxZ),
+    x,
+    z,
+    walls,
+    collisionOptions
+  );
+  x = wallResolved.x;
+  z = wallResolved.z;
 
   x = clamp(x, normalizedBounds.minX, normalizedBounds.maxX);
   z = clamp(z, normalizedBounds.minZ, normalizedBounds.maxZ);
@@ -299,6 +302,46 @@ function resolveCircleFromWall(x: number, z: number, radius: number, wall: Arena
   }
 
   return wallLocalToWorld(resolvedX, resolvedZ, wall);
+}
+
+function moveThroughCollisionWalls(
+  startX: number,
+  startZ: number,
+  targetX: number,
+  targetZ: number,
+  walls: ArenaCollisionWall[],
+  options: Required<ArenaMovementCollisionOptions>
+): { x: number; z: number } {
+  const blockingWalls = walls.filter((wall) => !wall.climbable && wallBlocksAtPlayerHeight(wall, options));
+  if (blockingWalls.length === 0) return { x: targetX, z: targetZ };
+
+  const dx = targetX - startX;
+  const dz = targetZ - startZ;
+  const distance = Math.hypot(dx, dz);
+  const steps = Math.max(1, Math.ceil(distance / Math.max(0.1, options.radius * 0.5)));
+  let x = startX;
+  let z = startZ;
+
+  for (let step = 1; step <= steps; step++) {
+    let stepX = startX + (dx * step) / steps;
+    let stepZ = startZ + (dz * step) / steps;
+    const requestedX = stepX;
+    const requestedZ = stepZ;
+
+    for (const wall of blockingWalls) {
+      const resolved = resolveCircleFromWall(stepX, stepZ, options.radius, wall);
+      stepX = resolved.x;
+      stepZ = resolved.z;
+    }
+
+    x = stepX;
+    z = stepZ;
+    if (Math.hypot(stepX - requestedX, stepZ - requestedZ) > 0.0001) {
+      break;
+    }
+  }
+
+  return { x, z };
 }
 
 function findLandingSurface(

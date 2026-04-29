@@ -1,3 +1,5 @@
+import type { CharacterClass } from './classes.js';
+
 export const ROOM_NAME = 'magic_match';
 
 export const TICK_RATE = 20;
@@ -125,6 +127,11 @@ export interface PublicPlayerState {
   anim: string;
   casting: boolean;
   selectedSpell: string;
+  characterClass: CharacterClass;
+  fireballReadyAt?: number;
+  iceBoltReadyAt?: number;
+  lightBurstReadyAt?: number;
+  shadowDashReadyAt?: number;
 }
 
 export interface PublicProjectileState {

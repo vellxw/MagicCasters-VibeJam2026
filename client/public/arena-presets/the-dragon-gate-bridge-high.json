@@ -1,0 +1,89 @@
+{
+  "presetId": "the-dragon-gate-bridge-high",
+  "calibrationGroupId": "the-dragon-gate-bridge",
+  "quality": "high",
+  "arenaId": "splat-test",
+  "displayName": "The Dragon Gate Bridge (HIGH)",
+  "type": "splat",
+  "splatUrl": "/splats/the-dragon-gate-bridge-high.sog",
+  "splatFileSizeBytes": 24616928,
+  "enabledModes": [],
+  "collisionMeshUrl": null,
+  "voxelCollisionUrl": null,
+  "spawnPoints": [
+    {
+      "x": -5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": -1.5707963267948966
+    },
+    {
+      "x": 5.5,
+      "y": 0,
+      "z": 0,
+      "rotY": 1.5707963267948966
+    }
+  ],
+  "spawnPointsByMode": {
+    "1v1": [
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": -1.5707963267948966
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": 0,
+        "rotY": 1.5707963267948966
+      }
+    ],
+    "2v2": [
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": -1.25,
+        "rotY": -1.5707963267948966
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": 1.25,
+        "rotY": 1.5707963267948966
+      },
+      {
+        "x": -5.5,
+        "y": 0,
+        "z": 1.25,
+        "rotY": -1.5707963267948966
+      },
+      {
+        "x": 5.5,
+        "y": 0,
+        "z": -1.25,
+        "rotY": 1.5707963267948966
+      }
+    ]
+  },
+  "bounds": {
+    "minX": -8,
+    "maxX": 8,
+    "minZ": -6,
+    "maxZ": 6
+  },
+  "scale": 1,
+  "rotation": {
+    "x": 180,
+    "y": 180,
+    "z": 0
+  },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "floorY": 0,
+  "collisionErasers": [],
+  "collisionWalls": []
+}

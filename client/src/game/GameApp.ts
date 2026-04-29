@@ -20,12 +20,15 @@ import {
   type MatchMode,
   type MoveInput
 } from '../../../shared/types';
+import type { SplatQuality } from '../../../shared/splatMapPool';
 import { FirstPersonCamera, clampPitch } from '../camera/FirstPersonCamera';
 import { TouchControls } from '../input/TouchControls';
 import { NetworkClient } from '../network/NetworkClient';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
 import { RemotePlayerController } from '../player/RemotePlayerController';
+import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } from '../player/AnimatedPlayerController';
 import { SpellVfxManager } from '../spells/SpellVfxManager';
+import { CharacterSelectOverlay } from '../ui/CharacterSelectOverlay';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { SplatCalibrationOverlay } from '../ui/SplatCalibrationOverlay';
 import { VoiceCommandManager } from '../voice/VoiceCommandManager';
@@ -38,7 +41,9 @@ import {
   loadLatestSplatPresetHistoryEntry,
   loadConfiguredSplatArenaPreset,
   saveConfiguredSplatArenaPreset,
+  getSplatCalibrationStorageKey,
   setStoredSplatPresetId,
+  setStoredSplatQuality,
   splatPresetIsCompatibleWithBase,
   type SplatMapCatalog,
   type SplatArenaPreset,
@@ -46,6 +51,7 @@ import {
   type SplatCalibrationSettings
 } from '../world/ArenaPreset';
 import { LobbyScene } from '../world/LobbyScene';
+import { type CharacterClass, isCharacterClass } from '../../../shared/classes';
 import {
   requestDevSplatCollisionDeletion,
   requestDevSplatCollisionGeneration,
@@ -60,7 +66,9 @@ interface ProjectileSnapshot {
   z: number;
 }
 
-type SceneMode = 'LOBBY' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
+type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
+type CharacterGltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
+type PlayerController = LocalPlayerController | RemotePlayerController | AnimatedPlayerController;
 
 export class GameApp {
   private shell: HTMLDivElement;
@@ -73,6 +81,7 @@ export class GameApp {
   private touchControls: TouchControls;
   private ui: DebugOverlay;
   private calibrationUi: SplatCalibrationOverlay;
+  private characterSelectUi: CharacterSelectOverlay;
   private mobileStartEl: HTMLDivElement;
   private voice = new VoiceCommandManager();
   private network: NetworkClient;
@@ -86,7 +95,7 @@ export class GameApp {
   private calibrationSnapshot: PlayerSnapshot | null = null;
   private calibrationGuide: THREE.Group | null = null;
   private calibrationVelocityY = 0;
-  private players = new Map<string, LocalPlayerController | RemotePlayerController>();
+  private players = new Map<string, PlayerController>();
   private playerSnapshots = new Map<string, PlayerSnapshot>();
   private projectileSnapshots: ProjectileSnapshot[] = [];
   private keys = new Set<string>();
@@ -103,6 +112,8 @@ export class GameApp {
   private selectedArenaPresetId = '';
   private selectedArenaPresetUrl = '';
   private selectedArenaDisplayName = '';
+  private selectedSplatQuality: SplatQuality = 'high';
+  private selectedCharacterClass: CharacterClass = 'arcanist';
   private phase = 'WAITING';
   private phaseMessage = '';
   private localControllerId: string | null = null;
@@ -111,6 +122,16 @@ export class GameApp {
   private lastMoveSent = 0;
   private queueToken = 0;
   private animationId = 0;
+  private previewGroup: THREE.Group | null = null;
+  private previewMixer: THREE.AnimationMixer | null = null;
+  private previewActions = new Map<string, THREE.AnimationAction>();
+  private previewRotY = 0;
+  private previewAutoRotate = true;
+  private previewDrag = false;
+  private previewLastX = 0;
+  private previewToken = 0;
+  private gltfCache = new Map<CharacterClass, CharacterGltf>();
+  private gltfLoads = new Map<CharacterClass, Promise<CharacterGltf | null>>();
 
   constructor(private root: HTMLElement) {
     this.shell = document.createElement('div');
@@ -129,14 +150,22 @@ export class GameApp {
     this.touchControls = new TouchControls(this.shell);
     this.ui = new DebugOverlay(this.root);
     this.calibrationUi = new SplatCalibrationOverlay(this.root);
+    this.characterSelectUi = new CharacterSelectOverlay(this.root);
     this.mobileStartEl = this.createMobileStartOverlay();
     this.createPortraitBlocker();
     this.network = new NetworkClient(resolveServerUrl());
+
+    this.characterSelectUi.onBack = () => this.returnToLobby();
+    this.characterSelectUi.onClassSelect = (characterClass) => this.switchPreviewClass(characterClass);
+    this.characterSelectUi.onConfirm = (characterClass) => this.confirmCharacterSelection(characterClass);
+    this.characterSelectUi.onSpellHover = (spellId) => this.playPreviewAnim(spellId ? 'lanzarmagia' : 'reposo');
+    this.bindCharacterPreviewEvents();
   }
 
   start(): void {
     this.setupScene();
     this.bindEvents();
+    void this.preloadCharacterModels();
     if (new URLSearchParams(window.location.search).get('calibrateSplat') === '1') {
       void this.enterCalibration();
     } else {
@@ -195,7 +224,8 @@ export class GameApp {
     this.ui.onPortalAction = () => this.activateNearestPortal();
     this.calibrationUi.onChange = (settings, options) => this.applyCalibrationSettings(settings, options);
     this.calibrationUi.onBeforeReset = (settings) => this.backupCalibrationSettings(settings, 'before-reset');
-    this.calibrationUi.onSelectMap = (presetId) => void this.switchCalibrationPreset(presetId);
+    this.calibrationUi.onSelectMap = (presetId) => void this.switchCalibrationPreset(presetId, this.selectedSplatQuality);
+    this.calibrationUi.onSelectQuality = (quality) => void this.switchCalibrationPreset(this.calibrationPreset?.calibrationGroupId ?? this.calibrationPreset?.presetId, quality);
     this.calibrationUi.onSave = () => this.saveCalibrationPreset();
     this.calibrationUi.onPublish = () => void this.publishCalibrationPreset();
     this.calibrationUi.onRestoreLast = () => this.restoreCalibrationHistory('last');
@@ -273,7 +303,7 @@ export class GameApp {
     if (this.sceneMode !== 'LOBBY') return;
     const portal = this.lobby?.nearestPortal();
     if (!portal) return;
-    void this.enterQueue(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
+    void this.enterCharacterSelect(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
   }
 
   private onKey(event: KeyboardEvent, down: boolean): void {
@@ -305,8 +335,13 @@ export class GameApp {
       const portal = this.lobby?.nearestPortal();
       if (portal) {
         event.preventDefault();
-        this.enterQueue(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
+        void this.enterCharacterSelect(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
       }
+      return;
+    }
+
+    if (key === 'escape' && this.sceneMode === 'CHARACTER_SELECT') {
+      this.returnToLobby();
       return;
     }
 
@@ -322,6 +357,12 @@ export class GameApp {
 
     if (key === 'escape' && this.sceneMode === 'CALIBRATION') {
       this.returnToLobby();
+      return;
+    }
+
+    if (key === 'enter' && this.sceneMode === 'CHARACTER_SELECT') {
+      event.preventDefault();
+      this.confirmCharacterSelection(this.selectedCharacterClass);
       return;
     }
 
@@ -467,6 +508,11 @@ export class GameApp {
 
   private updateScene(dt: number): void {
     const input = this.currentInput(this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE' || this.sceneMode === 'CALIBRATION');
+    if (this.sceneMode === 'CHARACTER_SELECT') {
+      this.updatePreview(dt);
+      return;
+    }
+
     if (this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE') {
       this.lobby?.update(input, dt);
       if (this.lobby) {
@@ -579,9 +625,7 @@ export class GameApp {
       existing.dispose(this.scene);
     }
 
-    const controller = shouldBeLocal
-      ? new LocalPlayerController(this.scene, true, player.teamId ?? 'A')
-      : new RemotePlayerController(this.scene, false, player.teamId ?? 'A');
+    const controller = this.createPlayerController(player, shouldBeLocal);
     controller.setName(player.name);
     controller.setFirstPersonHidden(shouldBeLocal);
     this.players.set(player.id, controller);
@@ -591,6 +635,24 @@ export class GameApp {
     } else if (isCurrentLocal) {
       this.localControllerId = null;
     }
+  }
+
+  private createPlayerController(player: PlayerSnapshot, local: boolean): PlayerController {
+    const characterClass = resolveCharacterClass(player.characterClass);
+    const gltf = this.gltfCache.get(characterClass);
+    if (gltf) {
+      try {
+        return AnimatedPlayerController.create(this.scene, local, gltf, characterClass, player.teamId ?? 'A');
+      } catch (error) {
+        console.warn(`[GameApp] Animated player fallback for ${characterClass}`, error);
+      }
+    } else {
+      void this.loadCharacterGltfCached(characterClass);
+    }
+
+    return local
+      ? new LocalPlayerController(this.scene, true, player.teamId ?? 'A')
+      : new RemotePlayerController(this.scene, false, player.teamId ?? 'A');
   }
 
   private syncControlState(): void {
@@ -612,6 +674,8 @@ export class GameApp {
   private enterLobby(): void {
     this.queueToken++;
     this.sceneMode = 'LOBBY';
+    this.characterSelectUi.hide();
+    this.clearPreview();
     this.selectedMode = null;
     this.selectedArenaId = DEFAULT_ARENA_ID;
     this.selectedArenaPresetId = '';
@@ -651,25 +715,44 @@ export class GameApp {
     this.ui.showToast('Loading splat calibration');
 
     let preset: SplatArenaPreset;
+    let selectedMapId = '';
     try {
-      const requestedPresetId = new URLSearchParams(window.location.search).get('map') ?? undefined;
-      const loaded = await loadConfiguredSplatArenaPreset(requestedPresetId);
+      const params = new URLSearchParams(window.location.search);
+      const requestedPresetId = params.get('map') ?? undefined;
+      const requestedQuality = normalizeSplatQualityParam(params.get('quality'));
+      const loaded = await loadConfiguredSplatArenaPreset(requestedPresetId, requestedQuality);
       this.splatCatalog = loaded.catalog;
       this.calibrationBasePreset = loaded.basePreset;
       preset = loaded.preset;
-      setStoredSplatPresetId(preset.presetId);
+      selectedMapId = loaded.entry.presetId;
+      this.selectedSplatQuality = loaded.quality;
+      setStoredSplatPresetId(selectedMapId);
+      setStoredSplatQuality(loaded.quality);
     } catch (error) {
       preset = defaultSplatCalibrationPreset();
       this.calibrationBasePreset = preset;
+      selectedMapId = getSplatCalibrationStorageKey(preset);
+      this.selectedSplatQuality = preset.quality ?? 'high';
       this.splatCatalog = {
         defaultPresetId: preset.presetId,
         maps: [{
-          presetId: preset.presetId,
+          presetId: getSplatCalibrationStorageKey(preset),
           displayName: preset.displayName,
           presetUrl: '/arena-presets/splat-test.json',
           splatUrl: preset.splatUrl,
           splatFileSizeBytes: preset.splatFileSizeBytes,
-          enabledModes: [...preset.enabledModes]
+          enabledModes: [...preset.enabledModes],
+          calibrationGroupId: preset.calibrationGroupId,
+          quality: preset.quality,
+          defaultQuality: preset.quality ?? 'high',
+          qualities: {
+            [preset.quality ?? 'high']: {
+              presetId: preset.presetId,
+              presetUrl: '/arena-presets/splat-test.json',
+              splatUrl: preset.splatUrl,
+              splatFileSizeBytes: preset.splatFileSizeBytes
+            }
+          }
         }]
       };
       this.ui.showToast('Preset failed; using calibration defaults');
@@ -701,10 +784,53 @@ export class GameApp {
       onStatus: (message) => this.ui.showToast(message)
     });
     this.arenaRuntime.applyCalibration?.(settings);
-    this.calibrationUi.setMaps(this.splatCatalog.maps, preset.presetId);
+    this.calibrationUi.setMaps(this.splatCatalog.maps, selectedMapId || getSplatCalibrationStorageKey(preset), this.selectedSplatQuality);
     this.calibrationUi.show(preset, settings, this.calibrationBasePreset ?? preset);
     this.calibrationUi.setSaveInfo(loadLatestCompatibleHistoryEntry(preset));
     this.ui.showToast('Splat calibration mode');
+  }
+
+  private async enterCharacterSelect(mode: MatchMode, arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
+    const token = ++this.queueToken;
+    this.sceneMode = 'CHARACTER_SELECT';
+    this.selectedMode = mode;
+    this.selectedArenaId = arenaId;
+    this.selectedArenaPresetId = '';
+    this.selectedArenaPresetUrl = '';
+    this.selectedArenaDisplayName = '';
+    this.phase = 'WAITING';
+    this.phaseMessage = 'Choose your mage';
+    this.controlsEnabled = false;
+    this.localPlayerBound = false;
+    this.clearQueuedActions();
+    this.keys.clear();
+    this.touchControls.reset();
+    this.playerSnapshots.clear();
+    this.projectileSnapshots = [];
+    this.clearMatchScene();
+    this.lobby?.dispose();
+    this.lobby = null;
+    this.network.leave();
+    this.characterSelectUi.show();
+    this.ui.showToast('Choose your mage');
+    await this.loadPreviewModel(this.selectedCharacterClass);
+    if (token !== this.queueToken || this.sceneMode !== 'CHARACTER_SELECT') {
+      this.clearPreview();
+    }
+  }
+
+  private confirmCharacterSelection(characterClass: CharacterClass): void {
+    this.selectedCharacterClass = characterClass;
+    this.clearPreview();
+    this.characterSelectUi.hide();
+    void this.enterQueue(this.selectedMode ?? '1v1', this.selectedArenaId);
+  }
+
+  private switchPreviewClass(characterClass: CharacterClass): void {
+    this.selectedCharacterClass = characterClass;
+    if (this.sceneMode === 'CHARACTER_SELECT') {
+      void this.loadPreviewModel(characterClass);
+    }
   }
 
   private async enterQueue(mode: MatchMode, _arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
@@ -717,6 +843,8 @@ export class GameApp {
     this.selectedArenaDisplayName = '';
     this.phase = 'WAITING';
     this.phaseMessage = `Finding ${mode}`;
+    this.characterSelectUi.hide();
+    this.clearPreview();
     this.clearQueuedActions();
     this.playerSnapshots.clear();
     this.projectileSnapshots = [];
@@ -729,7 +857,7 @@ export class GameApp {
     nextNetwork.onEvent = (type, payload) => this.handleNetEvent(type, payload);
     this.network = nextNetwork;
     try {
-      await nextNetwork.connect(this.localName, mode);
+      await nextNetwork.connect(this.localName, mode, this.selectedCharacterClass);
       if (token !== this.queueToken || this.network !== nextNetwork || this.sceneMode !== 'QUEUE') {
         nextNetwork.leave();
       }
@@ -744,6 +872,8 @@ export class GameApp {
   private enterMatch(): void {
     if (this.sceneMode === 'MATCH') return;
     this.sceneMode = 'MATCH';
+    this.characterSelectUi.hide();
+    this.clearPreview();
     this.lobby?.dispose();
     this.lobby = null;
     const arenaOptions = this.selectedArenaId === SPLAT_TEST_ARENA_ID && this.selectedArenaPresetUrl
@@ -773,6 +903,168 @@ export class GameApp {
 
   private returnToLobby(): void {
     this.enterLobby();
+  }
+
+  private bindCharacterPreviewEvents(): void {
+    const preview = this.characterSelectUi.previewArea;
+    preview.addEventListener('pointerdown', (event) => {
+      if (this.sceneMode !== 'CHARACTER_SELECT') return;
+      this.previewDrag = true;
+      this.previewAutoRotate = false;
+      this.previewLastX = event.clientX;
+      preview.setPointerCapture(event.pointerId);
+    });
+    preview.addEventListener('pointermove', (event) => {
+      if (!this.previewDrag || !this.previewGroup) return;
+      const dx = event.clientX - this.previewLastX;
+      this.previewLastX = event.clientX;
+      this.previewRotY += dx * 0.01;
+      this.previewGroup.rotation.y = this.previewRotY;
+    });
+    const stopDrag = (event: PointerEvent) => {
+      if (!this.previewDrag) return;
+      this.previewDrag = false;
+      preview.releasePointerCapture(event.pointerId);
+    };
+    preview.addEventListener('pointerup', stopDrag);
+    preview.addEventListener('pointercancel', stopDrag);
+  }
+
+  private async preloadCharacterModels(): Promise<void> {
+    await Promise.allSettled([
+      this.loadCharacterGltfCached('arcanist'),
+      this.loadCharacterGltfCached('divine')
+    ]);
+  }
+
+  private loadCharacterGltfCached(characterClass: CharacterClass): Promise<CharacterGltf | null> {
+    const cached = this.gltfCache.get(characterClass);
+    if (cached) return Promise.resolve(cached);
+
+    const existing = this.gltfLoads.get(characterClass);
+    if (existing) return existing;
+
+    const load = preloadCharacterGltf(characterClass)
+      .then((gltf) => {
+        this.gltfCache.set(characterClass, gltf);
+        return gltf;
+      })
+      .catch((error) => {
+        console.warn(`[GameApp] Failed to load ${characterClass} model`, error);
+        return null;
+      })
+      .finally(() => {
+        this.gltfLoads.delete(characterClass);
+      });
+    this.gltfLoads.set(characterClass, load);
+    return load;
+  }
+
+  private async loadPreviewModel(characterClass: CharacterClass): Promise<void> {
+    this.clearPreview();
+    const token = ++this.previewToken;
+
+    const previewGroup = new THREE.Group();
+    previewGroup.position.set(0, 0, 0);
+    this.previewGroup = previewGroup;
+    this.scene.add(previewGroup);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x352416, 1.7);
+    hemi.position.set(0, 2, 0);
+    previewGroup.add(hemi);
+
+    const key = new THREE.DirectionalLight(0xfff0d0, 2.2);
+    key.position.set(2.4, 4, 2.8);
+    previewGroup.add(key);
+
+    const rim = new THREE.DirectionalLight(0x8fbaff, 0.85);
+    rim.position.set(-2.6, 2.2, -2.2);
+    previewGroup.add(rim);
+
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.82, 0.96, 0.16, 36),
+      new THREE.MeshStandardMaterial({ color: 0x2a2118, roughness: 0.74, metalness: 0.08 })
+    );
+    pedestal.position.y = 0.08;
+    previewGroup.add(pedestal);
+
+    const gltf = await this.loadCharacterGltfCached(characterClass);
+    if (token !== this.previewToken || this.sceneMode !== 'CHARACTER_SELECT' || this.previewGroup !== previewGroup) {
+      return;
+    }
+
+    if (!gltf) {
+      this.addFallbackPreview(previewGroup, characterClass);
+    } else {
+      const model = cloneCharacterScene(gltf.scene);
+      model.position.y = 0.16;
+      previewGroup.add(model);
+      this.previewMixer = new THREE.AnimationMixer(model);
+      this.previewActions.clear();
+      for (const clip of gltf.animations) {
+        const action = this.previewMixer.clipAction(clip);
+        action.clampWhenFinished = true;
+        this.previewActions.set(clip.name, action);
+      }
+      this.playPreviewAnim('reposo');
+    }
+
+    this.camera.position.set(0, 1.45, 2.9);
+    this.camera.lookAt(0, 1.05, 0);
+  }
+
+  private addFallbackPreview(previewGroup: THREE.Group, characterClass: CharacterClass): void {
+    const color = characterClass === 'divine' ? 0xf5c45e : 0x7c3aed;
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.36, 0.96, 6, 12),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.36, emissive: color, emissiveIntensity: 0.18 })
+    );
+    body.position.y = 0.86;
+    previewGroup.add(body);
+
+    const hat = new THREE.Mesh(
+      new THREE.ConeGeometry(0.44, 0.64, 6),
+      new THREE.MeshStandardMaterial({ color: 0xf7e7c6, roughness: 0.5 })
+    );
+    hat.position.y = 1.64;
+    previewGroup.add(hat);
+  }
+
+  private updatePreview(dt: number): void {
+    this.previewMixer?.update(dt);
+    if (this.previewGroup && this.previewAutoRotate && !this.previewDrag) {
+      this.previewRotY += dt * 0.42;
+      this.previewGroup.rotation.y = this.previewRotY;
+    }
+  }
+
+  private playPreviewAnim(name: string): void {
+    const action = this.previewActions.get(name);
+    if (!action) return;
+    for (const entry of this.previewActions.values()) {
+      entry.fadeOut(0.16);
+    }
+    action.reset().fadeIn(0.16).play();
+  }
+
+  private clearPreview(): void {
+    this.previewToken++;
+    if (this.previewGroup) {
+      this.scene.remove(this.previewGroup);
+      this.previewGroup.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        mesh.geometry?.dispose?.();
+        const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+        else material?.dispose?.();
+      });
+      this.previewGroup = null;
+    }
+    this.previewMixer = null;
+    this.previewActions.clear();
+    this.previewRotY = 0;
+    this.previewAutoRotate = true;
+    this.previewDrag = false;
   }
 
   private updateCalibration(input: MoveInput, dt: number): void {
@@ -874,7 +1166,7 @@ export class GameApp {
     }
 
     if (!voxelCollisionUrl) {
-      const command = `npm run splat:collision -- --input client/public/splats/${splatFilenameFromUrl(preset.splatUrl) ?? '<arena>.sog'} --arena ${sanitizeAssetId(preset.presetId)}`;
+      const command = `npm run splat:collision -- --input client/public/splats/${splatFilenameFromUrl(preset.splatUrl) ?? '<arena>.sog'} --arena ${collisionAssetIdFromPreset(preset)}`;
       this.calibrationUi.setFeedback(`Generator unavailable: voxel files were not found. Run: ${command}`);
       this.ui.showToast('Auto collision generator unavailable');
       return;
@@ -892,11 +1184,11 @@ export class GameApp {
     this.applyCalibrationSettings(nextSettings);
     this.calibrationUi.setSettings(nextSettings);
     await this.arenaRuntime?.reloadCollisionProxy?.(preset);
-    this.arenaRuntime?.setCollisionDebugVisible?.(Boolean(preset.collisionMeshUrl));
+    this.arenaRuntime?.setCollisionDebugVisible?.(false);
     const savedPresets = generated.ok && generated.updatedPresets?.length
       ? ` Saved into ${generated.updatedPresets.join(', ')}.`
       : '';
-    this.calibrationUi.setFeedback(`Voxel auto collision active from ${preset.voxelCollisionUrl}.${savedPresets} It no longer creates visible auto walls. Manual blockers/ladders and eraser zones stay editable.${legacyAutoCount > 0 ? ` Removed ${legacyAutoCount} legacy auto walls.` : ''}`);
+    this.calibrationUi.setFeedback(`Voxel auto collision active from ${preset.voxelCollisionUrl}.${savedPresets} Debug mesh stays hidden unless you enable Show Generated Collision. Manual blockers/ladders and eraser zones stay editable.${legacyAutoCount > 0 ? ` Removed ${legacyAutoCount} legacy auto walls.` : ''}`);
     this.ui.showToast('Voxel auto collision active');
   }
 
@@ -1001,18 +1293,20 @@ export class GameApp {
     return false;
   }
 
-  private async switchCalibrationPreset(presetId: string): Promise<void> {
+  private async switchCalibrationPreset(presetId: string | undefined, quality = this.selectedSplatQuality): Promise<void> {
     if (this.sceneMode !== 'CALIBRATION') return;
-    const token = this.queueToken;
+    const token = ++this.queueToken;
     this.calibrationUi.setFeedback('Loading selected map...');
     try {
-      const loaded = await loadConfiguredSplatArenaPreset(presetId);
+      const loaded = await loadConfiguredSplatArenaPreset(presetId, quality);
       if (token !== this.queueToken || this.sceneMode !== 'CALIBRATION') return;
       this.splatCatalog = loaded.catalog;
       this.calibrationBasePreset = loaded.basePreset;
-      setStoredSplatPresetId(loaded.preset.presetId);
+      this.selectedSplatQuality = loaded.quality;
+      setStoredSplatPresetId(loaded.entry.presetId);
+      setStoredSplatQuality(loaded.quality);
       this.applyCalibrationPreset(loaded.preset);
-      this.calibrationUi.setMaps(loaded.catalog.maps, loaded.preset.presetId);
+      this.calibrationUi.setMaps(loaded.catalog.maps, loaded.entry.presetId, loaded.quality);
       this.calibrationUi.show(loaded.preset, calibrationSettingsFromPreset(loaded.preset), loaded.basePreset);
       this.calibrationUi.setSaveInfo(loadLatestCompatibleHistoryEntry(loaded.preset));
       this.ui.showToast(`Map selected: ${loaded.preset.displayName}`);
@@ -1098,10 +1392,10 @@ export class GameApp {
 
   private async clearSavedCalibrationPreset(): Promise<void> {
     if (!this.calibrationPreset) return;
-    const presetId = this.calibrationPreset.presetId;
+    const presetId = getSplatCalibrationStorageKey(this.calibrationPreset);
     clearConfiguredSplatArenaPreset(presetId);
     this.calibrationUi.setFeedback('Saved config cleared. Backups kept. Reloading default preset...');
-    await this.switchCalibrationPreset(presetId);
+    await this.switchCalibrationPreset(presetId, this.selectedSplatQuality);
   }
 
   private applyCalibrationPreset(preset: SplatArenaPreset): void {
@@ -1231,6 +1525,8 @@ export class GameApp {
 function defaultSplatCalibrationPreset(): SplatArenaPreset {
   return {
     presetId: 'businesspark-belp-1og-ost',
+    calibrationGroupId: 'businesspark-belp-1og-ost',
+    quality: 'high',
     arenaId: SPLAT_TEST_ARENA_ID,
     displayName: 'Businesspark Belp 1OG Ost',
     type: 'splat',
@@ -1324,6 +1620,10 @@ function coerceArenaId(value: unknown): ArenaId {
   return value === SPLAT_TEST_ARENA_ID ? SPLAT_TEST_ARENA_ID : DEFAULT_ARENA_ID;
 }
 
+function resolveCharacterClass(value: unknown): CharacterClass {
+  return typeof value === 'string' && isCharacterClass(value) ? value : 'arcanist';
+}
+
 function stringValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
@@ -1350,11 +1650,11 @@ function formatHistoryTimestamp(value: string): string {
 }
 
 function loadLatestCompatibleHistoryEntry(preset: SplatArenaPreset): SplatPresetHistoryEntry | null {
-  return compatibleHistoryEntry(preset, loadLatestSplatPresetHistoryEntry(preset.presetId));
+  return compatibleHistoryEntry(preset, loadLatestSplatPresetHistoryEntry(getSplatCalibrationStorageKey(preset)));
 }
 
 function loadLatestCompatibleBackupEntry(preset: SplatArenaPreset): SplatPresetHistoryEntry | null {
-  return compatibleHistoryEntry(preset, loadLatestSplatPresetBackupEntry(preset.presetId));
+  return compatibleHistoryEntry(preset, loadLatestSplatPresetBackupEntry(getSplatCalibrationStorageKey(preset)));
 }
 
 function compatibleHistoryEntry(
@@ -1364,8 +1664,12 @@ function compatibleHistoryEntry(
   return entry && splatPresetIsCompatibleWithBase(preset, entry.preset) ? entry : null;
 }
 
+function normalizeSplatQualityParam(value: string | null): SplatQuality | undefined {
+  return value === 'low' || value === 'mid' || value === 'high' ? value : undefined;
+}
+
 async function detectGeneratedCollisionUrls(preset: SplatArenaPreset): Promise<{ collisionMeshUrl: string | null; voxelCollisionUrl: string | null }> {
-  const arenaId = sanitizeAssetId(preset.presetId);
+  const arenaId = collisionAssetIdFromPreset(preset);
   const voxelCollisionUrl = `/collision/${arenaId}.voxel.json`;
   const voxelBinUrl = `/collision/${arenaId}.voxel.bin`;
   const collisionMeshUrl = `/collision/${arenaId}.collision.glb`;
@@ -1388,6 +1692,10 @@ async function assetExists(url: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function collisionAssetIdFromPreset(preset: Pick<SplatArenaPreset, 'presetId' | 'calibrationGroupId'>): string {
+  return sanitizeAssetId(preset.calibrationGroupId ?? preset.presetId);
 }
 
 function sanitizeAssetId(value: string): string {

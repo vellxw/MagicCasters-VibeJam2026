@@ -15,7 +15,8 @@
     "start": "node server/dist/server/src/index.js",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client",
     "test": "npm run test --workspace server",
-    "splat:collision": "node tools/generate-splat-collision.mjs"
+    "splat:collision": "node tools/generate-splat-collision.mjs",
+    "splat:qualities": "node tools/generate-splat-qualities.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

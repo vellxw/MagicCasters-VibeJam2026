@@ -65,6 +65,71 @@ describe('server published splat map pool', () => {
     expect(selectPublishedSplatArenaForMode('2v2', root, () => 0)).toBeNull();
   });
 
+  it('loads the default quality variant from grouped splat catalog entries', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-quality-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'crystal-palace',
+      maps: [
+        {
+          presetId: 'crystal-palace',
+          calibrationGroupId: 'crystal-palace',
+          displayName: 'Crystal Palace',
+          presetUrl: '/arena-presets/crystal-palace-high.json',
+          splatUrl: '/splats/crystal-palace-high.sog',
+          enabledModes: ['1v1'],
+          defaultQuality: 'mid',
+          qualities: {
+            low: {
+              presetId: 'crystal-palace-low',
+              presetUrl: '/arena-presets/crystal-palace-low.json',
+              splatUrl: '/splats/crystal-palace-low.sog'
+            },
+            mid: {
+              presetId: 'crystal-palace-mid',
+              presetUrl: '/arena-presets/crystal-palace-mid.json',
+              splatUrl: '/splats/crystal-palace-mid.sog'
+            },
+            high: {
+              presetId: 'crystal-palace-high',
+              presetUrl: '/arena-presets/crystal-palace-high.json',
+              splatUrl: '/splats/crystal-palace-high.sog'
+            }
+          }
+        }
+      ]
+    }));
+    await writeFile(join(presetDir, 'crystal-palace-mid.json'), JSON.stringify({
+      presetId: 'crystal-palace-mid',
+      calibrationGroupId: 'crystal-palace',
+      quality: 'mid',
+      arenaId: 'splat-test',
+      displayName: 'Crystal Palace (MID)',
+      type: 'splat',
+      splatUrl: '/splats/crystal-palace-mid.sog',
+      collisionMeshUrl: null,
+      voxelCollisionUrl: null,
+      spawnPoints: [
+        { x: -2, y: 0, z: 0, rotY: -1 },
+        { x: 2, y: 0, z: 0, rotY: 1 }
+      ],
+      bounds: { minX: -8, maxX: 8, minZ: -6, maxZ: 6 },
+      scale: 1,
+      rotation: { x: 0, y: 0, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: 0,
+      collisionErasers: [],
+      collisionWalls: []
+    }));
+
+    const selected = selectPublishedSplatArenaForMode('1v1', root, () => 0);
+    expect(selected?.presetId).toBe('crystal-palace-mid');
+    expect(selected?.displayName).toBe('Crystal Palace (MID)');
+    expect(selected?.presetUrl).toBe('/arena-presets/crystal-palace-mid.json');
+    expect(selected?.collision.spawnPoints[0]?.x).toBe(-2);
+  });
+
   it('skips presets whose voxel collision asset is missing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-missing-voxel-'));
     const presetDir = join(root, 'client', 'public', 'arena-presets');

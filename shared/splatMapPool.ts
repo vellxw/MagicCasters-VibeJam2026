@@ -6,11 +6,22 @@ import {
 
 export interface SplatMapPoolEntry {
   presetId: string;
+  calibrationGroupId?: string;
   displayName: string;
   presetUrl: string;
   splatUrl: string;
   splatFileSizeBytes?: number;
   enabledModes?: MatchMode[];
+  quality?: SplatQuality;
+  defaultQuality?: SplatQuality;
+  qualities?: Partial<Record<SplatQuality, SplatMapQualityEntry>>;
+}
+
+export interface SplatMapQualityEntry {
+  presetId: string;
+  presetUrl: string;
+  splatUrl: string;
+  splatFileSizeBytes?: number;
 }
 
 export interface SplatMapPoolCatalog {
@@ -25,6 +36,36 @@ export interface SplatSpawnSource {
 }
 
 export const MATCH_MODE_VALUES: MatchMode[] = ['1v1', '2v2'];
+
+export const SPLAT_QUALITY_VALUES = ['low', 'mid', 'high'] as const;
+
+export type SplatQuality = (typeof SPLAT_QUALITY_VALUES)[number];
+
+export function normalizeSplatQuality(value: unknown, fallback: SplatQuality = 'high'): SplatQuality {
+  return value === 'low' || value === 'mid' || value === 'high' ? value : fallback;
+}
+
+export function resolveSplatQualityEntry(
+  entry: SplatMapPoolEntry,
+  requestedQuality?: SplatQuality
+): SplatMapQualityEntry & { quality: SplatQuality } {
+  const defaultQuality = normalizeSplatQuality(entry.defaultQuality ?? entry.quality, 'high');
+  const qualities = entry.qualities ?? {};
+  const requested = requestedQuality ?? defaultQuality;
+  const quality = qualities[requested]
+    ? requested
+    : qualities[defaultQuality]
+      ? defaultQuality
+      : normalizeSplatQuality(entry.quality, defaultQuality);
+  const variant = qualities[quality];
+  return {
+    quality,
+    presetId: variant?.presetId ?? entry.presetId,
+    presetUrl: variant?.presetUrl ?? entry.presetUrl,
+    splatUrl: variant?.splatUrl ?? entry.splatUrl,
+    splatFileSizeBytes: variant?.splatFileSizeBytes ?? entry.splatFileSizeBytes
+  };
+}
 
 export function resolveEnabledModes(value: Pick<SplatSpawnSource, 'enabledModes'>): MatchMode[] {
   if (!Array.isArray(value.enabledModes)) return ['1v1'];
