@@ -1015,6 +1015,7 @@ export class GameApp {
 
   private confirmCharacterSelection(characterClass: CharacterClass): void {
     this.selectedCharacterClass = characterClass;
+    this.ui.setCharacterClass(characterClass);
     this.clearPreview();
     this.characterSelectUi.hide();
     void this.enterQueue(this.selectedMode ?? '1v1', this.selectedArenaId);

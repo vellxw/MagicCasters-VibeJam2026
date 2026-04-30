@@ -1,4 +1,5 @@
-import { SPELL_IDS, SPELLS, type SpellId } from '../../../shared/spells';
+import { SPELLS, type SpellId } from '../../../shared/spells';
+import { CLASSES, type CharacterClass } from '../../../shared/classes';
 import type { ArenaId, MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
@@ -33,6 +34,8 @@ export class DebugOverlay {
   onReturnLobby?: () => void;
   onPortalAction?: () => void;
   onQualitySettings?: () => void;
+
+  private characterClass: CharacterClass = 'arcanist';
 
   constructor(root: HTMLElement) {
     this.element = document.createElement('div');
@@ -93,7 +96,27 @@ export class DebugOverlay {
     this.promptButtonEl.addEventListener('click', () => this.onPortalAction?.());
     this.element.querySelector('[data-quality-settings]')?.addEventListener('click', () => this.onQualitySettings?.());
 
-    for (const id of SPELL_IDS) {
+    this.rebuildSpellDock();
+    this.voiceButton = document.createElement('button');
+    this.voiceButton.className = 'voice-button';
+    this.voiceButton.textContent = 'Voice';
+    this.voiceButton.dataset.active = 'false';
+    this.voiceButton.addEventListener('click', () => this.onVoiceToggle?.());
+    this.dockEl.appendChild(this.voiceButton);
+  }
+
+  setCharacterClass(characterClass: CharacterClass): void {
+    if (this.characterClass !== characterClass) {
+      this.characterClass = characterClass;
+      this.rebuildSpellDock();
+    }
+  }
+
+  private rebuildSpellDock(): void {
+    this.dockEl.innerHTML = '';
+    this.spellButtons.clear();
+    const classDef = CLASSES[this.characterClass];
+    for (const id of classDef.spellIds as SpellId[]) {
       const spell = SPELLS[id];
       const button = document.createElement('button');
       button.className = 'spell-button';
@@ -103,13 +126,9 @@ export class DebugOverlay {
       this.dockEl.appendChild(button);
       this.spellButtons.set(id, button);
     }
-
-    this.voiceButton = document.createElement('button');
-    this.voiceButton.className = 'voice-button';
-    this.voiceButton.textContent = 'Voice';
-    this.voiceButton.dataset.active = 'false';
-    this.voiceButton.addEventListener('click', () => this.onVoiceToggle?.());
-    this.dockEl.appendChild(this.voiceButton);
+    if (!this.dockEl.contains(this.voiceButton)) {
+      this.dockEl.appendChild(this.voiceButton);
+    }
   }
 
   update(args: {
@@ -157,9 +176,8 @@ export class DebugOverlay {
     this.resultsMessageEl.textContent = args.resultsMessage || 'Return to lobby to play again.';
 
     const now = Date.now();
-    for (const id of SPELL_IDS) {
-      const button = this.spellButtons.get(id);
-      if (!button || !args.local) continue;
+    for (const [id, button] of this.spellButtons) {
+      if (!args.local) continue;
       const readyAt = cooldownFor(args.local, id);
       const cooldown = Math.max(0, readyAt - now) / SPELLS[id].cooldownMs;
       button.style.setProperty('--cooldown', `${1 - Math.min(1, cooldown)}`);
