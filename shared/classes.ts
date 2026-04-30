@@ -17,22 +17,22 @@ export const CLASSES: Record<CharacterClass, ClassDefinition> = {
     name: 'Arcanist',
     title: 'Hechicero Oscuro',
     description:
-      'Maestro del fuego abisal y las sombras. Especialista en engano y destruccion arcana.',
+      'Maestro del engano y la destruccion arcana. Aplica marcas umbrias y las consume para combos devastadores.',
     modelPath: '/models/mago-negro.glb',
     texturePrefix: 'mn',
     themeColor: 0x7c3aed,
-    spellIds: ['fireball', 'ice_bolt', 'light_burst']
+    spellIds: ['shadow_dart', 'void_trap', 'abyssal_claw', 'eclipse']
   },
   divine: {
     id: 'divine',
     name: 'Divine',
     title: 'Hechicero Divino',
     description:
-      'Canalizador de luz celestial y electricidad sagrada. Protector y juez del campo de batalla.',
+      'Canalizador de luz celestial que castiga a los enemigos debilitados con picos de hielo y rayos sagrados.',
     modelPath: '/models/mago-blanco.glb',
     texturePrefix: 'mb',
     themeColor: 0xf59e0b,
-    spellIds: ['fireball', 'ice_bolt', 'light_burst']
+    spellIds: ['judgment_ray', 'penitent_seal', 'glacial_spikes', 'firmament_shield']
   }
 };
 
