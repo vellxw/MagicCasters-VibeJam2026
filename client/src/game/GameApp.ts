@@ -349,12 +349,23 @@ export class GameApp {
       return;
     }
 
+    if (key === 'f9' && this.sceneMode === 'LOBBY') {
+      event.preventDefault();
+      void this.enterVfxEditor();
+      return;
+    }
+
     if (key === 'e' && this.sceneMode === 'LOBBY') {
       const portal = this.lobby?.nearestPortal();
       if (portal) {
         event.preventDefault();
         void this.enterCharacterSelect(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
       }
+      return;
+    }
+
+    if (key === 'escape' && this.sceneMode === 'VFX_EDITOR') {
+      void this.returnToLobby();
       return;
     }
 
@@ -495,6 +506,22 @@ export class GameApp {
       this.vfx.triggeredTrap(payload.x, payload.z);
     }
     if (type === 'mark_consumed') {
+      const target = this.players.get(payload.targetId);
+      if (target) this.vfx.consumedMark(target.group.position);
+    }
+    if (type === 'ground_line_hit') {
+      const origin = new THREE.Vector3(payload.x, 0, payload.z);
+      const dir = new THREE.Vector3(payload.dirX, 0, payload.dirZ);
+      this.vfx.groundLineHit(origin, dir);
+    }
+    if (type === 'shield_exploded') {
+      const caster = this.players.get(payload.casterId);
+      if (caster) this.vfx.explodedShield(caster.group.position);
+    }
+    if (type === 'trap_triggered') {
+      this.vfx.triggeredTrap(payload.x, payload.z);
+    }
+    if (type === 'mark_consumed') {
       const snap = this.playerSnapshots.get(payload.targetId);
       if (snap) this.vfx.consumedMark(new THREE.Vector3(snap.x, snap.y, snap.z));
     }
@@ -548,6 +575,9 @@ export class GameApp {
     if (this.sceneMode === 'CALIBRATION') {
       this.calibrationUi.updateStatus(this.getArenaDebugInfo(), this.calibrationSnapshot);
     }
+    if (this.sceneMode === 'VFX_EDITOR' && this.vfxEditorUi) {
+      this.vfxEditorUi.updateStatus(this.lobby?.getPlayerPosition(), this.lobby?.getPlayerRotation());
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -568,13 +598,21 @@ export class GameApp {
   }
 
   private updateScene(dt: number): void {
-    const input = this.currentInput(this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE' || this.sceneMode === 'CALIBRATION');
+    const input = this.currentInput(this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE' || this.sceneMode === 'CALIBRATION' || this.sceneMode === 'VFX_EDITOR');
     if (this.sceneMode === 'CHARACTER_SELECT') {
       this.updatePreview(dt);
       return;
     }
 
     if (this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE') {
+      this.lobby?.update(input, dt, this.camera);
+      if (this.lobby) {
+        this.cameraRig.update(this.camera, this.lobby.getPlayerPosition(), this.lobby.getPlayerRotation(), this.aimPitch, dt);
+      }
+      return;
+    }
+
+    if (this.sceneMode === 'VFX_EDITOR') {
       this.lobby?.update(input, dt, this.camera);
       if (this.lobby) {
         this.cameraRig.update(this.camera, this.lobby.getPlayerPosition(), this.lobby.getPlayerRotation(), this.aimPitch, dt);
