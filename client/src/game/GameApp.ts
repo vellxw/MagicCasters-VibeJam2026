@@ -73,7 +73,7 @@ interface ProjectileSnapshot {
   z: number;
 }
 
-type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
+type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 type CharacterGltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
 type PlayerController = LocalPlayerController | RemotePlayerController | AnimatedPlayerController;
 

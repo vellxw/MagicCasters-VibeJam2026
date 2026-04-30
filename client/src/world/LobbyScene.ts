@@ -10,13 +10,16 @@ import {
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
 import type { SplatArenaPreset } from './ArenaPreset';
 import type { PlayCanvasSplatLayer } from './PlayCanvasSplatLayer';
+import type { VfxRuntime } from '../vfx/VfxRuntime';
+import type { MapVfxConfig, MapVfxEntry } from '../vfx/MapVfxConfig';
+import { loadMapVfxConfig } from '../vfx/MapVfxConfig';
 
 export interface LobbyPortal {
   mode: MatchMode;
   arenaId?: ArenaId;
   label: string;
   position: THREE.Vector3;
-  mesh: THREE.Mesh;
+  mesh: THREE.Mesh | null;
 }
 
 export class LobbyScene {
@@ -25,6 +28,8 @@ export class LobbyScene {
   readonly player: LocalPlayerController;
   private velocityY = 0;
   private splatLayer: PlayCanvasSplatLayer | null = null;
+  private vfxRuntime: VfxRuntime | null = null;
+  private vfxInstanceIds: string[] = [];
   private bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   private floorY: number;
 
@@ -57,7 +62,6 @@ export class LobbyScene {
     };
 
     this.scene.add(this.group);
-    this.buildEnvironment();
     this.player = new LocalPlayerController(this.group, true, 'A');
     this.player.setFirstPersonHidden(true);
     this.player.setName('You');
@@ -71,6 +75,41 @@ export class LobbyScene {
       camera,
       preset
     });
+  }
+
+  async loadVfx(runtime: VfxRuntime, presetId: string): Promise<void> {
+    this.vfxRuntime = runtime;
+    this.stopVfx();
+    const config = await loadMapVfxConfig(presetId);
+    if (!config) return;
+    for (const entry of config.effects) {
+      this.playVfxEntry(entry);
+    }
+  }
+
+  playVfxEntry(entry: MapVfxEntry): void {
+    if (!this.vfxRuntime) return;
+    try {
+      const instanceId = this.vfxRuntime.play(entry.vfxId, {
+        position: new THREE.Vector3(entry.position.x, entry.position.y, entry.position.z),
+        rotation: new THREE.Euler(entry.rotation.x, entry.rotation.y, entry.rotation.z),
+        loop: true
+      });
+      const instance = this.vfxRuntime.getInstance(instanceId);
+      if (instance && entry.scale !== 1) {
+        instance.group.scale.setScalar(entry.scale);
+      }
+      this.vfxInstanceIds.push(instanceId);
+    } catch (err) {
+      console.warn(`[LobbyScene] Failed to play VFX "${entry.vfxId}":`, err);
+    }
+  }
+
+  stopVfx(): void {
+    for (const id of this.vfxInstanceIds) {
+      this.vfxRuntime?.stop(id);
+    }
+    this.vfxInstanceIds = [];
   }
 
   update(input: MoveInput, dt: number, camera?: THREE.PerspectiveCamera): void {
@@ -99,11 +138,12 @@ export class LobbyScene {
       : length > 0 ? 'run' : 'idle';
     this.player.update(this.snapshot, dt, true);
 
-    const nearest = this.nearestPortal();
     for (const portal of this.portals) {
-      portal.mesh.rotation.y += dt * 0.8;
-      const near = nearest === portal;
-      portal.mesh.scale.setScalar(near ? 1.12 : 1);
+      if (portal.mesh) {
+        const nearest = this.nearestPortal();
+        const near = nearest === portal;
+        portal.mesh.scale.setScalar(near ? 1.12 : 1);
+      }
     }
 
     if (camera && this.splatLayer) {
@@ -154,6 +194,8 @@ export class LobbyScene {
   }
 
   dispose(): void {
+    this.stopVfx();
+    this.vfxRuntime = null;
     this.splatLayer?.dispose();
     this.splatLayer = null;
     this.player.dispose(this.group);
@@ -167,44 +209,79 @@ export class LobbyScene {
     });
   }
 
-  private buildEnvironment(): void {
-    this.createPortal('1v1', '1v1 Duel', -6, 15, 0xff6b35);
-    this.createPortal('2v2', '2v2 Team Duel', 6, 15, 0x7dd3fc);
-    this.createPortal('1v1', 'Realistic Arena Test', 0, 18, 0xa78bfa, {
-      arenaId: SPLAT_TEST_ARENA_ID,
-      badge: 'EXPERIMENTAL'
-    });
-  }
+  buildPortalsFromVfx(config: MapVfxConfig): void {
+    this.portals = [];
+    const portalDefs: Array<{ mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string }> = [
+      { mode: '1v1', label: '1v1 Duel', color: 0xff6b35, arenaId: undefined },
+      { mode: '2v2', label: '2v2 Team Duel', color: 0x7dd3fc, arenaId: undefined },
+      { mode: '1v1', label: 'Realistic Arena Test', color: 0xa78bfa, arenaId: SPLAT_TEST_ARENA_ID, badge: 'EXPERIMENTAL' }
+    ];
 
-  private createPortal(
-    mode: MatchMode,
-    label: string,
-    x: number,
-    z: number,
-    color: number,
-    options: { arenaId?: ArenaId; badge?: string } = {}
-  ): void {
-    const mesh = new THREE.Mesh(
-      new THREE.TorusGeometry(0.75, 0.08, 10, 48),
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.1, roughness: 0.22 })
-    );
-    mesh.position.set(x, 1.05, z);
-    mesh.rotation.x = Math.PI / 2;
-    this.group.add(mesh);
+    for (let i = 0; i < config.effects.length && i < portalDefs.length; i++) {
+      const entry = config.effects[i];
+      const def = portalDefs[i];
+      const pos = new THREE.Vector3(entry.position.x, entry.position.y, entry.position.z);
 
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.9, 1.1, 0.15, 32),
-      new THREE.MeshStandardMaterial({ color: 0x3b2f25, roughness: 0.5 })
-    );
-    base.position.set(x, 0.075, z);
-    this.group.add(base);
+      const markerGeo = new THREE.RingGeometry(0.15, 0.22, 16);
+      const markerMat = new THREE.MeshBasicMaterial({
+        color: def.color,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+      });
+      const marker = new THREE.Mesh(markerGeo, markerMat);
+      marker.rotation.x = -Math.PI / 2;
+      marker.position.set(entry.position.x, 0.02, entry.position.z);
+      this.group.add(marker);
 
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(label, options.badge), transparent: true }));
-    sprite.position.set(x, 2.35, z);
-    sprite.scale.set(options.badge ? 3.1 : 2.4, options.badge ? 0.8 : 0.55, 1);
-    this.group.add(sprite);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(def.label, def.badge), transparent: true }));
+      sprite.position.set(entry.position.x, entry.position.y + 1.3, entry.position.z);
+      sprite.scale.set(def.badge ? 3.1 : 2.4, def.badge ? 0.8 : 0.55, 1);
+      this.group.add(sprite);
 
-    this.portals.push({ mode, arenaId: options.arenaId, label, position: new THREE.Vector3(x, 0, z), mesh });
+      this.portals.push({
+        mode: def.mode,
+        arenaId: def.arenaId,
+        label: def.label,
+        position: new THREE.Vector3(entry.position.x, 0, entry.position.z),
+        mesh: marker
+      });
+    }
+
+    for (let i = config.effects.length; i < portalDefs.length; i++) {
+      const def = portalDefs[i];
+      const defaultPositions = [
+        { x: -6, z: 15 },
+        { x: 6, z: 15 },
+        { x: 0, z: 18 }
+      ];
+      const pos = defaultPositions[i];
+
+      const markerGeo = new THREE.RingGeometry(0.15, 0.22, 16);
+      const markerMat = new THREE.MeshBasicMaterial({
+        color: def.color,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+      });
+      const marker = new THREE.Mesh(markerGeo, markerMat);
+      marker.rotation.x = -Math.PI / 2;
+      marker.position.set(pos.x, 0.02, pos.z);
+      this.group.add(marker);
+
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(def.label, def.badge), transparent: true }));
+      sprite.position.set(pos.x, 1.35, pos.z);
+      sprite.scale.set(def.badge ? 3.1 : 2.4, def.badge ? 0.8 : 0.55, 1);
+      this.group.add(sprite);
+
+      this.portals.push({
+        mode: def.mode,
+        arenaId: def.arenaId,
+        label: def.label,
+        position: new THREE.Vector3(pos.x, 0, pos.z),
+        mesh: marker
+      });
+    }
   }
 }
 
