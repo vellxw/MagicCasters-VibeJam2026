@@ -183,7 +183,7 @@ export class MagicDuelRoom extends Room<GameState> {
       voxelCollision: this.voxelCollision
     });
 
-    caster.castingUntil = now + 250;
+    caster.castingUntil = now + 500;
     caster.syncCooldownFields();
 
     if (!result.ok) {

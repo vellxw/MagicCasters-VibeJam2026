@@ -159,9 +159,15 @@ export class AnimatedPlayerController {
     if (name === 'BaileVictoria') {
       action.setLoop(THREE.LoopRepeat, Infinity);
       action.clampWhenFinished = false;
+      action.timeScale = 1;
+    } else if (name === 'lanzarmagia') {
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.timeScale = 2;
     } else {
       action.setLoop(THREE.LoopOnce, 1);
       action.clampWhenFinished = true;
+      action.timeScale = 1;
     }
 
     if (this.currentAction) {
