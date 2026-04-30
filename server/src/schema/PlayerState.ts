@@ -18,14 +18,21 @@ export class PlayerState extends Schema implements ServerPlayer {
   @type('boolean') casting = false;
   @type('string') selectedSpell = '';
   @type('string') characterClass: CharacterClass = 'arcanist';
-  @type('number') fireballReadyAt = 0;
-  @type('number') iceBoltReadyAt = 0;
-  @type('number') lightBurstReadyAt = 0;
-  @type('number') shadowDashReadyAt = 0;
+  @type('number') shadowDartReadyAt = 0;
+  @type('number') voidTrapReadyAt = 0;
+  @type('number') abyssalClawReadyAt = 0;
+  @type('number') eclipseReadyAt = 0;
+  @type('number') judgmentRayReadyAt = 0;
+  @type('number') penitentSealReadyAt = 0;
+  @type('number') glacialSpikesReadyAt = 0;
+  @type('number') firmamentShieldReadyAt = 0;
   @type('boolean') shieldActive = false;
   @type('number') silencedUntil = 0;
   @type('number') slowedUntil = 0;
   @type('number') speedBoostUntil = 0;
+  @type('number') markedUntil = 0;
+  @type('number') rootedUntil = 0;
+  @type('boolean') explosiveShield = false;
   cooldowns: Partial<Record<SpellId, number>> = {};
   castingUntil = 0;
   velocityY = 0;
@@ -71,16 +78,23 @@ export class PlayerState extends Schema implements ServerPlayer {
     this.silencedUntil = 0;
     this.slowedUntil = 0;
     this.speedBoostUntil = 0;
+    this.markedUntil = 0;
+    this.rootedUntil = 0;
+    this.explosiveShield = false;
     this.cooldowns = {};
     this.castingUntil = 0;
     this.syncCooldownFields();
   }
 
   syncCooldownFields(): void {
-    this.fireballReadyAt = this.cooldowns.fireball ?? 0;
-    this.iceBoltReadyAt = this.cooldowns.ice_bolt ?? 0;
-    this.lightBurstReadyAt = this.cooldowns.light_burst ?? 0;
-    this.shadowDashReadyAt = this.cooldowns.shadow_dash ?? 0;
+    this.shadowDartReadyAt = this.cooldowns.shadow_dart ?? 0;
+    this.voidTrapReadyAt = this.cooldowns.void_trap ?? 0;
+    this.abyssalClawReadyAt = this.cooldowns.abyssal_claw ?? 0;
+    this.eclipseReadyAt = this.cooldowns.eclipse ?? 0;
+    this.judgmentRayReadyAt = this.cooldowns.judgment_ray ?? 0;
+    this.penitentSealReadyAt = this.cooldowns.penitent_seal ?? 0;
+    this.glacialSpikesReadyAt = this.cooldowns.glacial_spikes ?? 0;
+    this.firmamentShieldReadyAt = this.cooldowns.firmament_shield ?? 0;
   }
 }
 
