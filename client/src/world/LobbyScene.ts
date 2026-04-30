@@ -24,7 +24,7 @@ export interface LobbyPortal {
 
 export class LobbyScene {
   readonly group = new THREE.Group();
-  readonly portals: LobbyPortal[] = [];
+  portals: LobbyPortal[] = [];
   readonly player: LocalPlayerController;
   private velocityY = 0;
   private splatLayer: PlayCanvasSplatLayer | null = null;
@@ -77,18 +77,21 @@ export class LobbyScene {
     });
   }
 
-  async loadVfx(runtime: VfxRuntime, presetId: string): Promise<void> {
+  async loadVfx(runtime: VfxRuntime, presetId: string): Promise<string[]> {
     this.vfxRuntime = runtime;
     this.stopVfx();
     const config = await loadMapVfxConfig(presetId);
-    if (!config) return;
+    const ids: string[] = [];
+    if (!config) return ids;
     for (const entry of config.effects) {
-      this.playVfxEntry(entry);
+      const id = this.playVfxEntry(entry);
+      if (id) ids.push(id);
     }
+    return ids;
   }
 
-  playVfxEntry(entry: MapVfxEntry): void {
-    if (!this.vfxRuntime) return;
+  playVfxEntry(entry: MapVfxEntry): string | null {
+    if (!this.vfxRuntime) return null;
     try {
       const instanceId = this.vfxRuntime.play(entry.vfxId, {
         position: new THREE.Vector3(entry.position.x, entry.position.y, entry.position.z),
@@ -100,8 +103,10 @@ export class LobbyScene {
         instance.group.scale.setScalar(entry.scale);
       }
       this.vfxInstanceIds.push(instanceId);
+      return instanceId;
     } catch (err) {
       console.warn(`[LobbyScene] Failed to play VFX "${entry.vfxId}":`, err);
+      return null;
     }
   }
 
@@ -210,7 +215,7 @@ export class LobbyScene {
   }
 
   buildPortalsFromVfx(config: MapVfxConfig): void {
-    this.portals = [];
+    this.portals.length = 0;
     const portalDefs: Array<{ mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string }> = [
       { mode: '1v1', label: '1v1 Duel', color: 0xff6b35, arenaId: undefined },
       { mode: '2v2', label: '2v2 Team Duel', color: 0x7dd3fc, arenaId: undefined },

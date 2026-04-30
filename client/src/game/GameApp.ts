@@ -34,6 +34,11 @@ import { DebugOverlay } from '../ui/DebugOverlay';
 import { QualityPicker } from '../ui/QualityPicker';
 import { QualitySettingsModal } from '../ui/QualitySettingsModal';
 import { SplatCalibrationOverlay } from '../ui/SplatCalibrationOverlay';
+import { VfxEditorOverlay } from '../ui/VfxEditorOverlay';
+import { VfxRuntime } from '../vfx/VfxRuntime';
+import { VfxLibrary } from '../vfx/VfxLibrary';
+import { VfxLoader } from '../vfx/VfxLoader';
+import { loadMapVfxConfig, type MapVfxEntry, type MapVfxConfig } from '../vfx/MapVfxConfig';
 import { resolveEffectiveTier, saveGraphicsTier, tierToSplatQuality, splatQualityToTier, type GraphicsTier } from '../utils/GraphicsSettings';
 import { VoiceCommandManager } from '../voice/VoiceCommandManager';
 import { createArenaProvider, type ArenaDebugInfo, type ArenaRuntime } from '../world/ArenaProvider';
@@ -88,6 +93,10 @@ export class GameApp {
   private touchControls: TouchControls;
   private ui: DebugOverlay;
   private calibrationUi: SplatCalibrationOverlay;
+  private vfxEditorUi: VfxEditorOverlay | null = null;
+  private vfxEditorRuntime: VfxRuntime | null = null;
+  private vfxEditorEffects: MapVfxEntry[] = [];
+  private vfxEditorInstanceIds: string[] = [];
   private characterSelectUi: CharacterSelectOverlay;
   private mobileStartEl: HTMLDivElement;
   private voice = new VoiceCommandManager();
@@ -162,6 +171,7 @@ export class GameApp {
     this.touchControls = new TouchControls(this.shell);
     this.ui = new DebugOverlay(this.root);
     this.calibrationUi = new SplatCalibrationOverlay(this.root);
+    this.vfxEditorUi = new VfxEditorOverlay(this.root);
     this.characterSelectUi = new CharacterSelectOverlay(this.root);
     this.mobileStartEl = this.createMobileStartOverlay();
     this.createPortraitBlocker();
@@ -254,6 +264,12 @@ export class GameApp {
     this.calibrationUi.onGenerateAutoCollision = () => void this.generateAutoCollision();
     this.calibrationUi.onClearAutoCollision = () => void this.clearAutoCollision();
     this.calibrationUi.onExit = () => void this.returnToLobby();
+    this.vfxEditorUi!.onAddEffect = (vfxId: string) => this.addVfxEditorEffect(vfxId);
+    this.vfxEditorUi!.onDeleteEffect = (index: number) => this.deleteVfxEditorEffect(index);
+    this.vfxEditorUi!.onChange = (index, field, value) => this.updateVfxEditorInstance(index, field, value);
+    this.vfxEditorUi!.onSave = () => void this.saveVfxEditorConfig();
+    this.vfxEditorUi!.onPublish = () => void this.publishVfxEditorConfig();
+    this.vfxEditorUi!.onExit = () => void this.returnToLobby();
     this.voice.onSpell = (spellId, raw) => {
       this.ui.showToast(raw.trim());
       this.cast(spellId);
@@ -576,7 +592,9 @@ export class GameApp {
       this.calibrationUi.updateStatus(this.getArenaDebugInfo(), this.calibrationSnapshot);
     }
     if (this.sceneMode === 'VFX_EDITOR' && this.vfxEditorUi) {
-      this.vfxEditorUi.updateStatus(this.lobby?.getPlayerPosition(), this.lobby?.getPlayerRotation());
+      const pos = this.lobby?.getPlayerPosition();
+      const rot = this.lobby?.getPlayerRotation() ?? null;
+      this.vfxEditorUi.updateStatus(pos ? { x: pos.x, y: pos.y, z: pos.z } : null, rot);
     }
     this.renderer.render(this.scene, this.camera);
   }
@@ -839,6 +857,10 @@ export class GameApp {
     this.queueToken++;
     this.sceneMode = 'LOBBY';
     this.characterSelectUi.hide();
+    this.vfxEditorUi?.hide();
+    this.vfxEditorRuntime?.stopAll();
+    this.vfxEditorRuntime = null;
+    this.vfxEditorInstanceIds = [];
     this.clearPreview();
     this.selectedMode = null;
     this.selectedArenaId = DEFAULT_ARENA_ID;
@@ -878,6 +900,13 @@ export class GameApp {
         ]);
         this.renderer.setClearColor(0x000000, 0);
         this.ui.showToast("Welcome to the Demon Lord's Throne");
+
+        const vfxLib = new VfxLibrary();
+        const vfxLoader = new VfxLoader();
+        const vfxRuntime = new VfxRuntime(this.scene, vfxLib, vfxLoader);
+        await vfxRuntime.preloadFromIndex();
+        vfxRuntime.setCamera(this.camera);
+        await lobby.loadVfx(vfxRuntime, 'lobby-high');
       } else {
         throw new Error('No lobby preset available');
       }
@@ -981,6 +1010,63 @@ export class GameApp {
     this.calibrationUi.show(preset, settings, this.calibrationBasePreset ?? preset);
     this.calibrationUi.setSaveInfo(loadLatestCompatibleHistoryEntry(preset));
     this.ui.showToast('Splat calibration mode');
+  }
+
+  private async enterVfxEditor(): Promise<void> {
+    const token = ++this.queueToken;
+    if (this.sceneMode !== 'LOBBY' || !this.lobby) return;
+    this.sceneMode = 'VFX_EDITOR';
+    this.controlsEnabled = false;
+
+    const library = new VfxLibrary();
+    const loader = new VfxLoader();
+    const runtime = new VfxRuntime(this.scene, library, loader);
+    this.vfxEditorRuntime = runtime;
+    await runtime.preloadFromIndex();
+    if (token !== this.queueToken || this.sceneMode !== 'VFX_EDITOR') return;
+    runtime.setCamera(this.camera);
+
+    const presetId = 'lobby-high';
+    const lobby = this.lobby;
+    let instanceIds: string[] = [];
+    try {
+      instanceIds = await lobby.loadVfx(runtime, presetId);
+    } catch (err) {
+      console.warn('[GameApp] VFX editor: failed to load lobby VFX', err);
+    }
+    if (token !== this.queueToken || this.sceneMode !== 'VFX_EDITOR') return;
+
+    let config = await loadMapVfxConfig(presetId);
+    if (!config) {
+      try {
+        const saved = localStorage.getItem(`vfx-map-${presetId}`);
+        if (saved) config = JSON.parse(saved) as MapVfxConfig;
+      } catch {
+        // ignore
+      }
+    }
+    this.vfxEditorEffects = config ? [...config.effects] : [];
+    this.vfxEditorInstanceIds = instanceIds;
+
+    if (this.splatCatalog) {
+      const catalogMaps = this.splatCatalog.maps.map((m) => ({
+        presetId: m.presetId,
+        displayName: m.displayName,
+        presetUrl: m.presetUrl,
+        splatUrl: m.splatUrl,
+        splatFileSizeBytes: m.splatFileSizeBytes,
+        enabledModes: m.enabledModes,
+        calibrationGroupId: m.calibrationGroupId,
+        quality: m.quality,
+        defaultQuality: m.defaultQuality,
+        qualities: m.qualities
+      }));
+      this.vfxEditorUi?.setMaps(catalogMaps, presetId);
+    }
+
+    this.vfxEditorUi?.setEffects(this.vfxEditorEffects);
+    this.vfxEditorUi?.show();
+    this.ui.showToast('VFX Editor — press Esc to exit');
   }
 
   private async enterCharacterSelect(mode: MatchMode, arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
@@ -1681,6 +1767,111 @@ export class GameApp {
     this.ui.showToast(`Moved to spawn ${String.fromCharCode(65 + index)}`);
   }
 
+  private addVfxEditorEffect(vfxId: string): void {
+    const pos = this.lobby?.getPlayerPosition();
+    const rot = this.lobby?.getPlayerRotation();
+    const entry: MapVfxEntry = {
+      id: `vfx_${Date.now()}`,
+      vfxId,
+      position: { x: pos?.x ?? 0, y: pos?.y ?? 0, z: pos?.z ?? 0 },
+      rotation: { x: 0, y: rot ?? 0, z: 0 },
+      scale: 1
+    };
+    this.vfxEditorEffects.push(entry);
+    const instanceId = this.lobby?.playVfxEntry(entry);
+    this.vfxEditorInstanceIds.push(instanceId ?? '');
+    this.vfxEditorUi?.setEffects(this.vfxEditorEffects);
+  }
+
+  private deleteVfxEditorEffect(index: number): void {
+    if (index < 0 || index >= this.vfxEditorEffects.length) return;
+    this.vfxEditorEffects.splice(index, 1);
+    const instanceId = this.vfxEditorInstanceIds.splice(index, 1)[0];
+    if (instanceId) {
+      this.vfxEditorRuntime?.stop(instanceId);
+    }
+    this.vfxEditorUi?.setEffects(this.vfxEditorEffects);
+  }
+
+  private rebuildVfxEditorInstances(): void {
+    this.lobby?.stopVfx();
+    this.vfxEditorInstanceIds = [];
+    for (const entry of this.vfxEditorEffects) {
+      const id = this.lobby?.playVfxEntry(entry);
+      this.vfxEditorInstanceIds.push(id ?? '');
+    }
+  }
+
+  private updateVfxEditorInstance(index: number, field: string, value: number): void {
+    if (index < 0 || index >= this.vfxEditorEffects.length) return;
+    const entry = this.vfxEditorEffects[index];
+    if (field.startsWith('position.')) {
+      const axis = field.slice(9) as 'x' | 'y' | 'z';
+      entry.position[axis] = value;
+    } else if (field.startsWith('rotation.')) {
+      const axis = field.slice(9) as 'x' | 'y' | 'z';
+      entry.rotation[axis] = value;
+    } else if (field === 'scale') {
+      entry.scale = value;
+    }
+
+    const instanceId = this.vfxEditorInstanceIds[index];
+    if (!instanceId || !this.vfxEditorRuntime) return;
+
+    if (field.startsWith('position.')) {
+      this.vfxEditorRuntime.setInstancePosition(
+        instanceId,
+        new THREE.Vector3(entry.position.x, entry.position.y, entry.position.z)
+      );
+    } else if (field.startsWith('rotation.')) {
+      this.vfxEditorRuntime.setInstanceRotation(
+        instanceId,
+        new THREE.Euler(entry.rotation.x, entry.rotation.y, entry.rotation.z)
+      );
+    } else if (field === 'scale') {
+      this.vfxEditorRuntime.setInstanceScale(instanceId, entry.scale);
+    }
+  }
+
+  private async saveVfxEditorConfig(): Promise<void> {
+    const config: MapVfxConfig = {
+      presetId: 'lobby-high',
+      effects: this.vfxEditorEffects
+    };
+    try {
+      localStorage.setItem('vfx-map-lobby-high', JSON.stringify(config));
+      this.vfxEditorUi?.setFeedback('VFX config saved to localStorage');
+      this.ui.showToast('VFX config saved');
+    } catch (err) {
+      this.vfxEditorUi?.setFeedback(`Save failed: ${String(err)}`);
+    }
+  }
+
+  private async publishVfxEditorConfig(): Promise<void> {
+    const config: MapVfxConfig = {
+      presetId: 'lobby-high',
+      effects: this.vfxEditorEffects
+    };
+    this.vfxEditorUi?.setFeedback('Publishing VFX config to project files...');
+    this.ui.showToast('Publishing VFX map');
+    try {
+      const apiUrl = `${resolveDevApiBaseUrl()}/api/dev/vfx-map/publish`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      this.vfxEditorUi?.setFeedback('VFX config published to project files');
+      this.ui.showToast('VFX map published');
+    } catch (err) {
+      this.vfxEditorUi?.setFeedback(`Publish failed: ${String(err)}. Run npm run dev locally.`);
+    }
+  }
+
   private clearMatchScene(): void {
     this.vfx.reset();
     for (const controller of this.players.values()) {
@@ -1865,6 +2056,13 @@ function resolveCharacterClass(value: unknown): CharacterClass {
 
 function stringValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+function resolveDevApiBaseUrl(): string {
+  if (['5173', '4173', '4174'].includes(location.port)) {
+    return `${location.protocol}//${location.hostname}:3001`;
+  }
+  return `${location.protocol}//${location.host}`;
 }
 
 function resolveServerUrl(): string {

@@ -150,6 +150,20 @@ export class VfxRuntime {
     }
   }
 
+  setInstanceRotation(instanceId: string, rotation: THREE.Euler): void {
+    const instance = this.instances.get(instanceId);
+    if (instance) {
+      instance.group.rotation.copy(rotation);
+    }
+  }
+
+  setInstanceScale(instanceId: string, scale: number): void {
+    const instance = this.instances.get(instanceId);
+    if (instance) {
+      instance.group.scale.setScalar(scale);
+    }
+  }
+
   private createEmitters(definition: VfxDefinition): BaseEmitter[] {
     const emitters: BaseEmitter[] = [];
     for (const layer of definition.layers) {

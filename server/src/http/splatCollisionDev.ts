@@ -12,6 +12,7 @@ import { invalidateServerVoxelCollision } from '../systems/ServerVoxelCollision.
 
 const API_PREFIX = '/api/dev/splat-collision/';
 const MAP_API_PREFIX = '/api/dev/splat-map/';
+const VFX_MAP_API_PREFIX = '/api/dev/vfx-map/';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_OUTPUT_BYTES = 24 * 1024;
 const GENERATE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -46,7 +47,7 @@ export function handleSplatCollisionDevApi(
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env
 ): boolean {
   const pathname = safeApiPathname(request.url);
-  if (!pathname.startsWith(API_PREFIX) && !pathname.startsWith(MAP_API_PREFIX)) return false;
+  if (!pathname.startsWith(API_PREFIX) && !pathname.startsWith(MAP_API_PREFIX) && !pathname.startsWith(VFX_MAP_API_PREFIX)) return false;
 
   applyCorsHeaders(request, response);
 
@@ -56,7 +57,7 @@ export function handleSplatCollisionDevApi(
     return true;
   }
 
-  if (request.method === 'GET' && (pathname === `${API_PREFIX}status` || pathname === `${MAP_API_PREFIX}status`)) {
+  if (request.method === 'GET' && (pathname === `${API_PREFIX}status` || pathname === `${MAP_API_PREFIX}status` || pathname === `${VFX_MAP_API_PREFIX}status`)) {
     sendJson(response, 200, getSplatCollisionDevStatus(env, request.headers.host, request.socket.remoteAddress));
     return true;
   }
@@ -77,9 +78,11 @@ export function handleSplatCollisionDevApi(
 
   void readJsonBody(request)
     .then((body) => (
-      pathname.startsWith(MAP_API_PREFIX)
-        ? routeSplatMapRequest(pathname, body, response)
-        : routeSplatCollisionRequest(pathname, body, response)
+      pathname.startsWith(VFX_MAP_API_PREFIX)
+        ? routeVfxMapRequest(pathname, body, response)
+        : pathname.startsWith(MAP_API_PREFIX)
+          ? routeSplatMapRequest(pathname, body, response)
+          : routeSplatCollisionRequest(pathname, body, response)
     ))
     .catch((error) => sendJson(response, 400, { ok: false, error: errorMessage(error) }));
   return true;
@@ -137,6 +140,54 @@ async function routeSplatMapRequest(pathname: string, body: unknown, response: S
     return;
   }
   sendJson(response, 404, { ok: false, error: 'Unknown splat map dev endpoint' });
+}
+
+async function routeVfxMapRequest(pathname: string, body: unknown, response: ServerResponse): Promise<void> {
+  if (pathname === `${VFX_MAP_API_PREFIX}publish`) {
+    const repoRoot = findRepoRoot();
+    const config = normalizeVfxMapConfig(body);
+    const presetId = sanitizeArenaId(config.presetId);
+    const vfxDir = resolve(repoRoot, 'client', 'public', 'vfx', 'maps');
+    await mkdir(vfxDir, { recursive: true });
+    const configPath = resolve(vfxDir, `${presetId}-vfx.json`);
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    const distVfxDir = resolve(repoRoot, 'client', 'dist', 'vfx', 'maps');
+    if (existsSync(distVfxDir)) {
+      await mkdir(distVfxDir, { recursive: true });
+      await copyFile(configPath, resolve(distVfxDir, `${presetId}-vfx.json`));
+    }
+
+    sendJson(response, 200, { ok: true, presetId, file: `vfx/maps/${presetId}-vfx.json` });
+    return;
+  }
+  sendJson(response, 404, { ok: false, error: 'Unknown VFX map dev endpoint' });
+}
+
+function normalizeVfxMapConfig(value: unknown): { presetId: string; effects: Array<{ id: string; vfxId: string; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number }; scale: number }> } {
+  const data = asRecord(value);
+  const presetId = typeof data.presetId === 'string' ? data.presetId : 'lobby-high';
+  const rawEffects = Array.isArray(data.effects) ? data.effects : [];
+  const effects = rawEffects.map((entry: unknown) => {
+    const e = asRecord(entry);
+    return {
+      id: typeof e.id === 'string' ? e.id : `vfx_${Date.now()}`,
+      vfxId: typeof e.vfxId === 'string' ? e.vfxId : 'portal_electric',
+      position: normalizeVec3(e.position),
+      rotation: normalizeVec3(e.rotation),
+      scale: typeof e.scale === 'number' && Number.isFinite(e.scale) ? e.scale : 1
+    };
+  });
+  return { presetId, effects };
+}
+
+function normalizeVec3(value: unknown): { x: number; y: number; z: number } {
+  const v = asRecord(value);
+  return {
+    x: typeof v.x === 'number' && Number.isFinite(v.x) ? v.x : 0,
+    y: typeof v.y === 'number' && Number.isFinite(v.y) ? v.y : 0,
+    z: typeof v.z === 'number' && Number.isFinite(v.z) ? v.z : 0
+  };
 }
 
 export function getSplatCollisionDevStatus(

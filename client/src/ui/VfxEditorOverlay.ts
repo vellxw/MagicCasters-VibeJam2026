@@ -1,5 +1,5 @@
 import type { SplatMapEntry } from '../world/ArenaPreset';
-import type { SplatQuality } from '../../shared/splatMapPool';
+// Note: splatMapPool types moved to ArenaPreset to avoid circular deps
 import type { MapVfxEntry } from '../vfx/MapVfxConfig';
 
 interface VfxEditorCallbacks {
@@ -235,5 +235,6 @@ export class VfxEditorOverlay {
     } else if (key === 'scale') {
       effect.scale = value;
     }
+    this.onChange?.(index, key, value);
   }
 }

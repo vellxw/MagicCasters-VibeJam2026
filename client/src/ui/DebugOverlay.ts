@@ -4,7 +4,7 @@ import type { ArenaId, MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
 
-type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION';
+type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 
 export class DebugOverlay {
   readonly element: HTMLDivElement;
