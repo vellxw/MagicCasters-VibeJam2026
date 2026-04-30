@@ -10,6 +10,7 @@ export class TrailEmitter extends BaseEmitter {
   private layer: TrailLayer;
   private maxLength: number;
   private fadeTime: number;
+  private tempTrailPos = new THREE.Vector3();
 
   constructor(layer: TrailLayer) {
     super();
@@ -40,7 +41,8 @@ export class TrailEmitter extends BaseEmitter {
   update(_dt: number, elapsed: number, _duration: number): void {
     if (!this.mesh || !this.parent) return;
 
-    this.positions.unshift(new THREE.Vector3(0, 0, 0));
+    this.tempTrailPos.set(0, 0, 0);
+    this.positions.unshift(this.tempTrailPos.clone());
     if (this.positions.length > this.maxLength) {
       this.positions.pop();
     }

@@ -9,6 +9,7 @@ export class MeshEmitter extends BaseEmitter {
   private layer: MeshLayer;
   private baseScale: THREE.Vector3;
   private startTime = 0;
+  private cachedAxis: THREE.Vector3 | null = null;
 
   constructor(layer: MeshLayer) {
     super();
@@ -103,10 +104,12 @@ export class MeshEmitter extends BaseEmitter {
     }
 
     if (anim.rotation?.axis && anim.rotation.angle) {
-      const axis = new THREE.Vector3(...anim.rotation.axis).normalize();
+      if (!this.cachedAxis) {
+        this.cachedAxis = new THREE.Vector3(...anim.rotation.axis).normalize();
+      }
       const angleVal = this.evaluateAnimatedValue(anim.rotation.angle, elapsed, duration);
       const angle = typeof angleVal === 'number' ? angleVal : angleVal[0];
-      this.mesh.rotateOnAxis(axis, angle * dt);
+      this.mesh.rotateOnAxis(this.cachedAxis, angle * dt);
     }
 
     if (anim.scale && typeof this.layer.scale !== 'number' && !Array.isArray(this.layer.scale)) {

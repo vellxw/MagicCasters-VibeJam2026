@@ -35,6 +35,7 @@ export class ParticleSystem {
   private gravity: THREE.Vector3;
   private drag: number;
   private camera: THREE.Camera | null = null;
+  private tempRadial = new THREE.Vector3();
 
   constructor(parent: THREE.Group, options: ParticleSystemOptions, camera?: THREE.Camera | null) {
     this.group = new THREE.Group();
@@ -89,11 +90,12 @@ export class ParticleSystem {
           p.velocity.z += (Math.random() - 0.5) * spread;
         }
         if (radial) {
-          p.velocity.add(new THREE.Vector3(
+          this.tempRadial.set(
             (Math.random() - 0.5) * 2,
             (Math.random() - 0.5) * 2,
             (Math.random() - 0.5) * 2
-          ).normalize().multiplyScalar(velocityBase.length()));
+          ).normalize().multiplyScalar(velocityBase.length());
+          p.velocity.add(this.tempRadial);
         }
         this.pool[i].position.copy(position);
         this.pool[i].visible = true;
