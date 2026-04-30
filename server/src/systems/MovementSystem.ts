@@ -52,13 +52,19 @@ export function applyMovement(
     moveZ -= right.z;
   }
 
+  const now = Date.now();
+  if ((player.rootedUntil ?? 0) > now) {
+    moveX = 0;
+    moveZ = 0;
+    input.dash = false;
+  }
+
   const length = Math.hypot(moveX, moveZ);
   if (length > 0) {
     moveX /= length;
     moveZ /= length;
   }
 
-  const now = Date.now();
   let speedMultiplier = 1;
   if ((player.speedBoostUntil ?? 0) > now) speedMultiplier *= 2;
   if ((player.slowedUntil ?? 0) > now) speedMultiplier *= 0.3;
