@@ -7,5 +7,8 @@
   "ice_bolt_cast",
   "light_burst_cast",
   "light_burst_impact",
-  "portal_spin"
+  "portal_spin",
+  "portal_electric",
+  "portal_electric_blue",
+  "portal_electric_orange"
 ]

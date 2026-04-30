@@ -128,10 +128,14 @@ export interface PublicPlayerState {
   casting: boolean;
   selectedSpell: string;
   characterClass: CharacterClass;
-  fireballReadyAt?: number;
-  iceBoltReadyAt?: number;
-  lightBurstReadyAt?: number;
-  shadowDashReadyAt?: number;
+  shadowDartReadyAt?: number;
+  voidTrapReadyAt?: number;
+  abyssalClawReadyAt?: number;
+  eclipseReadyAt?: number;
+  judgmentRayReadyAt?: number;
+  penitentSealReadyAt?: number;
+  glacialSpikesReadyAt?: number;
+  firmamentShieldReadyAt?: number;
 }
 
 export interface PublicProjectileState {

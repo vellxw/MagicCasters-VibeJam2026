@@ -7,70 +7,73 @@
   "type": "splat",
   "splatUrl": "/splats/the-arcane-ritual-library-high.sog",
   "splatFileSizeBytes": 23931955,
-  "enabledModes": [],
+  "enabledModes": [
+    "1v1",
+    "2v2"
+  ],
   "collisionMeshUrl": null,
   "voxelCollisionUrl": null,
   "spawnPoints": [
     {
-      "x": -5.5,
+      "x": 0,
       "y": 0,
-      "z": 0,
-      "rotY": -1.5707963267948966
+      "z": 11,
+      "rotY": 0
     },
     {
-      "x": 5.5,
+      "x": 0,
       "y": 0,
-      "z": 0,
-      "rotY": 1.5707963267948966
+      "z": -4,
+      "rotY": 3.129
     }
   ],
   "spawnPointsByMode": {
     "1v1": [
       {
-        "x": -5.5,
+        "x": 0,
         "y": 0,
-        "z": 0,
-        "rotY": -1.5707963267948966
+        "z": 11,
+        "rotY": 0
       },
       {
-        "x": 5.5,
+        "x": 0,
         "y": 0,
-        "z": 0,
-        "rotY": 1.5707963267948966
+        "z": -4,
+        "rotY": 3.129
       }
     ],
     "2v2": [
       {
         "x": -5.5,
         "y": 0,
-        "z": -1.25,
+        "z": 4,
         "rotY": -1.5707963267948966
       },
       {
         "x": 5.5,
         "y": 0,
-        "z": 1.25,
+        "z": 6,
         "rotY": 1.5707963267948966
       },
       {
         "x": -5.5,
         "y": 0,
-        "z": 1.25,
+        "z": 6,
         "rotY": -1.5707963267948966
       },
       {
         "x": 5.5,
         "y": 0,
-        "z": -1.25,
+        "z": 4,
         "rotY": 1.5707963267948966
       }
     ]
   },
   "bounds": {
-    "minX": -8,
-    "maxX": 8,
-    "minZ": -6,
-    "maxZ": 6
+    "minX": -6.8,
+    "maxX": 6.7,
+    "minZ": -4.7,
+    "maxZ": 12.2
   },
   "scale": 1,
   "rotation": {
@@ -83,7 +86,7 @@
     "y": 0,
     "z": 0
   },
-  "floorY": 0,
+  "floorY": -2,
   "collisionErasers": [],
   "collisionWalls": []
 }

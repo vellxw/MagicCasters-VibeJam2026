@@ -8,6 +8,8 @@ import {
   type MoveInput
 } from '../../../shared/types';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
+import type { SplatArenaPreset } from './ArenaPreset';
+import type { PlayCanvasSplatLayer } from './PlayCanvasSplatLayer';
 
 export interface LobbyPortal {
   mode: MatchMode;
@@ -17,36 +19,43 @@ export interface LobbyPortal {
   mesh: THREE.Mesh;
 }
 
-const LOBBY_BOUNDS = {
-  minX: -7,
-  maxX: 7,
-  minZ: -5,
-  maxZ: 5
-};
-const LOBBY_FLOOR_Y = 0;
-
 export class LobbyScene {
   readonly group = new THREE.Group();
   readonly portals: LobbyPortal[] = [];
   readonly player: LocalPlayerController;
   private velocityY = 0;
+  private splatLayer: PlayCanvasSplatLayer | null = null;
+  private bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  private floorY: number;
 
-  private snapshot: PlayerSnapshot = {
-    id: 'lobby-local',
-    name: 'Mage',
-    teamId: 'A',
-    x: 0,
-    y: 0,
-    z: 4.45,
-    rotY: 0,
-    hp: 100,
-    mana: 100,
-    anim: 'idle',
-    casting: false,
-    selectedSpell: ''
-  };
+  private snapshot: PlayerSnapshot;
 
-  constructor(private scene: THREE.Scene) {
+  constructor(
+    private scene: THREE.Scene,
+    private shell: HTMLElement,
+    preset?: SplatArenaPreset
+  ) {
+    this.bounds = preset
+      ? { ...preset.bounds }
+      : { minX: -16, maxX: 15, minZ: -11, maxZ: 39 };
+    this.floorY = preset?.floorY ?? 0;
+
+    const spawn = preset?.spawnPoints[0];
+    this.snapshot = {
+      id: 'lobby-local',
+      name: 'Mage',
+      teamId: 'A',
+      x: spawn?.x ?? 0,
+      y: spawn?.y ?? 0,
+      z: spawn?.z ?? 30,
+      rotY: spawn?.rotY ?? Math.PI,
+      hp: 100,
+      mana: 100,
+      anim: 'idle',
+      casting: false,
+      selectedSpell: ''
+    };
+
     this.scene.add(this.group);
     this.buildEnvironment();
     this.player = new LocalPlayerController(this.group, true, 'A');
@@ -55,7 +64,16 @@ export class LobbyScene {
     this.player.update(this.snapshot, 1, true);
   }
 
-  update(input: MoveInput, dt: number): void {
+  async loadSplat(camera: THREE.PerspectiveCamera, preset: SplatArenaPreset): Promise<void> {
+    const module = await import('./PlayCanvasSplatLayer');
+    this.splatLayer = await module.createPlayCanvasSplatLayer({
+      container: this.shell,
+      camera,
+      preset
+    });
+  }
+
+  update(input: MoveInput, dt: number, camera?: THREE.PerspectiveCamera): void {
     const yaw = input.rotY ?? this.snapshot.rotY;
     this.snapshot.rotY = yaw;
 
@@ -73,10 +91,10 @@ export class LobbyScene {
       mz /= length;
     }
 
-    this.snapshot.x = clamp(this.snapshot.x + mx * 4.8 * dt, LOBBY_BOUNDS.minX, LOBBY_BOUNDS.maxX);
-    this.snapshot.z = clamp(this.snapshot.z + mz * 4.8 * dt, LOBBY_BOUNDS.minZ, LOBBY_BOUNDS.maxZ);
+    this.snapshot.x = clamp(this.snapshot.x + mx * 4.8 * dt, this.bounds.minX, this.bounds.maxX);
+    this.snapshot.z = clamp(this.snapshot.z + mz * 4.8 * dt, this.bounds.minZ, this.bounds.maxZ);
     this.applyJump(input, dt);
-    this.snapshot.anim = this.snapshot.y > LOBBY_FLOOR_Y + 0.03 || Math.abs(this.velocityY) > 0.01
+    this.snapshot.anim = this.snapshot.y > this.floorY + 0.03 || Math.abs(this.velocityY) > 0.01
       ? 'jump'
       : length > 0 ? 'run' : 'idle';
     this.player.update(this.snapshot, dt, true);
@@ -87,15 +105,19 @@ export class LobbyScene {
       const near = nearest === portal;
       portal.mesh.scale.setScalar(near ? 1.12 : 1);
     }
+
+    if (camera && this.splatLayer) {
+      this.splatLayer.updateFromThreeCamera(camera);
+    }
   }
 
   private applyJump(input: MoveInput, dt: number): void {
-    const grounded = this.snapshot.y <= LOBBY_FLOOR_Y + 0.02;
+    const grounded = this.snapshot.y <= this.floorY + 0.02;
     if (grounded && input.jump) {
-      this.snapshot.y = LOBBY_FLOOR_Y;
+      this.snapshot.y = this.floorY;
       this.velocityY = PLAYER_JUMP_VELOCITY;
     } else if (grounded && this.velocityY <= 0) {
-      this.snapshot.y = LOBBY_FLOOR_Y;
+      this.snapshot.y = this.floorY;
       this.velocityY = 0;
     }
 
@@ -104,8 +126,8 @@ export class LobbyScene {
       this.snapshot.y += this.velocityY * dt;
     }
 
-    if (this.snapshot.y <= LOBBY_FLOOR_Y) {
-      this.snapshot.y = LOBBY_FLOOR_Y;
+    if (this.snapshot.y <= this.floorY) {
+      this.snapshot.y = this.floorY;
       this.velocityY = 0;
     }
   }
@@ -132,6 +154,8 @@ export class LobbyScene {
   }
 
   dispose(): void {
+    this.splatLayer?.dispose();
+    this.splatLayer = null;
     this.player.dispose(this.group);
     this.scene.remove(this.group);
     this.group.traverse((object) => {
@@ -144,25 +168,9 @@ export class LobbyScene {
   }
 
   private buildEnvironment(): void {
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(17, 13),
-      new THREE.MeshStandardMaterial({ color: 0x242017, roughness: 0.78 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    this.group.add(floor);
-
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(2.5, 2.65, 72),
-      new THREE.MeshBasicMaterial({ color: 0xf5c45e, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.02;
-    this.group.add(ring);
-
-    this.createPortal('1v1', '1v1 Duel', -4.4, -2.25, 0xff6b35);
-    this.createPortal('2v2', '2v2 Team Duel', 4.4, -2.25, 0x7dd3fc);
-    this.createPortal('1v1', 'Realistic Arena Test', 0, 1.75, 0xa78bfa, {
+    this.createPortal('1v1', '1v1 Duel', -6, 15, 0xff6b35);
+    this.createPortal('2v2', '2v2 Team Duel', 6, 15, 0x7dd3fc);
+    this.createPortal('1v1', 'Realistic Arena Test', 0, 18, 0xa78bfa, {
       arenaId: SPLAT_TEST_ARENA_ID,
       badge: 'EXPERIMENTAL'
     });

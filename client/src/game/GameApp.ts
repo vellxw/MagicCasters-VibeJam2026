@@ -44,6 +44,9 @@ import {
   loadLatestSplatPresetBackupEntry,
   loadLatestSplatPresetHistoryEntry,
   loadConfiguredSplatArenaPreset,
+  loadSavedSplatPreset,
+  loadSplatArenaPreset,
+  mergeSplatArenaPresetForRuntime,
   saveConfiguredSplatArenaPreset,
   getSplatCalibrationStorageKey,
   setStoredSplatPresetId,
@@ -164,7 +167,7 @@ export class GameApp {
     this.createPortraitBlocker();
     this.network = new NetworkClient(resolveServerUrl());
 
-    this.characterSelectUi.onBack = () => this.returnToLobby();
+    this.characterSelectUi.onBack = () => void this.returnToLobby();
     this.characterSelectUi.onClassSelect = (characterClass) => this.switchPreviewClass(characterClass);
     this.characterSelectUi.onConfirm = (characterClass) => this.confirmCharacterSelection(characterClass);
     this.characterSelectUi.onSpellHover = (spellId) => this.playPreviewAnim(spellId ? 'lanzarmagia' : 'reposo');
@@ -232,8 +235,8 @@ export class GameApp {
 
     this.ui.onCast = (spellId) => this.cast(spellId);
     this.ui.onVoiceToggle = () => this.voice.toggle();
-    this.ui.onCancelQueue = () => this.returnToLobby();
-    this.ui.onReturnLobby = () => this.returnToLobby();
+    this.ui.onCancelQueue = () => void this.returnToLobby();
+    this.ui.onReturnLobby = () => void this.returnToLobby();
     this.ui.onPortalAction = () => this.activateNearestPortal();
     this.ui.onQualitySettings = () => this.openQualityModal();
     this.calibrationUi.onChange = (settings, options) => this.applyCalibrationSettings(settings, options);
@@ -242,6 +245,7 @@ export class GameApp {
     this.calibrationUi.onSelectQuality = (quality) => void this.switchCalibrationPreset(this.calibrationPreset?.calibrationGroupId ?? this.calibrationPreset?.presetId, quality);
     this.calibrationUi.onSave = () => this.saveCalibrationPreset();
     this.calibrationUi.onPublish = () => void this.publishCalibrationPreset();
+    this.calibrationUi.onUpdateLobby = () => void this.updateLobbyFromCalibration();
     this.calibrationUi.onRestoreLast = () => this.restoreCalibrationHistory('last');
     this.calibrationUi.onRestoreBackup = () => this.restoreCalibrationHistory('backup');
     this.calibrationUi.onClearSaved = () => void this.clearSavedCalibrationPreset();
@@ -249,7 +253,7 @@ export class GameApp {
     this.calibrationUi.onShowCollisionDebug = (visible) => this.arenaRuntime?.setCollisionDebugVisible?.(visible);
     this.calibrationUi.onGenerateAutoCollision = () => void this.generateAutoCollision();
     this.calibrationUi.onClearAutoCollision = () => void this.clearAutoCollision();
-    this.calibrationUi.onExit = () => this.returnToLobby();
+    this.calibrationUi.onExit = () => void this.returnToLobby();
     this.voice.onSpell = (spellId, raw) => {
       this.ui.showToast(raw.trim());
       this.cast(spellId);
@@ -340,7 +344,7 @@ export class GameApp {
     if (!down || event.repeat) return;
     if (key === 'f8' && (this.sceneMode === 'LOBBY' || this.sceneMode === 'CALIBRATION')) {
       event.preventDefault();
-      if (this.sceneMode === 'CALIBRATION') this.returnToLobby();
+      if (this.sceneMode === 'CALIBRATION') void this.returnToLobby();
       else void this.enterCalibration();
       return;
     }
@@ -355,22 +359,22 @@ export class GameApp {
     }
 
     if (key === 'escape' && this.sceneMode === 'CHARACTER_SELECT') {
-      this.returnToLobby();
+      void this.returnToLobby();
       return;
     }
 
     if (key === 'escape' && this.sceneMode === 'QUEUE') {
-      this.returnToLobby();
+      void this.returnToLobby();
       return;
     }
 
     if (key === 'escape' && this.sceneMode === 'RESULTS') {
-      this.returnToLobby();
+      void this.returnToLobby();
       return;
     }
 
     if (key === 'escape' && this.sceneMode === 'CALIBRATION') {
-      this.returnToLobby();
+      void this.returnToLobby();
       return;
     }
 
@@ -555,7 +559,7 @@ export class GameApp {
     }
 
     if (this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE') {
-      this.lobby?.update(input, dt);
+      this.lobby?.update(input, dt, this.camera);
       if (this.lobby) {
         this.cameraRig.update(this.camera, this.lobby.getPlayerPosition(), this.lobby.getPlayerRotation(), this.aimPitch, dt);
       }
@@ -733,13 +737,13 @@ export class GameApp {
 
   private promptInitialQualityIfNeeded(): void {
     if (this.initialQualitySelected) {
-      this.enterLobby();
+      void this.enterLobby();
       return;
     }
     const saved = localStorage.getItem('mc_graphics_tier');
     if (saved) {
       this.initialQualitySelected = true;
-      this.enterLobby();
+      void this.enterLobby();
       return;
     }
     this.qualityPicker = new QualityPicker(this.root);
@@ -751,7 +755,7 @@ export class GameApp {
       this.selectedSplatQuality = tierToSplatQuality(tier === 'auto' ? resolveEffectiveTier() : tier);
       this.qualityPicker?.dispose();
       this.qualityPicker = null;
-      this.enterLobby();
+      void this.enterLobby();
     };
     this.qualityPicker.show();
   }
@@ -777,7 +781,7 @@ export class GameApp {
     }
   }
 
-  private enterLobby(): void {
+  private async enterLobby(): Promise<void> {
     this.queueToken++;
     this.sceneMode = 'LOBBY';
     this.characterSelectUi.hide();
@@ -795,15 +799,44 @@ export class GameApp {
     this.touchControls.reset();
     this.clearMatchScene();
     this.network.leave();
-    if (!this.lobby) {
-      this.lobby = new LobbyScene(this.scene);
+    this.lobby?.dispose();
+    this.lobby = null;
+
+    this.ui.showToast('Loading throne lobby...');
+
+    let lobbyPreset: SplatArenaPreset | null = null;
+    try {
+      const basePreset = await loadSplatArenaPreset('/arena-presets/lobby-high.json');
+      const savedPreset = loadSavedSplatPreset('lobby-high');
+      lobbyPreset = savedPreset ? mergeSplatArenaPresetForRuntime(basePreset, savedPreset) : basePreset;
+    } catch (error) {
+      console.warn('[GameApp] Failed to load lobby preset', error);
     }
-    this.ui.showToast('Choose a portal');
+
+    const lobby = new LobbyScene(this.scene, this.shell, lobbyPreset ?? undefined);
+    this.lobby = lobby;
+
+    try {
+      if (lobbyPreset) {
+        await Promise.race([
+          lobby.loadSplat(this.camera, lobbyPreset),
+          new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Lobby splat load timeout')), 20000))
+        ]);
+        this.renderer.setClearColor(0x000000, 0);
+        this.ui.showToast("Welcome to the Demon Lord's Throne");
+      } else {
+        throw new Error('No lobby preset available');
+      }
+    } catch (error) {
+      console.warn('[GameApp] Lobby splat failed, using procedural fallback', error);
+      this.ui.showToast('Lobby splat unavailable');
+    }
   }
 
   private async enterCalibration(): Promise<void> {
     const token = ++this.queueToken;
     this.sceneMode = 'CALIBRATION';
+    this.renderer.setClearColor(0x15120f, 1);
     this.selectedMode = '1v1';
     this.selectedArenaId = SPLAT_TEST_ARENA_ID;
     this.phase = 'CALIBRATION';
@@ -899,6 +932,7 @@ export class GameApp {
   private async enterCharacterSelect(mode: MatchMode, arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
     const token = ++this.queueToken;
     this.sceneMode = 'CHARACTER_SELECT';
+    this.renderer.setClearColor(0x15120f, 1);
     this.selectedMode = mode;
     this.selectedArenaId = arenaId;
     this.selectedArenaPresetId = '';
@@ -942,6 +976,7 @@ export class GameApp {
   private async enterQueue(mode: MatchMode, _arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
     const token = ++this.queueToken;
     this.sceneMode = 'QUEUE';
+    this.renderer.setClearColor(0x15120f, 1);
     this.selectedMode = mode;
     this.selectedArenaId = DEFAULT_ARENA_ID;
     this.selectedArenaPresetId = '';
@@ -971,13 +1006,14 @@ export class GameApp {
       if (token !== this.queueToken) return;
       this.ui.showToast('Queue failed');
       console.error(error);
-      this.returnToLobby();
+      void this.returnToLobby();
     }
   }
 
   private enterMatch(): void {
     if (this.sceneMode === 'MATCH') return;
     this.sceneMode = 'MATCH';
+    this.renderer.setClearColor(0x15120f, 1);
     this.characterSelectUi.hide();
     this.clearPreview();
     this.lobby?.dispose();
@@ -1001,6 +1037,7 @@ export class GameApp {
 
   private enterResults(): void {
     this.sceneMode = 'RESULTS';
+    this.renderer.setClearColor(0x15120f, 1);
     this.controlsEnabled = false;
     this.keys.clear();
     this.clearQueuedActions();
@@ -1022,8 +1059,8 @@ export class GameApp {
     this.ui.showToast(this.phaseMessage || 'Match ended');
   }
 
-  private returnToLobby(): void {
-    this.enterLobby();
+  private async returnToLobby(): Promise<void> {
+    await this.enterLobby();
   }
 
   private bindCharacterPreviewEvents(): void {
@@ -1469,6 +1506,28 @@ export class GameApp {
     const modes = preset.enabledModes.length ? preset.enabledModes.join(', ') : 'no matchmaking modes';
     this.calibrationUi.setFeedback(`Map published for ${modes}. Updated ${updated}.`);
     this.ui.showToast('Map published');
+  }
+
+  private async updateLobbyFromCalibration(): Promise<void> {
+    if (!this.calibrationPreset || !this.calibrationSettings) return;
+    const preset = applyCalibrationToPreset(this.calibrationPreset, this.calibrationSettings);
+    this.calibrationPreset = preset;
+    this.calibrationUi.setPreset(preset);
+
+    this.calibrationUi.setFeedback('Publishing lobby preset to project files...');
+    this.ui.showToast('Publishing lobby');
+
+    const result = await requestDevSplatMapPublish(preset);
+    if (!result.ok) {
+      const suffix = result.command ? ` ${result.command}` : '';
+      this.calibrationUi.setFeedback(`Publish unavailable: ${result.error ?? 'request failed'}.${suffix}`);
+      this.ui.showToast('Publish unavailable');
+      return;
+    }
+
+    const updated = result.updatedPresets?.length ? result.updatedPresets.join(', ') : 'project presets';
+    this.calibrationUi.setFeedback(`Lobby published to ${updated}. All browsers will load these settings.`);
+    this.ui.showToast('Lobby published');
   }
 
   private autosaveCalibrationPreset(settings: SplatCalibrationSettings): void {

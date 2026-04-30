@@ -5,7 +5,7 @@ import type { PublicProjectileState } from '../../../shared/types.js';
 export class ProjectileState extends Schema implements PublicProjectileState {
   @type('string') id = '';
   @type('string') ownerId = '';
-  @type('string') spellId: SpellId = 'fireball';
+  @type('string') spellId: SpellId = 'shadow_dart';
   @type('number') x = 0;
   @type('number') y = 0;
   @type('number') z = 0;

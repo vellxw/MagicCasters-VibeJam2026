@@ -1,5 +1,5 @@
 {
-  "defaultPresetId": "celestial-marble-crystal-palace",
+  "defaultPresetId": "lobby-high",
   "maps": [
     {
       "presetId": "celestial-marble-crystal-palace",
@@ -122,6 +122,17 @@
       }
     },
     {
+      "presetId": "the-arcane-ritual-library-high",
+      "displayName": "The Arcane Ritual Library (HIGH)",
+      "presetUrl": "/arena-presets/the-arcane-ritual-library-high.json",
+      "splatUrl": "/splats/the-arcane-ritual-library-high.sog",
+      "splatFileSizeBytes": 23931955,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
       "presetId": "the-dark-gothic-citadel-bridge",
       "calibrationGroupId": "the-dark-gothic-citadel-bridge",
       "displayName": "The Dark Gothic Citadel Bridge",
@@ -150,6 +161,14 @@
           "splatFileSizeBytes": 23989949
         }
       }
+    },
+    {
+      "presetId": "lobby-high",
+      "displayName": "The Demon Lord's Throne",
+      "presetUrl": "/arena-presets/lobby-high.json",
+      "splatUrl": "/splats/lobby-high.sog",
+      "splatFileSizeBytes": 24023343,
+      "enabledModes": []
     },
     {
       "presetId": "the-dragon-gate-bridge",

@@ -15,10 +15,14 @@ export interface PlayerSnapshot {
   selectedSpell: string;
   teamId?: string;
   characterClass?: CharacterClass;
-  fireballReadyAt?: number;
-  iceBoltReadyAt?: number;
-  lightBurstReadyAt?: number;
-  shadowDashReadyAt?: number;
+  shadowDartReadyAt?: number;
+  voidTrapReadyAt?: number;
+  abyssalClawReadyAt?: number;
+  eclipseReadyAt?: number;
+  judgmentRayReadyAt?: number;
+  penitentSealReadyAt?: number;
+  glacialSpikesReadyAt?: number;
+  firmamentShieldReadyAt?: number;
 }
 
 export class LocalPlayerController {

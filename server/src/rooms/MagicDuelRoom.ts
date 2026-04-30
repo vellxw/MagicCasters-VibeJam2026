@@ -34,7 +34,7 @@ import {
   shouldLockRoom,
   shouldStartMatch
 } from '../systems/MatchSystem.js';
-import { applyProjectileDamage, directionAwayFrom, executeSpellCast } from '../systems/SpellSystem.js';
+import { applyDamage, applyProjectileDamage, directionAwayFrom, executeSpellCast } from '../systems/SpellSystem.js';
 
 interface JoinOptions {
   name?: string;
@@ -54,6 +54,7 @@ export class MagicDuelRoom extends Room<GameState> {
   private config: MatchConfig = getMatchConfig('1v1');
   private arenaCollision: ArenaCollisionConfig = defaultArenaCollisionConfig();
   private voxelCollision: SparseVoxelCollision | null = null;
+  private traps = new Map<string, { x: number; z: number; radius: number; ownerId: string; spellId: SpellId; expiresAt: number }>();
 
   onCreate(options?: JoinOptions): void {
     this.mode = normalizeMatchMode(options?.mode);
@@ -153,6 +154,7 @@ export class MagicDuelRoom extends Room<GameState> {
       index++;
     }
     this.clearProjectiles();
+    this.traps.clear();
     this.updatePlayerCount();
     this.state.phase = 'PLAYING';
     this.state.winnerId = '';
@@ -206,11 +208,38 @@ export class MagicDuelRoom extends Room<GameState> {
       );
     }
 
+    if (result.kind === 'trap') {
+      // Remove existing trap from this caster
+      for (const [id, trap] of this.traps) {
+        if (trap.ownerId === caster.id) {
+          this.traps.delete(id);
+          break;
+        }
+      }
+      this.traps.set(`trap_${Math.random().toString(36).slice(2, 10)}`, result.trap);
+    }
+
     if (result.kind === 'instant') {
       for (const hit of result.hits) {
         this.broadcast('damage', hit);
       }
       // Apply class-specific instant spell effects
+      this.applyClassSpellEffects(caster, rawSpellId as SpellId, result.hits.map((h) => h.targetId));
+      this.checkForWinner();
+    }
+
+    if (result.kind === 'ground_line') {
+      for (const hit of result.hits) {
+        this.broadcast('damage', hit);
+      }
+      this.broadcast('ground_line_hit', {
+        casterId: caster.id,
+        targetIds: result.hits.map((h) => h.targetId),
+        x: caster.x,
+        z: caster.z,
+        dirX: -Math.sin(caster.rotY),
+        dirZ: -Math.cos(caster.rotY)
+      });
       this.applyClassSpellEffects(caster, rawSpellId as SpellId, result.hits.map((h) => h.targetId));
       this.checkForWinner();
     }
@@ -229,36 +258,81 @@ export class MagicDuelRoom extends Room<GameState> {
     const now = Date.now();
     const characterClass = caster.characterClass as CharacterClass;
 
-    if (spellId === 'ice_bolt') {
-      if (characterClass === 'arcanist') {
-        // Espectro Falso: speed boost 2x for 2s
-        caster.speedBoostUntil = now + 2000;
-      } else if (characterClass === 'divine') {
-        // Barrera de Luz: shield absorbs next damage
-        caster.shieldActive = true;
+    // Arcanist effects
+    if (characterClass === 'arcanist') {
+      if (spellId === 'shadow_dart') {
+        for (const targetId of hitTargetIds) {
+          const target = this.state.players.get(targetId);
+          if (target) target.markedUntil = now + 3000;
+        }
       }
-    }
 
-    if (spellId === 'light_burst') {
-      if (characterClass === 'arcanist') {
-        // Estallido Umbrío: AOE knockback
+      if (spellId === 'abyssal_claw') {
+        for (const targetId of hitTargetIds) {
+          const target = this.state.players.get(targetId);
+          if (target && target.markedUntil > now) {
+            target.markedUntil = 0;
+            applyDamage(target, 8);
+            target.silencedUntil = now + 800;
+            this.broadcast('mark_consumed', { targetId: target.id, spellId, x: target.x, z: target.z });
+          }
+        }
+      }
+
+      if (spellId === 'eclipse') {
         for (const target of this.state.players.values()) {
           if (target.id === caster.id || target.hp <= 0) continue;
           const distance = Math.hypot(target.x - caster.x, target.z - caster.z);
-          if (distance <= 3) {
-            const dir = directionAwayFrom(caster, target);
-            target.x = clamp(target.x + dir.x * 1.5, this.arenaCollision.bounds.minX, this.arenaCollision.bounds.maxX);
-            target.z = clamp(target.z + dir.z * 1.5, this.arenaCollision.bounds.minZ, this.arenaCollision.bounds.maxZ);
+          if (distance <= SPELLS.eclipse.range && target.markedUntil > now) {
+            target.markedUntil = 0;
+            applyDamage(target, 10);
+            caster.hp = Math.min(100, caster.hp + 5);
+            this.broadcast('mark_consumed', { targetId: target.id, spellId, x: target.x, z: target.z });
           }
         }
-      } else if (characterClass === 'divine') {
-        // Sello del Juicio: slow + silence on hit targets
+      }
+    }
+
+    // Divine effects
+    if (characterClass === 'divine') {
+      if (spellId === 'judgment_ray') {
+        for (const targetId of hitTargetIds) {
+          const target = this.state.players.get(targetId);
+          if (target && (target.silencedUntil > now || target.slowedUntil > now)) {
+            applyDamage(target, 7); // extra damage on top of base 14
+          }
+        }
+      }
+
+      if (spellId === 'penitent_seal') {
         for (const targetId of hitTargetIds) {
           const target = this.state.players.get(targetId);
           if (target) {
+            target.silencedUntil = now + 1000;
             target.slowedUntil = now + 1500;
-            target.silencedUntil = now + 1500;
           }
+        }
+      }
+
+      if (spellId === 'glacial_spikes') {
+        for (const targetId of hitTargetIds) {
+          const target = this.state.players.get(targetId);
+          if (target && (target.silencedUntil > now || target.slowedUntil > now)) {
+            target.rootedUntil = now + 500;
+          }
+        }
+      }
+
+      if (spellId === 'firmament_shield') {
+        const hasDebuffedEnemyNearby = Array.from(this.state.players.values()).some(
+          (p) =>
+            p.id !== caster.id &&
+            p.hp > 0 &&
+            Math.hypot(p.x - caster.x, p.z - caster.z) <= 2.5 &&
+            (p.silencedUntil > now || p.slowedUntil > now)
+        );
+        if (hasDebuffedEnemyNearby) {
+          caster.explosiveShield = true;
         }
       }
     }
@@ -290,7 +364,35 @@ export class MagicDuelRoom extends Room<GameState> {
     }
 
     this.updateProjectiles();
+    this.updateTraps();
     this.checkForWinner();
+  }
+
+  private updateTraps(): void {
+    const now = Date.now();
+    for (const [trapId, trap] of this.traps) {
+      if (trap.expiresAt <= now) {
+        this.traps.delete(trapId);
+        continue;
+      }
+      for (const player of this.state.players.values()) {
+        if (player.id === trap.ownerId || player.hp <= 0) continue;
+        const dist = Math.hypot(player.x - trap.x, player.z - trap.z);
+        if (dist <= trap.radius) {
+          applyDamage(player, SPELLS[trap.spellId].damage);
+          this.broadcast('damage', { targetId: player.id, amount: SPELLS[trap.spellId].damage, hp: player.hp });
+          this.broadcast('trap_triggered', { trapOwnerId: trap.ownerId, targetId: player.id, x: trap.x, z: trap.z });
+
+          const owner = this.state.players.get(trap.ownerId);
+          if (owner && owner.characterClass === 'arcanist') {
+            player.markedUntil = now + 3000;
+          }
+
+          this.traps.delete(trapId);
+          break;
+        }
+      }
+    }
   }
 
   private updateProjectiles(): void {
@@ -324,6 +426,10 @@ export class MagicDuelRoom extends Room<GameState> {
           const hit = applyProjectileDamage(player, projectile.spellId as SpellId);
           removeIds.push(projectile.id);
           this.broadcast('damage', { targetId: player.id, amount: hit.damage, hp: player.hp });
+          if (hit.shieldBroken && player.explosiveShield) {
+            player.explosiveShield = false;
+            this.explodeShield(player);
+          }
           break;
         }
       }
@@ -344,8 +450,25 @@ export class MagicDuelRoom extends Room<GameState> {
     this.state.winnerId = winner?.id ?? '';
     this.state.message = winner ? `Team ${winner.teamId} wins` : 'Duel ended';
     this.clearProjectiles();
+    this.traps.clear();
     this.lock();
     this.broadcastPhase();
+  }
+
+  private explodeShield(player: PlayerState): void {
+    const now = Date.now();
+    for (const target of this.state.players.values()) {
+      if (target.id === player.id || target.hp <= 0) continue;
+      const distance = Math.hypot(target.x - player.x, target.z - player.z);
+      if (distance <= 2.5) {
+        const dir = directionAwayFrom(player, target);
+        target.x = clamp(target.x + dir.x * 2, this.arenaCollision.bounds.minX, this.arenaCollision.bounds.maxX);
+        target.z = clamp(target.z + dir.z * 2, this.arenaCollision.bounds.minZ, this.arenaCollision.bounds.maxZ);
+        applyDamage(target, 10);
+        this.broadcast('damage', { targetId: target.id, amount: 10, hp: target.hp });
+      }
+    }
+    this.broadcast('shield_exploded', { casterId: player.id, x: player.x, z: player.z });
   }
 
   private clearProjectiles(): void {

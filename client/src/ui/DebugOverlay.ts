@@ -204,14 +204,24 @@ function toDegrees(value: number): string {
 
 function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
   switch (spellId) {
-    case 'fireball':
-      return player.fireballReadyAt ?? 0;
-    case 'ice_bolt':
-      return player.iceBoltReadyAt ?? 0;
-    case 'light_burst':
-      return player.lightBurstReadyAt ?? 0;
-    case 'shadow_dash':
-      return player.shadowDashReadyAt ?? 0;
+    case 'shadow_dart':
+      return player.shadowDartReadyAt ?? 0;
+    case 'void_trap':
+      return player.voidTrapReadyAt ?? 0;
+    case 'abyssal_claw':
+      return player.abyssalClawReadyAt ?? 0;
+    case 'eclipse':
+      return player.eclipseReadyAt ?? 0;
+    case 'judgment_ray':
+      return player.judgmentRayReadyAt ?? 0;
+    case 'penitent_seal':
+      return player.penitentSealReadyAt ?? 0;
+    case 'glacial_spikes':
+      return player.glacialSpikesReadyAt ?? 0;
+    case 'firmament_shield':
+      return player.firmamentShieldReadyAt ?? 0;
+    default:
+      return 0;
   }
 }
 

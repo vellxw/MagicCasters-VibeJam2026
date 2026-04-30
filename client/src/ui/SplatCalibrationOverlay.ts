@@ -125,6 +125,7 @@ export class SplatCalibrationOverlay {
   onSelectQuality?: (quality: SplatQuality) => void;
   onSave?: () => void;
   onPublish?: () => void;
+  onUpdateLobby?: () => void;
   onRestoreLast?: () => void;
   onRestoreBackup?: () => void;
   onClearSaved?: () => void;
@@ -198,6 +199,7 @@ export class SplatCalibrationOverlay {
       <div class="calibration-panel__actions">
         <button type="button" data-calibration-save>Save Config</button>
         <button type="button" data-calibration-publish>Publish Map To Game</button>
+        <button type="button" data-calibration-update-lobby>Update Lobby</button>
         <button type="button" data-calibration-restore-last>Restore Last</button>
         <button type="button" data-calibration-restore-backup>Restore Backup</button>
         <button type="button" data-calibration-copy>Copy Preset JSON</button>
@@ -294,6 +296,13 @@ export class SplatCalibrationOverlay {
         this.onChange?.(cloneSettings(this.state), { autosave: false });
       }
       this.onPublish?.();
+    });
+    this.element.querySelector('[data-calibration-update-lobby]')?.addEventListener('click', () => {
+      this.persistActiveSpawnMode();
+      if (this.state) {
+        this.onChange?.(cloneSettings(this.state), { autosave: false });
+      }
+      this.onUpdateLobby?.();
     });
     this.element.querySelector('[data-calibration-restore-last]')?.addEventListener('click', () => this.onRestoreLast?.());
     this.element.querySelector('[data-calibration-restore-backup]')?.addEventListener('click', () => this.onRestoreBackup?.());

@@ -171,10 +171,10 @@ export class SpellVfxManager {
   }
 
   private createFallbackProjectile(projectile: ProjectileSnapshot): string {
-    const spell = SPELLS[projectile.spellId] ?? SPELLS.fireball;
+    const spell = SPELLS[projectile.spellId] ?? SPELLS.shadow_dart;
     const id = THREE.MathUtils.generateUUID();
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(projectile.spellId === 'ice_bolt' ? 0.18 : 0.24, 12, 12),
+      new THREE.SphereGeometry(projectile.spellId === 'abyssal_claw' ? 0.18 : 0.24, 12, 12),
       new THREE.MeshStandardMaterial({
         color: spell.color,
         emissive: spell.color,
@@ -189,24 +189,17 @@ export class SpellVfxManager {
   }
 
   private spawnFallbackImpact(position: THREE.Vector3, spellId: SpellId): void {
-    const spell = SPELLS[spellId] ?? SPELLS.fireball;
-    const geometry = spell.kind === 'dash'
-      ? new THREE.TorusGeometry(0.72, 0.03, 8, 48)
-      : new THREE.IcosahedronGeometry(0.28, 0);
+    const spell = SPELLS[spellId] ?? SPELLS.shadow_dart;
+    const geometry = new THREE.IcosahedronGeometry(0.28, 0);
     const material = new THREE.MeshBasicMaterial({
       color: spell.color,
       transparent: true,
       opacity: 0.72,
-      wireframe: spell.kind !== 'dash'
+      wireframe: true
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(position);
-    if (spell.kind === 'dash') {
-      mesh.rotation.x = -Math.PI / 2;
-      this.bursts.push({ mesh, ttl: 0.42, max: 0.42 });
-    } else {
-      this.bursts.push({ mesh, ttl: 0.3, max: 0.3 });
-    }
+    this.bursts.push({ mesh, ttl: 0.3, max: 0.3 });
     this.scene.add(mesh);
   }
 }

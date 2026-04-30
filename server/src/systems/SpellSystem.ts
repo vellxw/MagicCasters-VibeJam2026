@@ -37,7 +37,7 @@ export type CastResult =
   | { ok: false; reason: CastFailureReason }
   | { ok: true; kind: 'projectile'; spellId: SpellId; projectile: PublicProjectileState }
   | { ok: true; kind: 'instant'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> }
-  | { ok: true; kind: 'trap'; spellId: SpellId; trap: { x: number; z: number; ownerId: string; spellId: SpellId; expiresAt: number } }
+  | { ok: true; kind: 'trap'; spellId: SpellId; trap: { x: number; z: number; radius: number; ownerId: string; spellId: SpellId; expiresAt: number } }
   | { ok: true; kind: 'ground_line'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> };
 
 export interface ExecuteCastArgs {
@@ -151,6 +151,7 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
     const trap = {
       x: round(args.caster.x),
       z: round(args.caster.z),
+      radius: spell.radius,
       ownerId: args.caster.id,
       spellId: validation.spellId,
       expiresAt: args.now + spell.ttl * 1000

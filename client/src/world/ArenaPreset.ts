@@ -304,7 +304,7 @@ function findSplatMapEntry(catalog: SplatMapCatalog, presetId: string | undefine
     ?? catalog.maps[0];
 }
 
-function loadSavedSplatPreset(presetId: string): SplatArenaPreset | null {
+export function loadSavedSplatPreset(presetId: string): SplatArenaPreset | null {
   try {
     const raw = localStorage.getItem(`${SPLAT_PRESET_SETTINGS_PREFIX}${presetId}`);
     return raw ? normalizeSplatArenaPreset(JSON.parse(raw)) : null;
