@@ -24,6 +24,9 @@ export interface ServerPlayer {
   slowedUntil?: number;
   speedBoostUntil?: number;
   airDashAvailable?: boolean;
+  markedUntil?: number;
+  rootedUntil?: number;
+  explosiveShield?: boolean;
 }
 
 export type CastValidation =
@@ -33,7 +36,9 @@ export type CastValidation =
 export type CastResult =
   | { ok: false; reason: CastFailureReason }
   | { ok: true; kind: 'projectile'; spellId: SpellId; projectile: PublicProjectileState }
-  | { ok: true; kind: 'instant'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> };
+  | { ok: true; kind: 'instant'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> }
+  | { ok: true; kind: 'trap'; spellId: SpellId; trap: { x: number; z: number; ownerId: string; spellId: SpellId; expiresAt: number } }
+  | { ok: true; kind: 'ground_line'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> };
 
 export interface ExecuteCastArgs {
   caster: ServerPlayer;
@@ -131,12 +136,31 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
         if (target.id === args.caster.id || target.hp <= 0) continue;
         const distance = Math.hypot(target.x - args.caster.x, target.z - args.caster.z);
         if (distance <= spell.range) {
-          const damage = applyDamage(target, spell.damage);
-          hits.push({ targetId: target.id, damage, hp: target.hp });
+          const result = applyDamage(target, spell.damage);
+          hits.push({ targetId: target.id, damage: result.damage, hp: target.hp });
         }
+      }
+      if (validation.spellId === 'firmament_shield') {
+        args.caster.shieldActive = true;
       }
     }
     return { ok: true, kind: 'instant', spellId: validation.spellId, hits };
+  }
+
+  if (spell.kind === 'trap') {
+    const trap = {
+      x: round(args.caster.x),
+      z: round(args.caster.z),
+      ownerId: args.caster.id,
+      spellId: validation.spellId,
+      expiresAt: args.now + spell.ttl * 1000
+    };
+    return { ok: true, kind: 'trap', spellId: validation.spellId, trap };
+  }
+
+  if (spell.kind === 'ground_line') {
+    const hits = computeGroundLineHits(args.caster, args.targets, spell.range, spell.radius);
+    return { ok: true, kind: 'ground_line', spellId: validation.spellId, hits };
   }
 
   const direction = directionFromRotation(args.caster.rotY);
@@ -162,12 +186,42 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
   };
 }
 
-export function applyProjectileDamage(target: ServerPlayer, spellId: SpellId): { damage: number; defeated: boolean } {
+function computeGroundLineHits(
+  caster: ServerPlayer,
+  targets: ServerPlayer[],
+  range: number,
+  halfWidth: number
+): Array<{ targetId: string; damage: number; hp: number }> {
+  const hits: Array<{ targetId: string; damage: number; hp: number }> = [];
+  const dir = directionFromRotation(caster.rotY);
+  const originX = caster.x;
+  const originZ = caster.z;
+
+  for (const target of targets) {
+    if (target.id === caster.id || target.hp <= 0) continue;
+    const dx = target.x - originX;
+    const dz = target.z - originZ;
+    const longitudinal = dx * dir.x + dz * dir.z;
+    if (longitudinal < 0 || longitudinal > range) continue;
+    const perpX = dx - longitudinal * dir.x;
+    const perpZ = dz - longitudinal * dir.z;
+    const perpDist = Math.hypot(perpX, perpZ);
+    if (perpDist <= halfWidth) {
+      const result = applyDamage(target, SPELLS.glacial_spikes.damage);
+      hits.push({ targetId: target.id, damage: result.damage, hp: target.hp });
+    }
+  }
+
+  return hits;
+}
+
+export function applyProjectileDamage(target: ServerPlayer, spellId: SpellId): { damage: number; defeated: boolean; shieldBroken: boolean } {
   const spell = SPELLS[spellId];
-  const damage = applyDamage(target, spell.damage);
+  const result = applyDamage(target, spell.damage);
   return {
-    damage,
-    defeated: target.hp <= 0
+    damage: result.damage,
+    defeated: target.hp <= 0,
+    shieldBroken: result.shieldBroken
   };
 }
 
@@ -193,14 +247,14 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function applyDamage(target: ServerPlayer, amount: number): number {
+export function applyDamage(target: ServerPlayer, amount: number): { damage: number; shieldBroken: boolean } {
   if (target.shieldActive) {
     target.shieldActive = false;
-    return 0;
+    return { damage: 0, shieldBroken: true };
   }
   const before = target.hp;
   target.hp = Math.max(0, target.hp - amount);
-  return before - target.hp;
+  return { damage: before - target.hp, shieldBroken: false };
 }
 
 function round(value: number): number {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ARENA_BOUNDS } from '../../../shared/types';
 import type { SpellId } from '../../../shared/spells';
 import {
+  applyDamage,
   applyProjectileDamage,
   createTestPlayer,
   directionAwayFrom,
@@ -13,21 +14,21 @@ describe('SpellSystem', () => {
   it('rejects cast intents that violate phase, mana, cooldown, or spell id without mutating player', () => {
     const player = createTestPlayer('caster');
     player.mana = 5;
-    player.cooldowns.fireball = 0;
+    player.cooldowns.shadow_dart = 0;
 
-    expect(validateCast(player, 'fireball', 1000, 'WAITING')).toEqual({
+    expect(validateCast(player, 'shadow_dart', 1000, 'WAITING')).toEqual({
       ok: false,
       reason: 'wrong_phase'
     });
 
-    expect(validateCast(player, 'fireball', 1000, 'PLAYING')).toEqual({
+    expect(validateCast(player, 'shadow_dart', 1000, 'PLAYING')).toEqual({
       ok: false,
       reason: 'no_mana'
     });
 
     player.mana = 100;
-    player.cooldowns.fireball = 2500;
-    expect(validateCast(player, 'fireball', 1000, 'PLAYING')).toEqual({
+    player.cooldowns.shadow_dart = 2500;
+    expect(validateCast(player, 'shadow_dart', 1000, 'PLAYING')).toEqual({
       ok: false,
       reason: 'cooldown'
     });
@@ -40,7 +41,7 @@ describe('SpellSystem', () => {
     expect(player.mana).toBe(100);
   });
 
-  it('charges mana and creates a server-owned fireball projectile along the caster aim', () => {
+  it('charges mana and creates a server-owned shadow_dart projectile along the caster aim', () => {
     const caster = createTestPlayer('caster');
     caster.x = 2;
     caster.y = 0;
@@ -51,7 +52,7 @@ describe('SpellSystem', () => {
     const result = executeSpellCast({
       caster,
       targets: [],
-      spellId: 'fireball',
+      spellId: 'shadow_dart',
       now: 2000,
       phase: 'PLAYING',
       nextProjectileId: () => 'projectile-1'
@@ -59,21 +60,21 @@ describe('SpellSystem', () => {
 
     expect(result.ok).toBe(true);
     expect(result.kind).toBe('projectile');
-    expect(caster.mana).toBe(82);
-    expect(caster.cooldowns.fireball).toBe(2800);
+    expect(caster.mana).toBe(88);
+    expect(caster.cooldowns.shadow_dart).toBe(2700);
 
     if (result.kind !== 'projectile') throw new Error('expected projectile cast');
     expect(result.projectile).toMatchObject({
       id: 'projectile-1',
       ownerId: 'caster',
-      spellId: 'fireball',
+      spellId: 'shadow_dart',
       x: 2,
       y: 1,
       z: 2.35,
       dirX: 0,
       dirY: 0,
       dirZ: -1,
-      speed: 13,
+      speed: 14,
       ttl: 1.6
     });
   });
@@ -93,7 +94,7 @@ describe('SpellSystem', () => {
     const burst = executeSpellCast({
       caster,
       targets: [nearTarget, farTarget],
-      spellId: 'light_burst',
+      spellId: 'eclipse',
       now: 5000,
       phase: 'PLAYING',
       nextProjectileId: () => 'unused'
@@ -101,66 +102,99 @@ describe('SpellSystem', () => {
 
     expect(burst.ok).toBe(true);
     expect(burst.kind).toBe('instant');
-    expect(nearTarget.hp).toBe(84);
+    expect(nearTarget.hp).toBe(90);
     expect(farTarget.hp).toBe(100);
 
-    expect(applyProjectileDamage(nearTarget, 'ice_bolt')).toEqual({
-      damage: 12,
-      defeated: false
+    expect(applyProjectileDamage(nearTarget, 'abyssal_claw')).toEqual({
+      damage: 14,
+      defeated: false,
+      shieldBroken: false
     });
-    expect(nearTarget.hp).toBe(72);
+    expect(nearTarget.hp).toBe(76);
   });
 
-  it('moves the caster forward when casting shadow dash', () => {
+  it('creates a void_trap when casting trap spell', () => {
     const caster = createTestPlayer('caster');
-    caster.x = 0;
-    caster.z = 0;
-    caster.rotY = 0;
+    caster.x = 1;
+    caster.z = 2;
     caster.mana = 100;
 
     const result = executeSpellCast({
       caster,
       targets: [],
-      spellId: 'shadow_dash',
-      now: 7000,
+      spellId: 'void_trap',
+      now: 3000,
       phase: 'PLAYING',
       nextProjectileId: () => 'unused'
     });
 
     expect(result.ok).toBe(true);
-    expect(result.kind).toBe('instant');
-    expect(caster.mana).toBe(86);
-    expect(caster.cooldowns.shadow_dash).toBe(8600);
-    expect(caster.x).toBe(0);
-    expect(caster.z).toBe(-3.2);
+    expect(result.kind).toBe('trap');
+    expect(caster.mana).toBe(84);
+    if (result.kind !== 'trap') throw new Error('expected trap');
+    expect(result.trap).toMatchObject({
+      x: 1,
+      z: 2,
+      ownerId: 'caster',
+      spellId: 'void_trap'
+    });
+    expect(result.trap.expiresAt).toBe(3000 + 4000);
   });
 
-  it('keeps shadow dash outside arena collision walls', () => {
-    const caster = createTestPlayer('blocked-dasher');
+  it('hits targets in a line with glacial_spikes', () => {
+    const caster = createTestPlayer('caster');
+    const inLine = createTestPlayer('in-line');
+    const offLine = createTestPlayer('off-line');
     caster.x = 0;
-    caster.z = 1.2;
+    caster.z = 0;
     caster.rotY = 0;
-    caster.mana = 100;
+    inLine.x = 0;
+    inLine.z = -4;
+    offLine.x = 3;
+    offLine.z = -4;
 
     const result = executeSpellCast({
       caster,
-      targets: [],
-      spellId: 'shadow_dash',
-      now: 8000,
+      targets: [inLine, offLine],
+      spellId: 'glacial_spikes',
+      now: 1000,
       phase: 'PLAYING',
-      nextProjectileId: () => 'unused',
-      arenaCollision: {
-        bounds: { ...ARENA_BOUNDS },
-        floorY: 0,
-        spawnPoints: [],
-        collisionWalls: [
-          { id: 'dash-wall', x: 0, z: 0, width: 4, depth: 0.5, height: 2, rotY: 0 }
-        ]
-      }
+      nextProjectileId: () => 'unused'
     });
 
     expect(result.ok).toBe(true);
-    expect(caster.z).toBeGreaterThanOrEqual(0.69);
+    expect(result.kind).toBe('ground_line');
+    if (result.kind !== 'ground_line') throw new Error('expected ground_line');
+    expect(result.hits.some(h => h.targetId === 'in-line')).toBe(true);
+    expect(result.hits.some(h => h.targetId === 'off-line')).toBe(false);
+    expect(inLine.hp).toBe(82);
+    expect(offLine.hp).toBe(100);
+  });
+
+  it('activates shieldActive with firmament_shield', () => {
+    const caster = createTestPlayer('caster');
+    caster.mana = 100;
+    const result = executeSpellCast({
+      caster,
+      targets: [],
+      spellId: 'firmament_shield',
+      now: 1000,
+      phase: 'PLAYING',
+      nextProjectileId: () => 'unused'
+    });
+    expect(result.ok).toBe(true);
+    expect(result.kind).toBe('instant');
+    expect(caster.shieldActive).toBe(true);
+  });
+
+  it('absorbs damage when shieldActive is true', () => {
+    const target = createTestPlayer('target');
+    target.shieldActive = true;
+    const result = applyDamage(target, 20);
+    expect(result.damage).toBe(0);
+    expect(result.shieldBroken).toBe(true);
+    expect(target.shieldActive).toBe(false);
+    expect(target.hp).toBe(100);
   });
 
   it('computes horizontal knockback away from the caster', () => {
@@ -168,3 +202,4 @@ describe('SpellSystem', () => {
     expect(directionAwayFrom({ x: 0, z: 0 }, { x: 4, z: 0 })).toEqual({ x: 1, z: 0 });
   });
 });
+
