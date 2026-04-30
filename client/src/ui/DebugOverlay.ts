@@ -96,13 +96,12 @@ export class DebugOverlay {
     this.promptButtonEl.addEventListener('click', () => this.onPortalAction?.());
     this.element.querySelector('[data-quality-settings]')?.addEventListener('click', () => this.onQualitySettings?.());
 
-    this.rebuildSpellDock();
     this.voiceButton = document.createElement('button');
     this.voiceButton.className = 'voice-button';
     this.voiceButton.textContent = 'Voice';
     this.voiceButton.dataset.active = 'false';
     this.voiceButton.addEventListener('click', () => this.onVoiceToggle?.());
-    this.dockEl.appendChild(this.voiceButton);
+    this.rebuildSpellDock();
   }
 
   setCharacterClass(characterClass: CharacterClass): void {
