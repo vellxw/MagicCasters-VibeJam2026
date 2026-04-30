@@ -87,8 +87,9 @@ export class AnimatedPlayerController {
     this.mixer = new THREE.AnimationMixer(this.modelRoot);
     for (const clip of gltf.animations) {
       const action = this.mixer.clipAction(clip);
-      action.loop = THREE.LoopOnce;
-      action.clampWhenFinished = true;
+      const isLooping = clip.name === 'reposo' || clip.name === 'Correr';
+      action.loop = isLooping ? THREE.LoopRepeat : THREE.LoopOnce;
+      action.clampWhenFinished = !isLooping;
       this.actions.set(clip.name, action);
     }
 
@@ -156,7 +157,7 @@ export class AnimatedPlayerController {
     const action = this.actions.get(name);
     if (!action || action === this.currentAction) return;
 
-    if (name === 'BaileVictoria') {
+    if (name === 'BaileVictoria' || name === 'reposo' || name === 'Correr') {
       action.setLoop(THREE.LoopRepeat, Infinity);
       action.clampWhenFinished = false;
       action.timeScale = 1;
