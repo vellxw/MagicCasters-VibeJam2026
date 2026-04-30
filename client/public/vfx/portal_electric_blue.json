@@ -1,0 +1,107 @@
+{
+  "id": "portal_electric_blue",
+  "name": "Electric Portal Blue",
+  "duration": 0,
+  "loop": true,
+  "attachTo": "world",
+  "layers": [
+    {
+      "type": "mesh",
+      "geometry": { "type": "torus", "params": [1.6, 0.06, 12, 64] },
+      "material": {
+        "type": "standard",
+        "color": "#3b82f6",
+        "emissive": "#2563eb",
+        "emissiveIntensity": 2.5,
+        "transparent": true,
+        "opacity": 0.95,
+        "roughness": 0.1,
+        "metalness": 0.8
+      },
+      "rotation": [1.5708, 0, 0],
+      "animation": { "rotation": { "speed": [0, 0, 2.5] } }
+    },
+    {
+      "type": "mesh",
+      "geometry": { "type": "torus", "params": [1.35, 0.05, 12, 56] },
+      "material": {
+        "type": "standard",
+        "color": "#60a5fa",
+        "emissive": "#3b82f6",
+        "emissiveIntensity": 2.0,
+        "transparent": true,
+        "opacity": 0.7,
+        "roughness": 0.1,
+        "metalness": 0.8
+      },
+      "rotation": [1.5708, 0, 0],
+      "animation": { "rotation": { "speed": [0, 0, -3.0] } }
+    },
+    {
+      "type": "mesh",
+      "geometry": { "type": "torus", "params": [1.1, 0.04, 12, 48] },
+      "material": {
+        "type": "standard",
+        "color": "#93c5fd",
+        "emissive": "#60a5fa",
+        "emissiveIntensity": 1.8,
+        "transparent": true,
+        "opacity": 0.5,
+        "roughness": 0.1,
+        "metalness": 0.8
+      },
+      "rotation": [1.5708, 0, 0],
+      "animation": { "rotation": { "speed": [0, 0, 4.0] } }
+    },
+    {
+      "type": "mesh",
+      "geometry": { "type": "torus", "params": [0.85, 0.03, 10, 40] },
+      "material": {
+        "type": "standard",
+        "color": "#dbeafe",
+        "emissive": "#93c5fd",
+        "emissiveIntensity": 1.5,
+        "transparent": true,
+        "opacity": 0.4,
+        "roughness": 0.1,
+        "metalness": 0.8
+      },
+      "rotation": [1.5708, 0, 0],
+      "animation": { "rotation": { "speed": [0, 0, -5.0] } }
+    },
+    {
+      "type": "particles",
+      "count": 80,
+      "emissionRate": 40,
+      "emissionShape": "disc",
+      "emissionShapeParams": [1.5],
+      "lifetime": { "min": 0.6, "max": 1.2 },
+      "color": { "start": "#dbeafe", "end": "#1e40af" },
+      "size": { "start": 0.06, "end": 0.01 },
+      "opacity": { "start": 0.9, "end": 0 },
+      "velocity": { "initial": [0, 0.8, 0], "spread": 0.4, "radial": true },
+      "drag": 0.1
+    },
+    {
+      "type": "particles",
+      "count": 40,
+      "emissionRate": 20,
+      "emissionShape": "sphere",
+      "emissionShapeParams": [0.3],
+      "lifetime": { "min": 0.3, "max": 0.7 },
+      "color": { "start": "#ffffff", "end": "#3b82f6" },
+      "size": { "start": 0.04, "end": 0.01 },
+      "opacity": { "start": 1.0, "end": 0 },
+      "velocity": { "initial": [0, 0, 0], "spread": 1.2, "radial": true },
+      "drag": 0.3
+    },
+    {
+      "type": "light",
+      "lightType": "point",
+      "color": "#60a5fa",
+      "intensity": { "value": 4, "curve": "pulse", "duration": 1.5 },
+      "distance": 8,
+      "decay": 2
+    }
+  ]
+}

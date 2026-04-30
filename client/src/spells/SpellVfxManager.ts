@@ -202,4 +202,46 @@ export class SpellVfxManager {
     this.bursts.push({ mesh, ttl: 0.3, max: 0.3 });
     this.scene.add(mesh);
   }
+
+  triggeredTrap(x: number, z: number): void {
+    const geometry = new THREE.TorusGeometry(0.5, 0.05, 8, 32);
+    const material = new THREE.MeshBasicMaterial({ color: 0x4c1d95, transparent: true, opacity: 0.8 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, 0.05, z);
+    mesh.rotation.x = -Math.PI / 2;
+    this.scene.add(mesh);
+    this.bursts.push({ mesh, ttl: 0.4, max: 0.4 });
+  }
+
+  consumedMark(position: THREE.Vector3): void {
+    const geometry = new THREE.IcosahedronGeometry(0.2, 0);
+    const material = new THREE.MeshBasicMaterial({ color: 0x7c3aed, transparent: true, opacity: 0.9 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    this.scene.add(mesh);
+    this.bursts.push({ mesh, ttl: 0.25, max: 0.25 });
+  }
+
+  groundLineHit(origin: THREE.Vector3, dir: THREE.Vector3): void {
+    for (let i = 1; i <= 4; i++) {
+      const t = i * 1.5;
+      const pos = new THREE.Vector3().copy(origin).add(dir.clone().multiplyScalar(t));
+      const geometry = new THREE.IcosahedronGeometry(0.15, 0);
+      const material = new THREE.MeshStandardMaterial({ color: 0x7dd3fc, emissive: 0x7dd3fc, emissiveIntensity: 2 });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(pos.x, 0, pos.z);
+      mesh.scale.set(1, 0.1, 1);
+      this.scene.add(mesh);
+      this.bursts.push({ mesh, ttl: 0.35, max: 0.35 });
+    }
+  }
+
+  explodedShield(position: THREE.Vector3): void {
+    const geometry = new THREE.IcosahedronGeometry(0.3, 0);
+    const material = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.85 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    this.scene.add(mesh);
+    this.bursts.push({ mesh, ttl: 0.4, max: 0.4 });
+  }
 }

@@ -491,6 +491,22 @@ export class GameApp {
     if (type === 'damage') {
       this.ui.showToast(`-${payload.amount}`);
     }
+    if (type === 'trap_triggered') {
+      this.vfx.triggeredTrap(payload.x, payload.z);
+    }
+    if (type === 'mark_consumed') {
+      const snap = this.playerSnapshots.get(payload.targetId);
+      if (snap) this.vfx.consumedMark(new THREE.Vector3(snap.x, snap.y, snap.z));
+    }
+    if (type === 'ground_line_hit') {
+      const origin = new THREE.Vector3(payload.x, 0, payload.z);
+      const dir = new THREE.Vector3(payload.dirX, 0, payload.dirZ);
+      this.vfx.groundLineHit(origin, dir);
+    }
+    if (type === 'shield_exploded') {
+      const snap = this.playerSnapshots.get(payload.casterId);
+      if (snap) this.vfx.explodedShield(new THREE.Vector3(snap.x, snap.y, snap.z));
+    }
   }
 
   private loop(): void {
