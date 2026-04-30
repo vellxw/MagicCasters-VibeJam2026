@@ -554,16 +554,17 @@ export class GameApp {
 
   private loop(): void {
     this.animationId = requestAnimationFrame(() => this.loop());
-    const dt = Math.min(0.05, this.clock.getDelta());
+    try {
+      const dt = Math.min(0.05, this.clock.getDelta());
 
-    this.applyTouchCameraDelta();
-    this.applyTouchAction();
-    this.updateScene(dt);
-    this.sendMoveIfNeeded();
-    this.vfx.update(dt);
-    const local = this.sceneMode === 'CALIBRATION' ? this.calibrationSnapshot ?? undefined : this.getLocalSnapshot();
-    const portal = this.lobby?.nearestPortal() ?? null;
-    this.ui.update({
+      this.applyTouchCameraDelta();
+      this.applyTouchAction();
+      this.updateScene(dt);
+      this.sendMoveIfNeeded();
+      this.vfx.update(dt);
+      const local = this.sceneMode === 'CALIBRATION' ? this.calibrationSnapshot ?? undefined : this.getLocalSnapshot();
+      const portal = this.lobby?.nearestPortal() ?? null;
+      this.ui.update({
       scene: this.sceneMode,
       selectedMode: this.selectedMode,
       selectedArenaId: this.selectedArenaId,
@@ -595,6 +596,9 @@ export class GameApp {
       const pos = this.lobby?.getPlayerPosition();
       const rot = this.lobby?.getPlayerRotation() ?? null;
       this.vfxEditorUi.updateStatus(pos ? { x: pos.x, y: pos.y, z: pos.z } : null, rot);
+    }
+    } catch (err) {
+      console.error('[GameApp] Loop error:', err);
     }
     this.renderer.render(this.scene, this.camera);
   }
