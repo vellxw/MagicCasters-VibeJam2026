@@ -64,8 +64,11 @@ export class MeshEmitter extends BaseEmitter {
         opacity: initialOpacity,
         wireframe: matDef.wireframe ?? false
       });
+    } else if (matDef.type === 'shader') {
+      this.material = this.createVortexShaderMaterial(matDef, color, side, initialOpacity);
     } else {
-      throw new Error(`Material type "${matDef.type}" not yet implemented in MeshEmitter`);
+      const exhaustive: never = matDef.type;
+      throw new Error(`Material type "${exhaustive}" not yet implemented in MeshEmitter`);
     }
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -92,6 +95,8 @@ export class MeshEmitter extends BaseEmitter {
 
   update(dt: number, elapsed: number, duration: number): void {
     if (!this.mesh) return;
+
+    this.updateShaderTime(elapsed);
 
     const anim = this.layer.animation;
     if (!anim) return;
@@ -121,20 +126,14 @@ export class MeshEmitter extends BaseEmitter {
     if (anim.opacity && this.material) {
       const val = this.evaluateAnimatedValue(anim.opacity, elapsed, duration);
       const opacity = typeof val === 'number' ? val : val[0];
-      const mat = this.material as THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
-      if (mat.opacity !== undefined) {
-        mat.opacity = Math.max(0, Math.min(1, opacity));
-      }
+      this.setMaterialOpacity(opacity);
     }
 
     const matDef = this.layer.material;
     if (matDef.opacity && typeof matDef.opacity !== 'number' && this.material) {
       const val = this.evaluateAnimatedValue(matDef.opacity, elapsed, duration);
       const opacity = typeof val === 'number' ? val : val[0];
-      const mat = this.material as THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
-      if (mat.opacity !== undefined) {
-        mat.opacity = Math.max(0, Math.min(1, opacity));
-      }
+      this.setMaterialOpacity(opacity);
     }
   }
 
@@ -156,6 +155,87 @@ export class MeshEmitter extends BaseEmitter {
   private parseColor(color: VfxColor): THREE.Color {
     if (typeof color === 'string') return new THREE.Color(color);
     return new THREE.Color(color.start);
+  }
+
+  private createVortexShaderMaterial(
+    matDef: MeshLayer['material'],
+    color: THREE.Color,
+    side: THREE.Side,
+    opacity: number
+  ): THREE.ShaderMaterial {
+    const emissive = matDef.emissive ? this.parseColor(matDef.emissive) : color.clone();
+    return new THREE.ShaderMaterial({
+      transparent: matDef.transparent ?? true,
+      depthWrite: false,
+      side,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uBaseColor: { value: color },
+        uEmissiveColor: { value: emissive },
+        uOpacity: { value: opacity },
+        uIntensity: { value: matDef.emissiveIntensity ?? 1.8 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uBaseColor;
+        uniform vec3 uEmissiveColor;
+        uniform float uOpacity;
+        uniform float uIntensity;
+        varying vec2 vUv;
+
+        void main() {
+          vec2 p = vUv * 2.0 - 1.0;
+          float r = length(p);
+          if (r > 1.0) discard;
+
+          float angle = atan(p.y, p.x);
+          float inward = 1.0 - r;
+          float spin = angle * 4.0 - r * 11.5 + uTime * 1.35;
+          float broadSpin = angle * 2.0 - r * 6.0 + uTime * 0.72;
+
+          float spiral = smoothstep(0.38, 0.98, sin(spin) * 0.5 + 0.5);
+          float mist = smoothstep(0.14, 1.0, sin(broadSpin) * 0.5 + 0.5);
+          float rim = smoothstep(0.64, 0.9, r) * (1.0 - smoothstep(0.9, 1.0, r));
+          float core = smoothstep(0.78, 0.18, r);
+          float circle = 1.0 - smoothstep(0.86, 1.0, r);
+
+          float energy = (spiral * 0.72 + mist * 0.26 + core * 0.22 + rim * 0.95) * circle;
+          float alpha = clamp(energy * uOpacity, 0.0, 0.95);
+          vec3 color = mix(uBaseColor, uEmissiveColor, clamp(spiral + rim, 0.0, 1.0));
+          vec3 glow = color * (0.45 + energy * uIntensity);
+
+          gl_FragColor = vec4(glow, alpha);
+        }
+      `
+    });
+  }
+
+  private updateShaderTime(elapsed: number): void {
+    if (this.material instanceof THREE.ShaderMaterial && this.material.uniforms.uTime) {
+      this.material.uniforms.uTime.value = elapsed;
+    }
+  }
+
+  private setMaterialOpacity(opacity: number): void {
+    if (!this.material) return;
+    const clamped = Math.max(0, Math.min(1, opacity));
+    if (this.material instanceof THREE.ShaderMaterial && this.material.uniforms.uOpacity) {
+      this.material.uniforms.uOpacity.value = clamped;
+      return;
+    }
+    const mat = this.material as THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
+    if (mat.opacity !== undefined) {
+      mat.opacity = clamped;
+    }
   }
 
   private evaluateAnimatedValue(animated: AnimatedValue, elapsed: number, duration: number): number | [number, number, number] {

@@ -15,9 +15,9 @@ export const CLASSES: Record<CharacterClass, ClassDefinition> = {
   arcanist: {
     id: 'arcanist',
     name: 'Arcanist',
-    title: 'Hechicero Oscuro',
+    title: 'Dark Sorcerer',
     description:
-      'Maestro del engano y la destruccion arcana. Aplica marcas umbrias y las consume para combos devastadores.',
+      'A master of deception and arcane destruction. Applies umbral marks and consumes them for devastating combos.',
     modelPath: '/models/mago-negro.glb',
     texturePrefix: 'mn',
     themeColor: 0x7c3aed,
@@ -26,9 +26,9 @@ export const CLASSES: Record<CharacterClass, ClassDefinition> = {
   divine: {
     id: 'divine',
     name: 'Divine',
-    title: 'Hechicero Divino',
+    title: 'Divine Sorcerer',
     description:
-      'Canalizador de luz celestial que castiga a los enemigos debilitados con picos de hielo y rayos sagrados.',
+      'A channeler of celestial light who punishes weakened enemies with glacial spikes and sacred rays.',
     modelPath: '/models/mago-blanco.glb',
     texturePrefix: 'mb',
     themeColor: 0xf59e0b,

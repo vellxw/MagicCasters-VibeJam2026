@@ -1,10 +1,10 @@
 import type { GraphicsTier } from '../utils/GraphicsSettings';
 
 const LABELS: Record<GraphicsTier, { title: string; desc: string }> = {
-  auto: { title: 'Auto', desc: 'Detectar automáticamente' },
-  low: { title: 'Bajo', desc: 'Máximo rendimiento' },
-  medium: { title: 'Medio', desc: 'Balanceado' },
-  high: { title: 'Alto', desc: 'Máxima calidad' }
+  auto: { title: 'Auto', desc: 'Detect automatically' },
+  low: { title: 'Low', desc: 'Maximum performance' },
+  medium: { title: 'Medium', desc: 'Balanced' },
+  high: { title: 'High', desc: 'Maximum quality' }
 };
 
 const ORDER: GraphicsTier[] = ['auto', 'low', 'medium', 'high'];
@@ -18,18 +18,18 @@ export class QualityPicker {
     this.element.className = 'quality-picker';
     this.element.innerHTML = `
       <div class="quality-picker__inner">
-        <h1 class="quality-picker__title">Calidad Gráfica</h1>
+        <h1 class="quality-picker__title">Graphics Quality</h1>
         <div class="quality-picker__options">
           ${ORDER.map((tier) => `
             <button type="button" class="quality-picker__option" data-tier="${tier}" ${tier === 'auto' ? 'data-recommended="true"' : ''}>
               <span class="quality-picker__option-title">${LABELS[tier].title}</span>
-              <span class="quality-picker__option-desc">${LABELS[tier].desc}${tier === 'auto' ? ' (Recomendado)' : ''}</span>
+              <span class="quality-picker__option-desc">${LABELS[tier].desc}${tier === 'auto' ? ' (Recommended)' : ''}</span>
             </button>
           `).join('')}
         </div>
         <label class="quality-picker__remember">
           <input type="checkbox" data-remember />
-          <span>Recordar mi elección</span>
+          <span>Remember my choice</span>
         </label>
       </div>
     `;

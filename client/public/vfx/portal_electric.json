@@ -1,106 +1,72 @@
 {
   "id": "portal_electric",
-  "name": "Electric Portal",
+  "name": "Vortex Portal Violet",
   "duration": 0,
   "loop": true,
   "attachTo": "world",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "torus", "params": [1.6, 0.06, 12, 64] },
+      "geometry": { "type": "plane", "params": [3.2, 3.2] },
       "material": {
-        "type": "standard",
-        "color": "#a855f7",
-        "emissive": "#7c3aed",
-        "emissiveIntensity": 2.5,
+        "type": "shader",
+        "color": "#a78bfa",
+        "emissive": "#f5d0fe",
+        "emissiveIntensity": 1.6,
         "transparent": true,
-        "opacity": 0.95,
-        "roughness": 0.1,
-        "metalness": 0.8
-      },
-      "rotation": [1.5708, 0, 0],
-      "animation": { "rotation": { "speed": [0, 0, 2.5] } }
+        "opacity": 0.72,
+        "side": "double"
+      }
     },
     {
       "type": "mesh",
-      "geometry": { "type": "torus", "params": [1.35, 0.05, 12, 56] },
+      "geometry": { "type": "torus", "params": [1.48, 0.024, 12, 96] },
       "material": {
         "type": "standard",
-        "color": "#c084fc",
+        "color": "#ede9fe",
         "emissive": "#a855f7",
-        "emissiveIntensity": 2.0,
+        "emissiveIntensity": 2.3,
         "transparent": true,
-        "opacity": 0.7,
-        "roughness": 0.1,
-        "metalness": 0.8
+        "opacity": 0.5,
+        "roughness": 0.18,
+        "metalness": 0.2
       },
-      "rotation": [1.5708, 0, 0],
-      "animation": { "rotation": { "speed": [0, 0, -3.0] } }
+      "animation": { "rotation": { "speed": [0, 0, 0.28] } }
     },
     {
       "type": "mesh",
-      "geometry": { "type": "torus", "params": [1.1, 0.04, 12, 48] },
+      "geometry": { "type": "torus", "params": [1.18, 0.018, 10, 72] },
       "material": {
         "type": "standard",
-        "color": "#e9d5ff",
+        "color": "#faf5ff",
         "emissive": "#c084fc",
         "emissiveIntensity": 1.8,
         "transparent": true,
-        "opacity": 0.5,
-        "roughness": 0.1,
-        "metalness": 0.8
+        "opacity": 0.34,
+        "roughness": 0.2,
+        "metalness": 0.1
       },
-      "rotation": [1.5708, 0, 0],
-      "animation": { "rotation": { "speed": [0, 0, 4.0] } }
-    },
-    {
-      "type": "mesh",
-      "geometry": { "type": "torus", "params": [0.85, 0.03, 10, 40] },
-      "material": {
-        "type": "standard",
-        "color": "#f3e8ff",
-        "emissive": "#e9d5ff",
-        "emissiveIntensity": 1.5,
-        "transparent": true,
-        "opacity": 0.4,
-        "roughness": 0.1,
-        "metalness": 0.8
-      },
-      "rotation": [1.5708, 0, 0],
-      "animation": { "rotation": { "speed": [0, 0, -5.0] } }
+      "animation": { "rotation": { "speed": [0, 0, -0.2] } }
     },
     {
       "type": "particles",
-      "count": 80,
-      "emissionRate": 40,
-      "emissionShape": "disc",
-      "emissionShapeParams": [1.5],
-      "lifetime": { "min": 0.6, "max": 1.2 },
-      "color": { "start": "#e9d5ff", "end": "#6b21a8" },
-      "size": { "start": 0.06, "end": 0.01 },
-      "opacity": { "start": 0.9, "end": 0 },
-      "velocity": { "initial": [0, 0.8, 0], "spread": 0.4, "radial": true },
-      "drag": 0.1
-    },
-    {
-      "type": "particles",
-      "count": 40,
-      "emissionRate": 20,
+      "count": 56,
+      "emissionRate": 22,
       "emissionShape": "sphere",
-      "emissionShapeParams": [0.3],
-      "lifetime": { "min": 0.3, "max": 0.7 },
+      "emissionShapeParams": [1.34],
+      "lifetime": { "min": 1.0, "max": 1.7 },
       "color": { "start": "#ffffff", "end": "#a855f7" },
-      "size": { "start": 0.04, "end": 0.01 },
-      "opacity": { "start": 1.0, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 1.2, "radial": true },
-      "drag": 0.3
+      "size": { "start": 0.052, "end": 0.008 },
+      "opacity": { "start": 0.62, "end": 0 },
+      "velocity": { "initial": [0, 0.04, 0], "spread": 0.18, "radial": true },
+      "drag": 0.46
     },
     {
       "type": "light",
       "lightType": "point",
       "color": "#c084fc",
-      "intensity": { "value": 4, "curve": "pulse", "duration": 1.5 },
-      "distance": 8,
+      "intensity": { "value": 1.55, "curve": "pulse", "duration": 2.8 },
+      "distance": 5,
       "decay": 2
     }
   ]

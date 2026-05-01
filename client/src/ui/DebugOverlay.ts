@@ -50,7 +50,7 @@ export class DebugOverlay {
           </div>
         </div>
         <div class="hud__top-right">
-          <button type="button" class="quality-chip" data-quality-settings>⚙ Calidad</button>
+          <button type="button" class="quality-chip" data-quality-settings>⚙ Quality</button>
           <div class="phase-chip" data-phase>Entering arena</div>
         </div>
       </div>
@@ -155,6 +155,7 @@ export class DebugOverlay {
     resultsMessage: string;
     arenaDebug: ArenaDebugInfo | null;
   }): void {
+    this.element.dataset.scene = args.scene.toLowerCase();
     const hp = args.local?.hp ?? 100;
     const mana = args.local?.mana ?? 100;
     this.hpFill.style.transform = `scaleX(${Math.max(0, Math.min(1, hp / 100))})`;
@@ -166,7 +167,7 @@ export class DebugOverlay {
     this.voiceButton.dataset.active = String(args.voiceActive);
     this.dockEl.dataset.active = String(args.scene === 'MATCH');
     this.promptTextEl.textContent = args.portalPrompt;
-    this.promptButtonEl.textContent = args.portalActionLabel ? `Entrar: ${args.portalActionLabel}` : 'Entrar';
+    this.promptButtonEl.textContent = args.portalActionLabel ? `Enter: ${args.portalActionLabel}` : 'Enter';
     this.promptEl.dataset.visible = String(Boolean(args.portalPrompt));
     this.queueEl.dataset.visible = String(args.queueActive);
     this.queueModeEl.textContent = `Mode: ${labelForSelection(args.selectedMode, args.selectedArenaId)}`;

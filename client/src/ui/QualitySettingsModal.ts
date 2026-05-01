@@ -1,10 +1,10 @@
 import { saveGraphicsTier, type GraphicsTier } from '../utils/GraphicsSettings';
 
 const LABELS: Record<GraphicsTier, { title: string; desc: string }> = {
-  auto: { title: 'Auto', desc: 'Detectar automáticamente' },
-  low: { title: 'Bajo', desc: 'Máximo rendimiento' },
-  medium: { title: 'Medio', desc: 'Balanceado' },
-  high: { title: 'Alto', desc: 'Máxima calidad' }
+  auto: { title: 'Auto', desc: 'Detect automatically' },
+  low: { title: 'Low', desc: 'Maximum performance' },
+  medium: { title: 'Medium', desc: 'Balanced' },
+  high: { title: 'High', desc: 'Maximum quality' }
 };
 
 const ORDER: GraphicsTier[] = ['auto', 'low', 'medium', 'high'];
@@ -19,14 +19,14 @@ export class QualitySettingsModal {
       <div class="quality-modal__backdrop"></div>
       <div class="quality-modal__panel">
         <div class="quality-modal__header">
-          <strong>Calidad Gráfica</strong>
-          <button type="button" class="quality-modal__close" aria-label="Cerrar">×</button>
+          <strong>Graphics Quality</strong>
+          <button type="button" class="quality-modal__close" aria-label="Close">×</button>
         </div>
         <div class="quality-modal__options">
           ${ORDER.map((tier) => `
             <button type="button" class="quality-modal__option${tier === currentTier ? ' quality-modal__option--active' : ''}" data-tier="${tier}">
               <span class="quality-modal__option-title">${LABELS[tier].title}</span>
-              <span class="quality-modal__option-desc">${LABELS[tier].desc}${tier === 'auto' ? ' (Recomendado)' : ''}</span>
+              <span class="quality-modal__option-desc">${LABELS[tier].desc}${tier === 'auto' ? ' (Recommended)' : ''}</span>
             </button>
           `).join('')}
         </div>

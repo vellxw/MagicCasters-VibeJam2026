@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CLASSES, type CharacterClass } from '../../../shared/classes';
 import type { PlayerSnapshot } from './LocalPlayerController';
+import { applyCharacterLighting } from './CharacterLighting';
 
 const ANIM_MAP: Record<string, string> = {
   idle: 'reposo',
@@ -228,6 +229,7 @@ export function cloneCharacterScene(scene: THREE.Group): THREE.Group {
       mesh.material = material.clone();
     }
   });
+  applyCharacterLighting(clone);
   return clone;
 }
 
