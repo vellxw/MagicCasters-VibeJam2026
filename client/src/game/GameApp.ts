@@ -37,6 +37,7 @@ import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } f
 import { SpellVfxManager } from '../spells/SpellVfxManager';
 import { CharacterSelectOverlay } from '../ui/CharacterSelectOverlay';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import { formatCastBlockMessage, formatCastDeniedReason, getSpellAvailability } from '../ui/SpellAvailability';
 import { GlobalChatOverlay } from '../ui/GlobalChatOverlay';
 import { CustomMatchOverlay, type CustomCreateRequest } from '../ui/CustomMatchOverlay';
 import { MapIntroOverlay } from '../ui/MapIntroOverlay';
@@ -92,6 +93,7 @@ interface ProjectileSnapshot {
 export type SceneMode = 'LOBBY' | 'CUSTOM' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 type CharacterGltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
 type PlayerController = LocalPlayerController | RemotePlayerController | AnimatedPlayerController;
+const CHARACTER_SELECT_PREVIEW_PLAYER_ID = '__character_select_preview';
 type QueueRequest =
   | { kind: 'public' }
   | { kind: 'custom-create'; partyCode: string; arenaPresetId: string; arenaName: string; botSkill?: CustomCreateRequest['botSkill'] }
@@ -262,7 +264,7 @@ export class GameApp {
     this.characterSelectUi.onBack = () => void this.returnToLobby();
     this.characterSelectUi.onClassSelect = (characterClass) => this.switchPreviewClass(characterClass);
     this.characterSelectUi.onConfirm = (characterClass) => this.confirmCharacterSelection(characterClass);
-    this.characterSelectUi.onSpellHover = (spellId) => this.playPreviewAnim(spellId ? 'lanzarmagia' : 'reposo');
+    this.characterSelectUi.onSpellHover = (spellId) => this.playPreviewSpell(spellId);
     this.customMatchUi.onBack = () => void this.returnToLobby();
     this.customMatchUi.onCreate = (request) => void this.createCustomMatch(request);
     this.customMatchUi.onJoin = (partyCode) => void this.joinCustomMatch(partyCode);
@@ -348,7 +350,6 @@ export class GameApp {
     });
 
     this.ui.onCast = (spellId) => {
-      this.audio.play('ui.confirm');
       this.cast(spellId);
     };
     this.ui.onVoiceToggle = () => {
@@ -568,7 +569,6 @@ export class GameApp {
     const spell = resolveKeyboardSpellForClass(this.getLocalCharacterClass(), event.key);
     if (spell) {
       event.preventDefault();
-      this.audio.play('ui.confirm');
       this.cast(spell);
     }
   }
@@ -579,9 +579,21 @@ export class GameApp {
     return resolveCharacterClass(snapshot?.characterClass ?? this.selectedCharacterClass);
   }
 
-  private cast(spellId: SpellId): void {
-    if (this.sceneMode !== 'MATCH') return;
+  private cast(spellId: SpellId): boolean {
+    if (this.sceneMode !== 'MATCH') return false;
+    const availability = getSpellAvailability({
+      player: this.getLocalSnapshot(),
+      spellId,
+      phase: this.phase
+    });
+    if (!availability.canCast) {
+      this.audio.play('ui.denied');
+      this.ui.showToast(formatCastBlockMessage(availability));
+      return false;
+    }
+    this.audio.play('ui.confirm');
     this.network.cast(spellId);
+    return true;
   }
 
   private applyState(state: any): void {
@@ -700,7 +712,7 @@ export class GameApp {
       this.vfx.playCast(payload.spellId, payload.playerId ?? this.network.localSessionId ?? '', payload.x, payload.y, payload.z);
     }
     if (type === 'cast_denied') {
-      this.ui.showToast(payload.reason ?? 'Cast denied');
+      this.ui.showToast(formatCastDeniedReason(payload.reason));
     }
     if (type === 'bot_added') {
       const count = typeof payload.count === 'number' ? payload.count : 1;
@@ -1041,8 +1053,10 @@ export class GameApp {
   }
 
   private setupVfxAttachPoints(playerId: string, controller: PlayerController): void {
-    const root = controller.group;
+    this.setupVfxAttachPointsForRoot(playerId, controller.group);
+  }
 
+  private setupVfxAttachPointsForRoot(playerId: string, root: THREE.Object3D): void {
     const head = new THREE.Group();
     head.position.set(0, 1.6, 0);
     root.add(head);
@@ -1702,6 +1716,8 @@ export class GameApp {
     previewGroup.position.set(0, 0, 0);
     this.previewGroup = previewGroup;
     this.scene.add(previewGroup);
+    this.setupVfxAttachPointsForRoot(CHARACTER_SELECT_PREVIEW_PLAYER_ID, previewGroup);
+    void this.vfx.preload();
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x352416, 1.7);
     hemi.position.set(0, 2, 0);
@@ -1799,8 +1815,19 @@ export class GameApp {
     action.reset().fadeIn(0.16).play();
   }
 
+  private playPreviewSpell(spellId: SpellId | null): void {
+    if (!spellId) {
+      this.playPreviewAnim('reposo');
+      return;
+    }
+
+    this.playPreviewAnim('lanzarmagia');
+    this.vfx.playCast(spellId, CHARACTER_SELECT_PREVIEW_PLAYER_ID, 0, 0, 0);
+  }
+
   private clearPreview(): void {
     this.previewToken++;
+    this.vfx.clearPlayerAttachPoints(CHARACTER_SELECT_PREVIEW_PLAYER_ID);
     if (this.previewGroup) {
       this.scene.remove(this.previewGroup);
       this.previewGroup.traverse((object) => {
@@ -2400,6 +2427,9 @@ export class GameApp {
 
   private clearMatchScene(): void {
     this.vfx.reset();
+    for (const id of this.players.keys()) {
+      this.vfx.clearPlayerAttachPoints(id);
+    }
     for (const controller of this.players.values()) {
       controller.dispose(this.scene);
     }

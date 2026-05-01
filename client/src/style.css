@@ -265,6 +265,55 @@ button {
   background: linear-gradient(90deg, #3387b5, var(--frost));
 }
 
+.status-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 22px;
+  margin-top: 8px;
+}
+
+.status-effects[data-active="false"] {
+  display: none;
+}
+
+.status-effect {
+  max-width: 132px;
+  padding: 4px 7px;
+  border: 1px solid rgba(247, 231, 198, 0.2);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(247, 231, 198, 0.9);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status-effect[data-effect="marked"] {
+  border-color: rgba(192, 132, 252, 0.72);
+  color: #e9d5ff;
+  background: rgba(88, 28, 135, 0.42);
+}
+
+.status-effect[data-effect="silenced"] {
+  border-color: rgba(216, 180, 254, 0.78);
+  color: #f3e8ff;
+  background: rgba(49, 46, 129, 0.48);
+}
+
+.status-effect[data-effect="slowed"],
+.status-effect[data-effect="rooted"] {
+  border-color: rgba(125, 211, 252, 0.72);
+  color: #e0f2fe;
+  background: rgba(12, 74, 110, 0.46);
+}
+
+.status-effect[data-effect="shielded"] {
+  border-color: rgba(254, 240, 138, 0.72);
+  color: #fef9c3;
+  background: rgba(113, 63, 18, 0.42);
+}
+
 .hud__top-right {
   display: flex;
   flex-direction: column;
@@ -368,23 +417,19 @@ button {
 }
 
 .results-panel {
-  width: min(520px, calc(100vw - 32px));
-  padding: 18px;
-}
-
-.results-panel strong {
-  color: var(--paper);
-  font-size: clamp(34px, 7vw, 78px);
-  line-height: 0.92;
+  width: min(640px, calc(100vw - 28px));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: center;
-  text-transform: uppercase;
 }
 
 .results-panel__image {
   display: block;
-  width: min(420px, 84vw);
-  max-height: 185px;
-  margin: 0 auto -8px;
+  width: min(560px, 92vw);
+  max-height: 255px;
+  margin: 0 auto -4px;
   object-fit: contain;
   filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.58));
 }
@@ -409,6 +454,8 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  width: min(520px, calc(100vw - 32px));
+  margin: 2px auto 0;
 }
 
 .queue-panel button,
@@ -437,7 +484,7 @@ button {
 .spell-button {
   position: relative;
   flex: 1;
-  height: 54px;
+  height: 64px;
   padding: 8px 10px;
   text-align: left;
   overflow: hidden;
@@ -464,6 +511,37 @@ button {
   margin-top: 5px;
   color: color-mix(in oklch, var(--paper) 76%, transparent);
   font-size: 12px;
+}
+
+.spell-button small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(247, 231, 198, 0.68);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.spell-button[data-can-cast="false"] {
+  border-color: rgba(247, 231, 198, 0.14);
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0)),
+    rgba(21, 18, 15, 0.74);
+}
+
+.spell-button[data-state="silenced"] {
+  border-color: rgba(168, 85, 247, 0.58);
+  box-shadow:
+    inset 0 0 0 1px rgba(168, 85, 247, 0.24),
+    0 10px 28px rgba(0, 0, 0, 0.25);
+}
+
+.spell-button[data-state="no_mana"] small {
+  color: #bae6fd;
+}
+
+.spell-button[data-state="cooldown"] small {
+  color: var(--gold);
 }
 
 .spell-button:active,
@@ -513,6 +591,35 @@ button {
   top: 7px;
   width: 14px;
   height: 2px;
+}
+
+.combat-state-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.combat-state-vignette[data-active="true"] {
+  opacity: 1;
+}
+
+.combat-state-vignette[data-state="marked"] {
+  background:
+    radial-gradient(circle at 50% 44%, transparent 38%, rgba(168, 85, 247, 0.13) 72%, rgba(49, 46, 129, 0.22) 100%);
+}
+
+.combat-state-vignette[data-state="silenced"] {
+  background:
+    linear-gradient(90deg, rgba(88, 28, 135, 0.2), transparent 26%, transparent 74%, rgba(88, 28, 135, 0.2)),
+    radial-gradient(circle at 50% 50%, transparent 36%, rgba(30, 27, 75, 0.24) 100%);
+}
+
+.combat-state-vignette[data-state="slowed"],
+.combat-state-vignette[data-state="rooted"] {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 42%, rgba(14, 165, 233, 0.12) 72%, rgba(12, 74, 110, 0.22) 100%);
 }
 
 .debug {
@@ -1934,7 +2041,7 @@ button {
   }
 
   .spell-button {
-    height: 48px;
+    height: 58px;
   }
 
   .voice-button {
@@ -2018,7 +2125,7 @@ button {
   }
 
   .spell-button {
-    height: 58px;
+    height: 64px;
     padding: 8px 9px;
   }
 
@@ -2028,6 +2135,10 @@ button {
 
   .spell-button span {
     font-size: 11px;
+  }
+
+  .spell-button small {
+    font-size: 9px;
   }
 
   .voice-button {

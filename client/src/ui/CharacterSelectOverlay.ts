@@ -121,10 +121,15 @@ export class CharacterSelectOverlay {
     this.element.dataset.visible = 'false';
     this.element.setAttribute('aria-hidden', 'true');
     this.selectedSpell = null;
+    for (const entry of Array.from(this.spellList.children)) {
+      (entry as HTMLElement).dataset.hovered = 'false';
+    }
     this.onSpellHover?.(null);
   }
 
   private selectClass(characterClass: CharacterClass): void {
+    this.selectedSpell = null;
+    this.onSpellHover?.(null);
     this.selectedClass = characterClass;
     this.onClassSelect?.(characterClass);
 
@@ -156,6 +161,8 @@ export class CharacterSelectOverlay {
       const card = document.createElement('div');
       card.className = 'character-select__spell-card';
       card.dataset.spellId = spellId;
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
       card.style.setProperty('--spell-color', spellColor);
       card.innerHTML = `
         <div class="character-select__spell-key">${base.key}</div>
@@ -169,16 +176,27 @@ export class CharacterSelectOverlay {
         </div>
       `;
 
-      card.addEventListener('mouseenter', () => {
+      const previewSpell = () => {
         this.selectedSpell = spellId;
+        for (const entry of Array.from(this.spellList.children)) {
+          (entry as HTMLElement).dataset.hovered = 'false';
+        }
         this.onSpellHover?.(spellId);
         card.dataset.hovered = 'true';
-      });
-      card.addEventListener('mouseleave', () => {
-        this.selectedSpell = null;
-        this.onSpellHover?.(null);
+      };
+      const clearPreview = () => {
+        if (this.selectedSpell === spellId) {
+          this.selectedSpell = null;
+          this.onSpellHover?.(null);
+        }
         card.dataset.hovered = 'false';
-      });
+      };
+
+      card.addEventListener('mouseenter', previewSpell);
+      card.addEventListener('mouseleave', clearPreview);
+      card.addEventListener('focus', previewSpell);
+      card.addEventListener('blur', clearPreview);
+      card.addEventListener('click', previewSpell);
 
       this.spellList.appendChild(card);
     }

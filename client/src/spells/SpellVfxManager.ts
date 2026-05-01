@@ -105,6 +105,15 @@ export class SpellVfxManager {
     this.playerAttachPoints.set(`${playerId}:${name}`, object);
   }
 
+  clearPlayerAttachPoints(playerId: string): void {
+    const prefix = `${playerId}:`;
+    for (const key of Array.from(this.playerAttachPoints.keys())) {
+      if (key.startsWith(prefix)) {
+        this.playerAttachPoints.delete(key);
+      }
+    }
+  }
+
   playAtAttachPoint(vfxId: string, playerId: string, attachPoint: AttachPoint): void {
     const obj = this.playerAttachPoints.get(`${playerId}:${attachPoint}`);
     if (!obj) return;

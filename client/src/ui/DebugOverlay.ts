@@ -3,6 +3,11 @@ import { CLASSES, type CharacterClass } from '../../../shared/classes';
 import type { ArenaId, MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
+import {
+  formatStatusTime,
+  getActiveStatusEffects,
+  getSpellAvailability
+} from './SpellAvailability';
 
 type SceneMode = 'LOBBY' | 'CUSTOM' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 
@@ -13,8 +18,10 @@ export class DebugOverlay {
   private hpFill: HTMLSpanElement;
   private manaFill: HTMLSpanElement;
   private nameEl: HTMLElement;
+  private statusEffectsEl: HTMLElement;
   private phaseEl: HTMLElement;
   private dockEl: HTMLElement;
+  private combatStateEl: HTMLElement;
   private promptEl: HTMLElement;
   private promptTextEl: HTMLElement;
   private promptButtonEl: HTMLButtonElement;
@@ -23,7 +30,6 @@ export class DebugOverlay {
   private queueCountEl: HTMLElement;
   private resultsEl: HTMLElement;
   private resultsImageEl: HTMLImageElement;
-  private resultsTitleEl: HTMLElement;
   private resultsMessageEl: HTMLElement;
   private rematchStatusEl: HTMLElement;
   private rematchButtonEl: HTMLButtonElement;
@@ -53,6 +59,7 @@ export class DebugOverlay {
             <div class="bar bar--hp"><span data-hp></span></div>
             <div class="bar bar--mana"><span data-mana></span></div>
           </div>
+          <div class="status-effects" data-status-effects></div>
         </div>
         <div class="hud__top-right">
           <button type="button" class="quality-chip" data-quality-settings>⚙ Settings</button>
@@ -71,7 +78,6 @@ export class DebugOverlay {
       </div>
       <div class="results-panel" data-results>
         <img class="results-panel__image" data-results-image alt="Match result" />
-        <strong data-results-title>Match ended</strong>
         <span data-results-message>Return to lobby to play again.</span>
         <span class="results-panel__rematch" data-rematch-status></span>
         <div class="results-panel__actions">
@@ -81,6 +87,7 @@ export class DebugOverlay {
       </div>
       <div class="spell-dock" data-spells></div>
       <div class="crosshair" aria-hidden="true"></div>
+      <div class="combat-state-vignette" data-combat-state aria-hidden="true"></div>
       <div class="toast" data-toast></div>
     `;
 
@@ -88,8 +95,10 @@ export class DebugOverlay {
     this.hpFill = this.element.querySelector('[data-hp]')!;
     this.manaFill = this.element.querySelector('[data-mana]')!;
     this.nameEl = this.element.querySelector('[data-name]')!;
+    this.statusEffectsEl = this.element.querySelector('[data-status-effects]')!;
     this.phaseEl = this.element.querySelector('[data-phase]')!;
     this.dockEl = this.element.querySelector('[data-spells]')!;
+    this.combatStateEl = this.element.querySelector('[data-combat-state]')!;
     this.promptEl = this.element.querySelector('[data-prompt]')!;
     this.promptTextEl = this.element.querySelector('[data-prompt-text]')!;
     this.promptButtonEl = this.element.querySelector('[data-portal-action]')!;
@@ -98,7 +107,6 @@ export class DebugOverlay {
     this.queueCountEl = this.element.querySelector('[data-queue-count]')!;
     this.resultsEl = this.element.querySelector('[data-results]')!;
     this.resultsImageEl = this.element.querySelector('[data-results-image]')!;
-    this.resultsTitleEl = this.element.querySelector('[data-results-title]')!;
     this.resultsMessageEl = this.element.querySelector('[data-results-message]')!;
     this.rematchStatusEl = this.element.querySelector('[data-rematch-status]')!;
     this.rematchButtonEl = this.element.querySelector('[data-rematch]')!;
@@ -133,7 +141,11 @@ export class DebugOverlay {
       const button = document.createElement('button');
       button.className = 'spell-button';
       button.style.setProperty('--spell-color', `#${spell.color.toString(16).padStart(6, '0')}`);
-      button.innerHTML = `<b>${spell.key} ${spell.incantation}</b><span>${spell.label}</span>`;
+      button.innerHTML = `
+        <b>${spell.key} ${spell.incantation}</b>
+        <span>${spell.label}</span>
+        <small data-spell-state>Ready</small>
+      `;
       button.addEventListener('click', () => this.onCast?.(id));
       this.dockEl.appendChild(button);
       this.spellButtons.set(id, button);
@@ -194,7 +206,6 @@ export class DebugOverlay {
     this.resultsEl.dataset.result = args.resultKind;
     this.resultsImageEl.src = args.resultKind === 'victory' ? '/results/victory.png' : '/results/defeat.png';
     this.resultsImageEl.alt = args.resultKind === 'victory' ? 'Victory' : 'Defeat';
-    this.resultsTitleEl.textContent = args.resultKind === 'victory' ? 'Victory' : 'Defeat';
     this.resultsMessageEl.textContent = args.resultsMessage || 'Return to lobby to play again.';
     this.rematchButtonEl.disabled = !args.rematchAvailable || args.rematchRequested;
     this.rematchButtonEl.textContent = args.rematchRequested ? 'Rematch Ready' : 'Rematch';
@@ -203,14 +214,42 @@ export class DebugOverlay {
       : 'Rematch unavailable';
 
     const now = Date.now();
+    const effects = getActiveStatusEffects(args.local, now);
+    this.renderStatusEffects(effects);
+    const primaryState = primaryCombatState(effects);
+    this.combatStateEl.dataset.state = primaryState;
+    this.combatStateEl.dataset.active = String(args.scene === 'MATCH' && primaryState !== 'none');
+
     for (const [id, button] of this.spellButtons) {
-      if (!args.local) continue;
-      const readyAt = cooldownFor(args.local, id);
-      const cooldown = Math.max(0, readyAt - now) / SPELLS[id].cooldownMs;
-      button.style.setProperty('--cooldown', `${1 - Math.min(1, cooldown)}`);
-      button.disabled = cooldown > 0 || args.local.mana < SPELLS[id].manaCost || args.phase !== 'PLAYING';
+      const availability = getSpellAvailability({
+        player: args.local,
+        spellId: id,
+        phase: args.phase,
+        now
+      });
+      const labelEl = button.querySelector<HTMLElement>('[data-spell-state]');
+      button.style.setProperty('--cooldown', `${availability.cooldownProgress}`);
+      button.dataset.state = availability.reason;
+      button.dataset.canCast = String(availability.canCast);
+      button.setAttribute('aria-disabled', String(!availability.canCast));
+      button.title = availability.canCast ? `${SPELLS[id].label} ready` : availability.label;
+      button.disabled = false;
+      if (labelEl) labelEl.textContent = availability.label;
     }
 
+  }
+
+  private renderStatusEffects(effects: ReturnType<typeof getActiveStatusEffects>): void {
+    this.statusEffectsEl.innerHTML = '';
+    this.statusEffectsEl.dataset.active = String(effects.length > 0);
+    for (const effect of effects) {
+      const chip = document.createElement('span');
+      chip.className = 'status-effect';
+      chip.dataset.effect = effect.id;
+      const time = formatStatusTime(effect.remainingMs);
+      chip.textContent = time ? `${effect.label} ${time}` : effect.label;
+      this.statusEffectsEl.appendChild(chip);
+    }
   }
 
   showToast(message: string): void {
@@ -223,27 +262,13 @@ export class DebugOverlay {
   }
 }
 
-function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
-  switch (spellId) {
-    case 'shadow_dart':
-      return player.shadowDartReadyAt ?? 0;
-    case 'void_trap':
-      return player.voidTrapReadyAt ?? 0;
-    case 'abyssal_claw':
-      return player.abyssalClawReadyAt ?? 0;
-    case 'eclipse':
-      return player.eclipseReadyAt ?? 0;
-    case 'judgment_ray':
-      return player.judgmentRayReadyAt ?? 0;
-    case 'penitent_seal':
-      return player.penitentSealReadyAt ?? 0;
-    case 'glacial_spikes':
-      return player.glacialSpikesReadyAt ?? 0;
-    case 'firmament_shield':
-      return player.firmamentShieldReadyAt ?? 0;
-    default:
-      return 0;
-  }
+function primaryCombatState(effects: ReturnType<typeof getActiveStatusEffects>): string {
+  if (effects.some((effect) => effect.id === 'silenced')) return 'silenced';
+  if (effects.some((effect) => effect.id === 'rooted')) return 'rooted';
+  if (effects.some((effect) => effect.id === 'slowed')) return 'slowed';
+  if (effects.some((effect) => effect.id === 'marked')) return 'marked';
+  if (effects.some((effect) => effect.id === 'shielded')) return 'shielded';
+  return 'none';
 }
 
 function messageForPhase(scene: SceneMode, phase: string, count: number, required: number): string {
