@@ -142,4 +142,42 @@ describe('splat map pool helpers', () => {
     expect(resolveSplatQualityEntry(entry!, 'low').presetId).toBe('lobby-low');
     expect(resolveSplatQualityEntry(entry!, 'high').presetId).toBe('lobby-high');
   });
+
+  it('does not fall back to lobby when strict playable lookup misses', () => {
+    const catalog = {
+      defaultPresetId: 'lobby-high',
+      maps: [
+        {
+          presetId: 'lobby-high',
+          calibrationGroupId: 'lobby-high',
+          displayName: 'Lobby',
+          presetUrl: '/arena-presets/lobby-high.json',
+          splatUrl: '/splats/lobby-high.sog',
+          enabledModes: [],
+          defaultQuality: 'high' as const,
+          qualities: {
+            low: { presetId: 'lobby-low', presetUrl: '/arena-presets/lobby-low.json', splatUrl: '/splats/lobby-low.sog' },
+            high: { presetId: 'lobby-high', presetUrl: '/arena-presets/lobby-high.json', splatUrl: '/splats/lobby-high.sog' }
+          }
+        },
+        {
+          presetId: 'arcane-library',
+          calibrationGroupId: 'arcane-library',
+          displayName: 'Arcane Library',
+          presetUrl: '/arena-presets/arcane-library-high.json',
+          splatUrl: '/splats/arcane-library-high.sog',
+          enabledModes: ['1v1'],
+          defaultQuality: 'high' as const,
+          qualities: {
+            high: { presetId: 'arcane-library-high', presetUrl: '/arena-presets/arcane-library-high.json', splatUrl: '/splats/arcane-library-high.sog' }
+          }
+        }
+      ]
+    };
+
+    expect(findSplatMapEntry(catalog, 'missing-map', { strict: true, playableOnly: true })).toBeNull();
+    expect(findSplatMapEntry(catalog, 'lobby-low', { strict: true, playableOnly: true })).toBeNull();
+    expect(findSplatMapEntry(catalog, 'arcane-library-high', { strict: true, playableOnly: true })?.presetId)
+      .toBe('arcane-library');
+  });
 });

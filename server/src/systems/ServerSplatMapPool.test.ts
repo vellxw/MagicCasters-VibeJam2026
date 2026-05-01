@@ -65,6 +65,59 @@ describe('server published splat map pool', () => {
     expect(selectPublishedSplatArenaForMode('2v2', root, () => 0)).toBeNull();
   });
 
+  it('never selects lobby variants as playable published arenas', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-lobby-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'lobby-high',
+      maps: [
+        {
+          presetId: 'lobby',
+          calibrationGroupId: 'lobby',
+          displayName: 'Lobby',
+          presetUrl: '/arena-presets/lobby-high.json',
+          splatUrl: '/splats/lobby-high.sog',
+          enabledModes: [],
+          defaultQuality: 'high',
+          qualities: {
+            low: { presetId: 'lobby-low', presetUrl: '/arena-presets/lobby-low.json', splatUrl: '/splats/lobby-low.sog' },
+            high: { presetId: 'lobby-high', presetUrl: '/arena-presets/lobby-high.json', splatUrl: '/splats/lobby-high.sog' }
+          }
+        },
+        {
+          presetId: 'lobby-low',
+          displayName: 'Lobby (LOW)',
+          presetUrl: '/arena-presets/lobby-low.json',
+          splatUrl: '/splats/lobby-low.sog',
+          enabledModes: ['1v1']
+        }
+      ]
+    }));
+    const lobbyPreset = {
+      arenaId: 'splat-test',
+      displayName: 'Lobby',
+      type: 'splat',
+      splatUrl: '/splats/lobby-high.sog',
+      enabledModes: ['1v1'],
+      spawnPoints: [
+        { x: -1, y: 0, z: 0, rotY: 0 },
+        { x: 1, y: 0, z: 0, rotY: 0 }
+      ],
+      bounds: { minX: -2, maxX: 2, minZ: -2, maxZ: 2 },
+      scale: 1,
+      rotation: { x: 0, y: 0, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: 0,
+      collisionWalls: []
+    };
+    await writeFile(join(presetDir, 'lobby-high.json'), JSON.stringify({ ...lobbyPreset, presetId: 'lobby-high' }));
+    await writeFile(join(presetDir, 'lobby-low.json'), JSON.stringify({ ...lobbyPreset, presetId: 'lobby-low' }));
+
+    expect(selectPublishedSplatArenaForMode('1v1', root, () => 0)).toBeNull();
+    expect(selectPublishedSplatArenaByPresetId('lobby-low', '1v1', root)).toBeNull();
+  });
+
   it('loads the default quality variant from grouped splat catalog entries', async () => {
     const root = await mkdtemp(join(tmpdir(), 'magic-casters-pool-quality-'));
     const presetDir = join(root, 'client', 'public', 'arena-presets');

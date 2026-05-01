@@ -3,6 +3,8 @@ import { basename, normalize, resolve, sep } from 'node:path';
 import { normalizeArenaCollisionConfig } from '../../../shared/arenaCollision.js';
 import {
   compactSplatMapCatalog,
+  findSplatMapEntry,
+  isPlayableSplatMapEntry,
   resolveSplatQualityEntry,
   selectRandomSplatMapForMode,
   resolveSpawnPointsForMode,
@@ -66,11 +68,7 @@ export function selectPublishedSplatArenaByPresetId(
 ): PublishedSplatArenaSelection | null {
   const catalog = readPublishedSplatCatalog(root);
   if (!catalog) return null;
-  const selected = playablePublishedMaps(catalog).find((entry) => (
-    entry.presetId === presetId ||
-    entry.calibrationGroupId === presetId ||
-    Object.values(entry.qualities ?? {}).some((quality) => quality?.presetId === presetId)
-  ));
+  const selected = findSplatMapEntry(catalog, presetId, { strict: true, playableOnly: true });
   if (!selected) return null;
 
   const selectedVariant = resolveSplatQualityEntry(selected);
@@ -120,9 +118,8 @@ function readPublishedSplatPreset(root: string, entry: Pick<SplatMapPoolEntry | 
 
 function playablePublishedMaps(catalog: SplatMapPoolCatalog): SplatMapPoolEntry[] {
   return compactSplatMapCatalog(catalog, {
-    includeUnassigned: true,
-    excludePresetIds: ['lobby-high']
-  });
+    includeUnassigned: true
+  }).filter(isPlayableSplatMapEntry);
 }
 
 function collisionConfigFromPublishedPreset(preset: Record<string, unknown>, mode: MatchMode): ArenaCollisionConfig {

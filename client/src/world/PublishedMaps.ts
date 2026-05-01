@@ -1,6 +1,7 @@
 import type { MatchMode } from '../../../shared/types';
 import {
   compactSplatMapCatalog,
+  isPlayableSplatMapEntry,
   type SplatMapPoolEntry
 } from '../../../shared/splatMapPool';
 import { loadSplatMapCatalog } from './ArenaPreset';
@@ -43,9 +44,9 @@ const PREVIEW_BY_GROUP: Record<string, { title: string; url: string }> = {
 export async function loadPublishedMapChoices(): Promise<PublishedMapChoice[]> {
   const catalog = await loadSplatMapCatalog();
   return compactSplatMapCatalog(catalog, {
-    includeUnassigned: true,
-    excludePresetIds: ['lobby-high']
+    includeUnassigned: true
   })
+    .filter(isPlayableSplatMapEntry)
     .map((entry) => choiceFromEntry(entry))
     .filter((entry): entry is PublishedMapChoice => Boolean(entry));
 }

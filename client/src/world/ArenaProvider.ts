@@ -7,6 +7,7 @@ import {
   applyCalibrationToPreset,
   loadConfiguredSplatArenaPreset,
   loadSplatArenaPreset,
+  isPlayableSplatArenaPreset,
   type SplatArenaPreset,
   type SplatCalibrationSettings
 } from './ArenaPreset';
@@ -332,11 +333,18 @@ class SplatArenaRuntime implements ArenaRuntime {
     }
     if (this.options.presetId) {
       try {
-        return (await loadConfiguredSplatArenaPreset(this.options.presetId, this.options.quality)).preset;
+        return (await loadConfiguredSplatArenaPreset(this.options.presetId, this.options.quality, {
+          strict: true,
+          playableOnly: true
+        })).preset;
       } catch (error) {
         if (this.options.fallbackPresetUrl) {
           console.warn('[ArenaProvider] Local quality preset failed; using server preset URL', error);
-          return loadSplatArenaPreset(this.options.fallbackPresetUrl);
+          const preset = await loadSplatArenaPreset(this.options.fallbackPresetUrl);
+          if (!isPlayableSplatArenaPreset(preset)) {
+            throw new Error('Fallback splat preset is not playable');
+          }
+          return preset;
         }
         throw error;
       }

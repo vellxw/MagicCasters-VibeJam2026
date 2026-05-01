@@ -34,6 +34,11 @@ export interface CompactSplatMapOptions {
   excludePresetIds?: string[];
 }
 
+export interface FindSplatMapEntryOptions extends CompactSplatMapOptions {
+  strict?: boolean;
+  playableOnly?: boolean;
+}
+
 export interface SplatSpawnSource {
   enabledModes?: unknown;
   spawnPoints?: unknown;
@@ -100,21 +105,40 @@ export function selectRandomSplatMapForMode(
   return maps[index] ?? maps[0] ?? null;
 }
 
-export function findSplatMapEntry(catalog: SplatMapPoolCatalog, presetId: string | undefined): SplatMapPoolEntry | null {
-  const maps = compactSplatMapCatalog(catalog, { includeUnassigned: true });
-  if (!presetId) {
-    return maps.find((entry) => entry.presetId === catalog.defaultPresetId)
+export function findSplatMapEntry(
+  catalog: SplatMapPoolCatalog,
+  presetId: string | undefined,
+  options: FindSplatMapEntryOptions = {}
+): SplatMapPoolEntry | null {
+  const maps = compactSplatMapCatalog(catalog, {
+    includeUnassigned: true,
+    excludePresetIds: options.excludePresetIds
+  }).filter((entry) => !options.playableOnly || isPlayableSplatMapEntry(entry));
+  const fallback = () => options.strict
+    ? null
+    : maps.find((entry) => entry.presetId === catalog.defaultPresetId)
       ?? maps[0]
       ?? null;
+  const requested = presetId?.trim();
+
+  if (!requested) {
+    return fallback();
   }
+
   return maps.find((entry) => (
-    entry.presetId === presetId ||
-    entry.calibrationGroupId === presetId ||
-    Object.values(entry.qualities ?? {}).some((quality) => quality?.presetId === presetId)
+    entry.presetId === requested ||
+    entry.calibrationGroupId === requested ||
+    Object.values(entry.qualities ?? {}).some((quality) => quality?.presetId === requested)
   ))
-    ?? maps.find((entry) => entry.presetId === catalog.defaultPresetId)
-    ?? maps[0]
-    ?? null;
+    ?? fallback();
+}
+
+export function isPlayableSplatMapEntry(entry: SplatMapPoolEntry): boolean {
+  return !isLobbySplatMapEntry(entry);
+}
+
+export function isLobbySplatMapEntry(entry: SplatMapPoolEntry): boolean {
+  return splatMapIds(entry).some((id) => normalizePlayableGroupId(id) === 'lobby');
 }
 
 export function compactSplatMapCatalog(
@@ -212,6 +236,18 @@ function mapGroupId(entry: SplatMapPoolEntry): string {
   return entry.calibrationGroupId?.trim()
     || stripQualitySuffix(entry.presetId)
     || entry.presetId;
+}
+
+function splatMapIds(entry: SplatMapPoolEntry): string[] {
+  return [
+    entry.presetId,
+    entry.calibrationGroupId,
+    ...Object.values(entry.qualities ?? {}).map((quality) => quality?.presetId)
+  ].filter((id): id is string => Boolean(id));
+}
+
+function normalizePlayableGroupId(value: string): string {
+  return stripQualitySuffix(value.trim()).toLowerCase();
 }
 
 function baseEntryForGroup(entry: SplatMapPoolEntry, groupId: string): SplatMapPoolEntry {

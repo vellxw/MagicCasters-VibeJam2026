@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/types';
 import {
   findSplatMapEntry as findSplatMapPoolEntry,
+  isPlayableSplatMapEntry,
   normalizeSplatQuality,
   resolveEnabledModes,
   resolveSplatQualityEntry,
@@ -86,6 +87,11 @@ export interface SplatMapCatalog {
   maps: SplatMapEntry[];
 }
 
+export interface LoadConfiguredSplatArenaPresetOptions {
+  strict?: boolean;
+  playableOnly?: boolean;
+}
+
 export type SplatPresetSaveReason = 'autosave' | 'manual-save' | 'before-reset';
 
 export interface SplatPresetHistoryEntry {
@@ -119,12 +125,13 @@ export async function loadSplatMapCatalog(url = SPLAT_CATALOG_URL): Promise<Spla
 
 export async function loadConfiguredSplatArenaPreset(
   presetId = getStoredSplatPresetId(),
-  quality = getStoredSplatQuality()
+  quality = getStoredSplatQuality(),
+  options: LoadConfiguredSplatArenaPresetOptions = {}
 ): Promise<{ catalog: SplatMapCatalog; entry: SplatMapEntry; quality: SplatQuality; basePreset: SplatArenaPreset; preset: SplatArenaPreset }> {
   const catalog = await loadSplatMapCatalog();
-  const entry = findSplatMapPoolEntry(catalog, presetId) as SplatMapEntry | null;
+  const entry = findSplatMapPoolEntry(catalog, presetId, options) as SplatMapEntry | null;
   if (!entry) {
-    throw new Error('Splat map catalog has no maps');
+    throw new Error('Splat map preset not found');
   }
   const variant = resolveSplatQualityEntry(entry, quality);
   const basePreset = await loadSplatArenaPreset(variant.presetUrl);
@@ -215,6 +222,19 @@ export function setStoredSplatQuality(quality: SplatQuality): void {
   } catch (error) {
     console.warn('Unable to store active splat quality', error);
   }
+}
+
+export function isPlayableSplatArenaPreset(
+  preset: Pick<SplatArenaPreset, 'presetId' | 'calibrationGroupId'>
+): boolean {
+  return isPlayableSplatMapEntry({
+    presetId: preset.presetId,
+    calibrationGroupId: preset.calibrationGroupId,
+    displayName: preset.presetId,
+    presetUrl: '',
+    splatUrl: '',
+    enabledModes: []
+  });
 }
 
 export function getSplatCalibrationStorageKey(preset: Pick<SplatArenaPreset, 'presetId' | 'calibrationGroupId'>): string {
