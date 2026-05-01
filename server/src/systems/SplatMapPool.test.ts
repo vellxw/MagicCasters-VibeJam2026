@@ -143,6 +143,95 @@ describe('splat map pool helpers', () => {
     expect(resolveSplatQualityEntry(entry!, 'high').presetId).toBe('lobby-high');
   });
 
+  it('does not let normalized direct variants overwrite the grouped high quality entry', () => {
+    const catalog = {
+      defaultPresetId: 'dragon-bridge',
+      maps: [
+        {
+          presetId: 'dragon-bridge',
+          calibrationGroupId: 'dragon-bridge',
+          displayName: 'Dragon Bridge',
+          presetUrl: '/arena-presets/dragon-bridge-high.json',
+          splatUrl: '/splats/dragon-bridge-high.sog',
+          enabledModes: [],
+          defaultQuality: 'high' as const,
+          qualities: {
+            low: {
+              presetId: 'dragon-bridge-low',
+              presetUrl: '/arena-presets/dragon-bridge-low.json',
+              splatUrl: '/splats/dragon-bridge-low.sog'
+            },
+            mid: {
+              presetId: 'dragon-bridge-mid',
+              presetUrl: '/arena-presets/dragon-bridge-mid.json',
+              splatUrl: '/splats/dragon-bridge-mid.sog'
+            },
+            high: {
+              presetId: 'dragon-bridge-high',
+              presetUrl: '/arena-presets/dragon-bridge-high.json',
+              splatUrl: '/splats/dragon-bridge-high.sog'
+            }
+          }
+        },
+        {
+          presetId: 'dragon-bridge-high',
+          calibrationGroupId: 'dragon-bridge',
+          displayName: 'Dragon Bridge (HIGH)',
+          presetUrl: '/arena-presets/dragon-bridge-high.json',
+          splatUrl: '/splats/dragon-bridge-high.sog',
+          enabledModes: ['1v1'],
+          defaultQuality: 'high' as const,
+          qualities: {
+            high: {
+              presetId: 'dragon-bridge-high',
+              presetUrl: '/arena-presets/dragon-bridge-high.json',
+              splatUrl: '/splats/dragon-bridge-high.sog'
+            }
+          }
+        },
+        {
+          presetId: 'dragon-bridge-low',
+          calibrationGroupId: 'dragon-bridge',
+          displayName: 'Dragon Bridge (LOW)',
+          presetUrl: '/arena-presets/dragon-bridge-low.json',
+          splatUrl: '/splats/dragon-bridge-low.sog',
+          enabledModes: ['1v1'],
+          defaultQuality: 'high' as const,
+          qualities: {
+            high: {
+              presetId: 'dragon-bridge-low',
+              presetUrl: '/arena-presets/dragon-bridge-low.json',
+              splatUrl: '/splats/dragon-bridge-low.sog'
+            }
+          }
+        },
+        {
+          presetId: 'dragon-bridge-mid',
+          calibrationGroupId: 'dragon-bridge',
+          displayName: 'Dragon Bridge (MID)',
+          presetUrl: '/arena-presets/dragon-bridge-mid.json',
+          splatUrl: '/splats/dragon-bridge-mid.sog',
+          enabledModes: ['1v1'],
+          defaultQuality: 'high' as const,
+          qualities: {
+            high: {
+              presetId: 'dragon-bridge-mid',
+              presetUrl: '/arena-presets/dragon-bridge-mid.json',
+              splatUrl: '/splats/dragon-bridge-mid.sog'
+            }
+          }
+        }
+      ]
+    };
+
+    const maps = compactSplatMapCatalog(catalog, { includeUnassigned: true });
+
+    expect(maps).toHaveLength(1);
+    expect(maps[0]?.presetId).toBe('dragon-bridge');
+    expect(maps[0]?.qualities?.high?.presetId).toBe('dragon-bridge-high');
+    expect(resolveSplatQualityEntry(maps[0]!, 'high').presetUrl).toBe('/arena-presets/dragon-bridge-high.json');
+  });
+
   it('does not fall back to lobby when strict playable lookup misses', () => {
     const catalog = {
       defaultPresetId: 'lobby-high',

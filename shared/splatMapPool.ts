@@ -251,29 +251,21 @@ function normalizePlayableGroupId(value: string): string {
 }
 
 function baseEntryForGroup(entry: SplatMapPoolEntry, groupId: string): SplatMapPoolEntry {
-  const quality = entry.quality ?? qualityFromPresetId(entry.presetId);
-  const qualities = { ...(entry.qualities ?? {}) };
-  if (quality && !qualities[quality]) {
-    qualities[quality] = {
-      presetId: entry.presetId,
-      presetUrl: entry.presetUrl,
-      splatUrl: entry.splatUrl,
-      splatFileSizeBytes: entry.splatFileSizeBytes
-    };
-  }
+  const variant = isQualityVariantEntry(entry, groupId);
 
   return {
     ...entry,
-    presetId: entry.calibrationGroupId ? entry.presetId : groupId,
+    presetId: variant || !entry.calibrationGroupId ? groupId : entry.presetId,
     calibrationGroupId: entry.calibrationGroupId ?? groupId,
     displayName: stripQualityLabel(entry.displayName),
     enabledModes: [...resolveEnabledModes(entry)],
-    qualities
+    qualities: qualityEntriesForGroup(entry, groupId)
   };
 }
 
 function mergeSplatMapEntries(current: SplatMapPoolEntry, entry: SplatMapPoolEntry, groupId: string): SplatMapPoolEntry {
-  const incomingIsBase = Boolean(entry.qualities) || entry.presetId === groupId || entry.calibrationGroupId === entry.presetId;
+  const incomingIsBase = !isQualityVariantEntry(entry, groupId)
+    && (Boolean(entry.qualities) || entry.presetId === groupId || entry.calibrationGroupId === entry.presetId);
   const base = incomingIsBase
     ? {
         ...entry,
@@ -286,17 +278,8 @@ function mergeSplatMapEntries(current: SplatMapPoolEntry, entry: SplatMapPoolEnt
 
   const qualities = {
     ...(current.qualities ?? {}),
-    ...(entry.qualities ?? {})
+    ...qualityEntriesForGroup(entry, groupId)
   };
-  const quality = entry.quality ?? qualityFromPresetId(entry.presetId);
-  if (quality && !qualities[quality]) {
-    qualities[quality] = {
-      presetId: entry.presetId,
-      presetUrl: entry.presetUrl,
-      splatUrl: entry.splatUrl,
-      splatFileSizeBytes: entry.splatFileSizeBytes
-    };
-  }
 
   return {
     ...base,
@@ -307,6 +290,41 @@ function mergeSplatMapEntries(current: SplatMapPoolEntry, entry: SplatMapPoolEnt
     defaultQuality: base.defaultQuality ?? current.defaultQuality ?? entry.defaultQuality,
     qualities
   };
+}
+
+function isQualityVariantEntry(entry: SplatMapPoolEntry, groupId: string): boolean {
+  const quality = entry.quality ?? qualityFromPresetId(entry.presetId);
+  return Boolean(quality)
+    && entry.presetId !== groupId
+    && entry.calibrationGroupId !== entry.presetId;
+}
+
+function qualityEntriesForGroup(
+  entry: SplatMapPoolEntry,
+  groupId: string
+): Partial<Record<SplatQuality, SplatMapQualityEntry>> {
+  const quality = entry.quality ?? qualityFromPresetId(entry.presetId);
+  if (quality && isQualityVariantEntry(entry, groupId)) {
+    return {
+      [quality]: {
+        presetId: entry.presetId,
+        presetUrl: entry.presetUrl,
+        splatUrl: entry.splatUrl,
+        splatFileSizeBytes: entry.splatFileSizeBytes
+      }
+    };
+  }
+
+  const qualities = { ...(entry.qualities ?? {}) };
+  if (quality && !qualities[quality]) {
+    qualities[quality] = {
+      presetId: entry.presetId,
+      presetUrl: entry.presetUrl,
+      splatUrl: entry.splatUrl,
+      splatFileSizeBytes: entry.splatFileSizeBytes
+    };
+  }
+  return qualities;
 }
 
 function qualityFromPresetId(presetId: string): SplatQuality | null {

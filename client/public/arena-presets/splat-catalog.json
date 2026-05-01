@@ -158,6 +158,39 @@
       }
     },
     {
+      "presetId": "ruined-palace-of-purple-crystals-high",
+      "displayName": "Ruined Palace of Purple Crystals (HIGH)",
+      "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-high.json",
+      "splatUrl": "/splats/ruined-palace-of-purple-crystals-high.sog",
+      "splatFileSizeBytes": 24261514,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "ruined-palace-of-purple-crystals-low",
+      "displayName": "Ruined Palace of Purple Crystals (LOW)",
+      "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-low.json",
+      "splatUrl": "/splats/ruined-palace-of-purple-crystals-low.sog",
+      "splatFileSizeBytes": 6647102,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "ruined-palace-of-purple-crystals-mid",
+      "displayName": "Ruined Palace of Purple Crystals (MID)",
+      "presetUrl": "/arena-presets/ruined-palace-of-purple-crystals-mid.json",
+      "splatUrl": "/splats/ruined-palace-of-purple-crystals-mid.sog",
+      "splatFileSizeBytes": 13231700,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
       "presetId": "the-arcane-ritual-library",
       "calibrationGroupId": "the-arcane-ritual-library",
       "displayName": "The Arcane Ritual Library",
@@ -219,36 +252,6 @@
         "1v1",
         "2v2"
       ]
-    },
-    {
-      "presetId": "the-dark-gothic-citadel-bridge",
-      "calibrationGroupId": "the-dark-gothic-citadel-bridge",
-      "displayName": "The Dark Gothic Citadel Bridge",
-      "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-high.json",
-      "splatUrl": "/splats/the-dark-gothic-citadel-bridge-high.sog",
-      "splatFileSizeBytes": 23989949,
-      "enabledModes": [],
-      "defaultQuality": "high",
-      "qualities": {
-        "low": {
-          "presetId": "the-dark-gothic-citadel-bridge-low",
-          "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-low.json",
-          "splatUrl": "/splats/the-dark-gothic-citadel-bridge-low.sog",
-          "splatFileSizeBytes": 6600897
-        },
-        "mid": {
-          "presetId": "the-dark-gothic-citadel-bridge-mid",
-          "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-mid.json",
-          "splatUrl": "/splats/the-dark-gothic-citadel-bridge-mid.sog",
-          "splatFileSizeBytes": 13174849
-        },
-        "high": {
-          "presetId": "the-dark-gothic-citadel-bridge-high",
-          "presetUrl": "/arena-presets/the-dark-gothic-citadel-bridge-high.json",
-          "splatUrl": "/splats/the-dark-gothic-citadel-bridge-high.sog",
-          "splatFileSizeBytes": 23989949
-        }
-      }
     },
     {
       "presetId": "lobby-high",

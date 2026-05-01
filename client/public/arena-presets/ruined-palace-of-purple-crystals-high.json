@@ -7,7 +7,10 @@
   "type": "splat",
   "splatUrl": "/splats/ruined-palace-of-purple-crystals-high.sog",
   "splatFileSizeBytes": 24261514,
-  "enabledModes": [],
+  "enabledModes": [
+    "1v1",
+    "2v2"
+  ],
   "collisionMeshUrl": null,
   "voxelCollisionUrl": null,
   "spawnPoints": [

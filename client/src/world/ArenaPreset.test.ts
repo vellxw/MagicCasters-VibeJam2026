@@ -63,6 +63,60 @@ describe('ArenaPreset quality resolution', () => {
               splatFileSizeBytes: 18
             }
           }
+        },
+        {
+          presetId: 'the-dragon-gate-bridge',
+          calibrationGroupId: 'the-dragon-gate-bridge',
+          displayName: 'The Dragon Gate Bridge',
+          presetUrl: '/arena-presets/the-dragon-gate-bridge-high.json',
+          splatUrl: '/splats/the-dragon-gate-bridge-high.sog',
+          splatFileSizeBytes: 24,
+          enabledModes: [],
+          defaultQuality: 'high',
+          qualities: {
+            low: {
+              presetId: 'the-dragon-gate-bridge-low',
+              presetUrl: '/arena-presets/the-dragon-gate-bridge-low.json',
+              splatUrl: '/splats/the-dragon-gate-bridge-low.sog',
+              splatFileSizeBytes: 6
+            },
+            mid: {
+              presetId: 'the-dragon-gate-bridge-mid',
+              presetUrl: '/arena-presets/the-dragon-gate-bridge-mid.json',
+              splatUrl: '/splats/the-dragon-gate-bridge-mid.sog',
+              splatFileSizeBytes: 12
+            },
+            high: {
+              presetId: 'the-dragon-gate-bridge-high',
+              presetUrl: '/arena-presets/the-dragon-gate-bridge-high.json',
+              splatUrl: '/splats/the-dragon-gate-bridge-high.sog',
+              splatFileSizeBytes: 24
+            }
+          }
+        },
+        {
+          presetId: 'the-dragon-gate-bridge-high',
+          displayName: 'The Dragon Gate Bridge (HIGH)',
+          presetUrl: '/arena-presets/the-dragon-gate-bridge-high.json',
+          splatUrl: '/splats/the-dragon-gate-bridge-high.sog',
+          splatFileSizeBytes: 24,
+          enabledModes: ['1v1']
+        },
+        {
+          presetId: 'the-dragon-gate-bridge-low',
+          displayName: 'The Dragon Gate Bridge (LOW)',
+          presetUrl: '/arena-presets/the-dragon-gate-bridge-low.json',
+          splatUrl: '/splats/the-dragon-gate-bridge-low.sog',
+          splatFileSizeBytes: 6,
+          enabledModes: ['1v1']
+        },
+        {
+          presetId: 'the-dragon-gate-bridge-mid',
+          displayName: 'The Dragon Gate Bridge (MID)',
+          presetUrl: '/arena-presets/the-dragon-gate-bridge-mid.json',
+          splatUrl: '/splats/the-dragon-gate-bridge-mid.sog',
+          splatFileSizeBytes: 12,
+          enabledModes: ['1v1']
         }
       ]
     };
@@ -111,6 +165,30 @@ describe('ArenaPreset quality resolution', () => {
         'arcane-library',
         'Arcane Library',
         ['1v1']
+      ),
+      '/arena-presets/the-dragon-gate-bridge-low.json': preset(
+        'the-dragon-gate-bridge-low',
+        'low',
+        '/splats/the-dragon-gate-bridge-low.sog',
+        'the-dragon-gate-bridge',
+        'The Dragon Gate Bridge (LOW)',
+        ['1v1']
+      ),
+      '/arena-presets/the-dragon-gate-bridge-mid.json': preset(
+        'the-dragon-gate-bridge-mid',
+        'mid',
+        '/splats/the-dragon-gate-bridge-mid.sog',
+        'the-dragon-gate-bridge',
+        'The Dragon Gate Bridge (MID)',
+        ['1v1']
+      ),
+      '/arena-presets/the-dragon-gate-bridge-high.json': preset(
+        'the-dragon-gate-bridge-high',
+        'high',
+        '/splats/the-dragon-gate-bridge-high.sog',
+        'the-dragon-gate-bridge',
+        'The Dragon Gate Bridge (HIGH)',
+        ['1v1']
       )
     };
 
@@ -145,6 +223,15 @@ describe('ArenaPreset quality resolution', () => {
     expect(loaded.quality).toBe('high');
     expect(loaded.preset.presetId).toBe('lobby-high');
     expect(loaded.preset.splatUrl).toBe('/splats/lobby-high.sog');
+  });
+
+  it('keeps the high quality variant when the catalog also includes direct variant entries', async () => {
+    const loaded = await loadConfiguredSplatArenaPreset('the-dragon-gate-bridge', 'high');
+
+    expect(loaded.entry.presetId).toBe('the-dragon-gate-bridge');
+    expect(loaded.quality).toBe('high');
+    expect(loaded.basePreset.presetId).toBe('the-dragon-gate-bridge-high');
+    expect(loaded.preset.splatUrl).toBe('/splats/the-dragon-gate-bridge-high.sog');
   });
 
   it('does not resolve missing playable match presets to the lobby default', async () => {

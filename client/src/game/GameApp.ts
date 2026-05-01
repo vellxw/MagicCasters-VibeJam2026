@@ -20,7 +20,10 @@ import {
   type MatchMode,
   type MoveInput
 } from '../../../shared/types';
-import type { SplatQuality } from '../../../shared/splatMapPool';
+import {
+  compactSplatMapCatalog,
+  type SplatQuality
+} from '../../../shared/splatMapPool';
 import { FirstPersonCamera, clampPitch } from '../camera/FirstPersonCamera';
 import { AudioManager } from '../audio/AudioManager';
 import {
@@ -65,6 +68,7 @@ import {
   setStoredSplatQuality,
   splatPresetIsCompatibleWithBase,
   type SplatMapCatalog,
+  type SplatMapEntry,
   type SplatArenaPreset,
   type SplatPresetHistoryEntry,
   type SplatCalibrationSettings
@@ -1365,7 +1369,7 @@ export class GameApp {
       onStatus: (message) => this.ui.showToast(message)
     });
     this.arenaRuntime.applyCalibration?.(settings);
-    this.calibrationUi.setMaps(this.splatCatalog.maps, selectedMapId || getSplatCalibrationStorageKey(preset), this.selectedSplatQuality);
+    this.calibrationUi.setMaps(compactCalibrationMaps(this.splatCatalog), selectedMapId || getSplatCalibrationStorageKey(preset), this.selectedSplatQuality);
     this.calibrationUi.show(preset, settings, this.calibrationBasePreset ?? preset);
     this.calibrationUi.setSaveInfo(loadLatestCompatibleHistoryEntry(preset));
     this.ui.showToast('Splat calibration mode');
@@ -2161,7 +2165,7 @@ export class GameApp {
       setStoredSplatPresetId(loaded.entry.presetId);
       setStoredSplatQuality(loaded.quality);
       this.applyCalibrationPreset(loaded.preset);
-      this.calibrationUi.setMaps(loaded.catalog.maps, loaded.entry.presetId, loaded.quality);
+      this.calibrationUi.setMaps(compactCalibrationMaps(loaded.catalog), loaded.entry.presetId, loaded.quality);
       this.calibrationUi.show(loaded.preset, calibrationSettingsFromPreset(loaded.preset), loaded.basePreset);
       this.calibrationUi.setSaveInfo(loadLatestCompatibleHistoryEntry(loaded.preset));
       this.ui.showToast(`Map selected: ${loaded.preset.displayName}`);
@@ -2690,6 +2694,21 @@ function compatibleHistoryEntry(
 
 function normalizeSplatQualityParam(value: string | null): SplatQuality | undefined {
   return value === 'low' || value === 'mid' || value === 'high' ? value : undefined;
+}
+
+function compactCalibrationMaps(catalog: SplatMapCatalog): SplatMapEntry[] {
+  return compactSplatMapCatalog(catalog, { includeUnassigned: true }).map((entry) => ({
+    presetId: entry.presetId,
+    displayName: entry.displayName,
+    presetUrl: entry.presetUrl,
+    splatUrl: entry.splatUrl,
+    splatFileSizeBytes: entry.splatFileSizeBytes,
+    enabledModes: entry.enabledModes ?? [],
+    calibrationGroupId: entry.calibrationGroupId,
+    quality: entry.quality,
+    defaultQuality: entry.defaultQuality ?? entry.quality ?? 'high',
+    qualities: entry.qualities ?? {}
+  }));
 }
 
 async function detectGeneratedCollisionUrls(preset: SplatArenaPreset): Promise<{ collisionMeshUrl: string | null; voxelCollisionUrl: string | null }> {

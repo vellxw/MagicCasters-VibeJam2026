@@ -31,10 +31,6 @@ const PREVIEW_BY_GROUP: Record<string, { title: string; url: string }> = {
     title: 'The Arcane Ritual Library',
     url: '/map-previews/the-arcane-ritual-library.png'
   },
-  'the-dark-gothic-citadel-bridge': {
-    title: 'The Dark Gothic Citadel Bridge',
-    url: '/map-previews/the-dark-gothic-citadel-bridge.png'
-  },
   'the-dragon-gate-bridge': {
     title: 'The Dragon Gate Bridge',
     url: '/map-previews/the-dragon-gate-bridge.png'

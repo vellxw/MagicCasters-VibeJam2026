@@ -298,7 +298,9 @@ function normalizeSplatMapCatalog(value: unknown): SplatMapCatalog {
 function normalizeSplatMapEntry(value: unknown): SplatMapEntry {
   const data = asRecord(value);
   const presetId = requiredString(data.presetId, 'presetId');
-  const defaultQuality = normalizeSplatQuality(data.defaultQuality ?? data.quality, 'high');
+  const explicitQuality = asOptionalSplatQuality(data.quality);
+  const inferredQuality = explicitQuality ?? qualityFromPresetId(presetId);
+  const defaultQuality = normalizeSplatQuality(data.defaultQuality ?? inferredQuality, 'high');
   const qualities = asSplatQualities(data.qualities);
   if (Object.keys(qualities).length === 0) {
     qualities[defaultQuality] = {
@@ -316,7 +318,7 @@ function normalizeSplatMapEntry(value: unknown): SplatMapEntry {
     splatFileSizeBytes: asOptionalNumber(data.splatFileSizeBytes),
     enabledModes: resolveEnabledModes(data),
     calibrationGroupId: asOptionalString(data.calibrationGroupId),
-    quality: asOptionalSplatQuality(data.quality),
+    quality: inferredQuality ?? undefined,
     defaultQuality,
     qualities
   };
@@ -528,6 +530,11 @@ function asSplatQualities(value: unknown): Partial<Record<SplatQuality, SplatMap
     };
   }
   return qualities;
+}
+
+function qualityFromPresetId(presetId: string): SplatQuality | undefined {
+  const match = presetId.match(/-(low|mid|high)$/i);
+  return match ? match[1].toLowerCase() as SplatQuality : undefined;
 }
 
 function asVoxelCollisionUrl(value: unknown): string | null {

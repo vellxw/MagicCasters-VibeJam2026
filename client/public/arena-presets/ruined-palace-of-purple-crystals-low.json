@@ -7,7 +7,10 @@
   "type": "splat",
   "splatUrl": "/splats/ruined-palace-of-purple-crystals-low.sog",
   "splatFileSizeBytes": 6647102,
-  "enabledModes": [],
+  "enabledModes": [
+    "1v1",
+    "2v2"
+  ],
   "collisionMeshUrl": null,
   "voxelCollisionUrl": null,
   "spawnPoints": [
@@ -70,7 +73,7 @@
     "minX": -8,
     "maxX": 8,
     "minZ": -6,
-    "maxZ": 6
+    "maxZ": 6.8
   },
   "scale": 1,
   "rotation": {
@@ -83,7 +86,118 @@
     "y": 0,
     "z": 0
   },
-  "floorY": 0,
+  "floorY": -2,
   "collisionErasers": [],
-  "collisionWalls": []
+  "collisionWalls": [
+    {
+      "id": "wall-momrzf8z",
+      "x": -4.7,
+      "z": 6.5,
+      "width": 0.6,
+      "depth": 1.2,
+      "height": 1.1,
+      "rotY": -9.3302963267949,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms0m02",
+      "x": 5.409108471713909,
+      "z": 6.9,
+      "width": 2,
+      "depth": 0.4,
+      "height": 1,
+      "rotY": -8.322296326794905,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms39zp",
+      "x": -0.0584592898368974,
+      "z": -6,
+      "width": 30,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": -6.2677963267949055,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms3tha",
+      "x": -8,
+      "z": 1.035905262461266,
+      "width": 30,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": -4.7137963267949035,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms45qk",
+      "x": -6.665554912671854,
+      "z": -4.465407507148401,
+      "width": 5,
+      "depth": 0.35,
+      "height": 5,
+      "rotY": -5.592296326794902,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms4oi4",
+      "x": -4.329217620167059,
+      "z": -5.309198181398824,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -6.033296326794904,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms5rtm",
+      "x": 7.343312677849084,
+      "z": -4.313097694883057,
+      "width": 3.4,
+      "depth": 0.8,
+      "height": 2,
+      "rotY": -0.0692963267948996,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms6ew9",
+      "x": 6.1545784973598305,
+      "z": -5.402372855654474,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -1.5707963267948994,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms6pm9",
+      "x": 8,
+      "z": -0.710396897664884,
+      "width": 30,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": -1.5882963267949044,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moms6zc0",
+      "x": -1.9016267814334014,
+      "z": 6.8,
+      "width": 30,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": -3.1247963267949066,
+      "climbable": false,
+      "ramp": false
+    }
+  ]
 }

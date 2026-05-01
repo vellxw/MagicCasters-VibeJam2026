@@ -17,9 +17,16 @@ if (maps.length === 0) {
 }
 
 let missing = 0;
+let checkedGroups = 0;
+let skippedVariants = 0;
 for (const map of maps) {
   const label = stringField(map.displayName, map.presetId ?? 'unknown map');
   const qualities = map.qualities && typeof map.qualities === 'object' ? map.qualities : {};
+  if (Object.keys(qualities).length === 0 && qualityFromPresetId(map.presetId)) {
+    skippedVariants++;
+    continue;
+  }
+  checkedGroups++;
   for (const quality of ['low', 'mid', 'high']) {
     const entry = qualities[quality];
     if (!entry) {
@@ -37,7 +44,7 @@ if (missing > 0) {
   fail(`Catalog is missing ${missing} quality entries.`);
 }
 
-console.log(`Splat quality catalog OK: ${maps.length} map groups.`);
+console.log(`Splat quality catalog OK: ${checkedGroups} map groups, ${skippedVariants} direct variants skipped.`);
 
 function checkAsset(label, quality, url, publicRoot) {
   const pathname = assetPathname(url);
@@ -76,6 +83,12 @@ function assetPathname(url) {
 
 function stringField(value, fallback) {
   return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function qualityFromPresetId(presetId) {
+  if (typeof presetId !== 'string') return null;
+  const match = presetId.match(/-(low|mid|high)$/i);
+  return match ? match[1].toLowerCase() : null;
 }
 
 function relative(filePath) {
