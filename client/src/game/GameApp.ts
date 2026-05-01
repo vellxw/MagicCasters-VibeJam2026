@@ -18,7 +18,8 @@ import {
   SPLAT_TEST_ARENA_ID,
   type ArenaId,
   type MatchMode,
-  type MoveInput
+  type MoveInput,
+  type PublicPotionState
 } from '../../../shared/types';
 import {
   compactSplatMapCatalog,
@@ -45,6 +46,7 @@ import { GlobalChatClient } from '../network/GlobalChatClient';
 import { NetworkClient } from '../network/NetworkClient';
 import { applyPredictedHorizontalMovement, needsReconciliation } from '../network/PredictedMovement';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
+import { PotionRenderer } from '../potions/PotionRenderer';
 import { RemotePlayerController } from '../player/RemotePlayerController';
 import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } from '../player/AnimatedPlayerController';
 import { resolveCombatRelation } from '../player/CombatIdentity';
@@ -140,6 +142,10 @@ export function normalizeDamageAmount(payload: { amount?: unknown; damage?: unkn
   return amount;
 }
 
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 export function clampMediaVolume(value: number): number {
   return Math.min(Math.max(value, 0), 1);
 }
@@ -216,6 +222,7 @@ export class GameApp {
   private clock = new THREE.Clock();
   private cameraRig = new FirstPersonCamera();
   private vfx = new SpellVfxManager(this.scene);
+  private potionRenderer = new PotionRenderer(this.scene);
   private audio = new AudioManager();
   private touchControls: TouchControls;
   private ui: DebugOverlay;
@@ -358,6 +365,7 @@ export class GameApp {
     this.setupScene();
     this.bindEvents();
     this.audio.preload();
+    void this.potionRenderer.preload();
     void this.preloadCharacterModels();
     void this.connectGlobalChat();
     if (new URLSearchParams(window.location.search).get('calibrateSplat') === '1') {
@@ -763,6 +771,11 @@ export class GameApp {
 
     this.projectileSnapshots = Array.from(state.projectiles?.values?.() ?? []) as ProjectileSnapshot[];
     this.vfx.syncProjectiles(this.projectileSnapshots);
+    this.potionRenderer.sync(
+      this.sceneMode === 'MATCH'
+        ? Array.from(state.potions?.values?.() ?? []) as PublicPotionState[]
+        : []
+    );
     this.vfx.syncPlayerStatusVfx(Array.from(this.playerSnapshots.values()));
     this.applyPendingSpawnAimReset();
     this.syncControlState();
@@ -816,6 +829,16 @@ export class GameApp {
     }
     if (type === 'projectile_impact') {
       this.vfx.playImpact(payload.spellId, new THREE.Vector3(payload.x, payload.y, payload.z));
+    }
+    if (type === 'potion_collected') {
+      const potionType = payload.type === 'mana' ? 'mana' : 'health';
+      this.potionRenderer.playCollected({
+        type: potionType,
+        x: finiteNumber(payload.x, 0),
+        y: finiteNumber(payload.y, 0),
+        z: finiteNumber(payload.z, 0)
+      });
+      this.ui.showToast(potionType === 'mana' ? '+mana' : '+vida');
     }
     if (type === 'trap_placed') {
       this.vfx.playTrapPlaced(payload.x, payload.z, payload.radius);
@@ -871,6 +894,7 @@ export class GameApp {
       this.updateMovementAudio();
       this.sendMoveIfNeeded();
       this.vfx.update(dt);
+      this.potionRenderer.update(dt);
       const local = this.sceneMode === 'CALIBRATION' ? this.calibrationSnapshot ?? undefined : this.getLocalSnapshot();
       const portal = this.lobby?.nearestPortal() ?? null;
       this.ui.update({
@@ -2624,6 +2648,7 @@ export class GameApp {
     this.localControllerId = null;
     this.playerSnapshots.clear();
     this.projectileSnapshots = [];
+    this.potionRenderer.sync([]);
     this.calibrationController?.dispose(this.scene);
     this.calibrationController = null;
     this.referenceCharacter?.dispose(this.scene);
