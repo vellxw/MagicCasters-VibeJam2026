@@ -5,7 +5,7 @@ import { AUDIO_SETTINGS_STORAGE_KEY, DEFAULT_AUDIO_SETTINGS, type AudioSettingsS
 class FakeHowl {
   static instances: FakeHowl[] = [];
 
-  readonly options: { src: string[]; loop?: boolean; volume?: number };
+  readonly options: { src: string[]; loop?: boolean; volume?: number; html5?: boolean };
   play = vi.fn(() => 1);
   stop = vi.fn();
   fade = vi.fn();
@@ -13,7 +13,7 @@ class FakeHowl {
   mute = vi.fn();
   unload = vi.fn();
 
-  constructor(options: { src: string[]; loop?: boolean; volume?: number }) {
+  constructor(options: { src: string[]; loop?: boolean; volume?: number; html5?: boolean }) {
     this.options = options;
     FakeHowl.instances.push(this);
   }
@@ -109,5 +109,18 @@ describe('AudioManager', () => {
     expect(FakeHowl.instances).toHaveLength(2);
     expect(FakeHowl.instances[0].fade).toHaveBeenCalled();
     expect(FakeHowl.instances[1].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not force music through the HTML5 audio pool', () => {
+    FakeHowl.instances = [];
+    const manager = new AudioManager({
+      HowlCtor: FakeHowl,
+      storage: storage(),
+      now: () => 1000
+    });
+
+    manager.playMusic('music.lobby');
+
+    expect(FakeHowl.instances[0].options.html5).not.toBe(true);
   });
 });

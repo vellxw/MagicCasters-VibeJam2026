@@ -207,7 +207,7 @@ export class AudioManager {
       loop: asset.loop,
       volume: this.effectiveVolume(asset),
       preload: asset.preload,
-      html5: asset.channel === 'music',
+      html5: false,
       onloaderror: () => this.speakFallback(asset),
       onplayerror: () => this.speakFallback(asset)
     });
