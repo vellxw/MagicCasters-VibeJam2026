@@ -32,12 +32,21 @@ describe('ramp collision walls', () => {
     expect(findStandingSurfaceY(0, 3, 1.5, 0, [ramp], 0.05, 0.1)).toBeCloseTo(1.5, 5);
   });
 
-  it('does not block horizontal movement like a vertical wall', () => {
-    const moved = moveWithArenaCollision(0, -3.4, 0, 3.4, bounds, [ramp], {
+  it('blocks movement through the solid volume below the ramp surface', () => {
+    const moved = moveWithArenaCollision(0, -3.4, 0, 0.25, bounds, [ramp], {
       playerY: 0,
       floorY: 0
     });
 
-    expect(moved.z).toBeCloseTo(3.4, 5);
+    expect(moved.z).toBeLessThan(0);
+  });
+
+  it('allows movement along the ramp surface', () => {
+    const moved = moveWithArenaCollision(0, -3.4, 0, 0.25, bounds, [ramp], {
+      playerY: 0.82,
+      floorY: 0
+    });
+
+    expect(moved.z).toBeCloseTo(0.25, 5);
   });
 });

@@ -323,7 +323,7 @@ function moveThroughCollisionWalls(
   walls: ArenaCollisionWall[],
   options: Required<ArenaMovementCollisionOptions>
 ): { x: number; z: number } {
-  const blockingWalls = walls.filter((wall) => !wall.climbable && wallBlocksAtPlayerHeight(wall, options));
+  const blockingWalls = walls.filter((wall) => !wall.climbable && (wall.ramp || wallBlocksAtPlayerHeight(wall, options)));
   if (blockingWalls.length === 0) return { x: targetX, z: targetZ };
 
   const dx = targetX - startX;
@@ -340,6 +340,7 @@ function moveThroughCollisionWalls(
     const requestedZ = stepZ;
 
     for (const wall of blockingWalls) {
+      if (!wallBlocksAtPosition(stepX, stepZ, wall, options)) continue;
       const resolved = resolveCircleFromWall(stepX, stepZ, options.radius, wall);
       stepX = resolved.x;
       stepZ = resolved.z;
@@ -387,6 +388,24 @@ function wallBlocksAtPlayerHeight(wall: ArenaCollisionWall, options: Required<Ar
     return true;
   }
   return options.playerY < wallTopY(wall, options.floorY) - options.obstacleClearance;
+}
+
+function wallBlocksAtPosition(
+  x: number,
+  z: number,
+  wall: ArenaCollisionWall,
+  options: Required<ArenaMovementCollisionOptions>
+): boolean {
+  if (!wall.ramp) {
+    return wallBlocksAtPlayerHeight(wall, options);
+  }
+  if (!Number.isFinite(options.playerY) || !Number.isFinite(options.floorY)) {
+    return false;
+  }
+  const surfaceY = rampSurfaceYAt(x, z, wall, options.floorY);
+  if (surfaceY === null) return false;
+  const walkableTolerance = Math.max(options.obstacleClearance, PLAYER_SURFACE_SNAP_TOLERANCE);
+  return options.playerY < surfaceY - walkableTolerance;
 }
 
 function wallTopY(wall: ArenaCollisionWall, floorY: number): number {

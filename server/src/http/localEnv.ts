@@ -1,16 +1,26 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 type Env = NodeJS.ProcessEnv | Record<string, string | undefined>;
 
 export function loadLocalEnv(root = process.cwd(), env: Env = process.env): void {
-  const path = join(root, '.env');
-  if (!existsSync(path)) return;
+  for (const path of resolveLocalEnvPaths(root)) {
+    if (!existsSync(path)) continue;
 
-  const parsed = parseLocalEnv(readFileSync(path, 'utf8'), env);
-  for (const [key, value] of Object.entries(parsed)) {
-    env[key] = value;
+    const parsed = parseLocalEnv(readFileSync(path, 'utf8'), env);
+    for (const [key, value] of Object.entries(parsed)) {
+      env[key] = value;
+    }
   }
+}
+
+export function resolveLocalEnvPaths(root = process.cwd()): string[] {
+  const paths = [join(root, '.env')];
+  const parent = dirname(root);
+  if (parent !== root && ['client', 'server'].includes(basename(root))) {
+    paths.push(join(parent, '.env'));
+  }
+  return paths;
 }
 
 export function parseLocalEnv(source: string, existingEnv: Env): Record<string, string> {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isPlayableSplatArenaPreset, loadConfiguredSplatArenaPreset } from './ArenaPreset';
+import { isPlayableSplatArenaPreset, loadConfiguredSplatArenaPreset, normalizeSplatArenaPreset } from './ArenaPreset';
 
 describe('ArenaPreset quality resolution', () => {
   const originalFetch = globalThis.fetch;
@@ -258,5 +258,62 @@ describe('ArenaPreset quality resolution', () => {
       presetId: 'arcane-library-high',
       calibrationGroupId: 'arcane-library'
     })).toBe(true);
+  });
+
+  it('supports Celestial Marble presets that rely only on manual collision walls', () => {
+    const preset = normalizeSplatArenaPreset({
+      presetId: 'celestial-marble-crystal-palace-high',
+      calibrationGroupId: 'celestial-marble-crystal-palace',
+      quality: 'high',
+      arenaId: 'splat-test',
+      displayName: 'Celestial Marble Crystal Palace (HIGH)',
+      type: 'splat',
+      splatUrl: '/splats/celestial-marble-crystal-palace-high.sog',
+      splatFileSizeBytes: 24817657,
+      enabledModes: ['1v1', '2v2'],
+      collisionMeshUrl: null,
+      voxelCollisionUrl: null,
+      spawnPoints: [
+        { x: -5.5, y: 0, z: 0, rotY: -Math.PI / 2 },
+        { x: 5.5, y: 0, z: 0, rotY: Math.PI / 2 }
+      ],
+      spawnPointsByMode: {
+        '1v1': [
+          { x: -5.5, y: 0, z: 0, rotY: -Math.PI / 2 },
+          { x: 5.5, y: 0, z: 0, rotY: Math.PI / 2 }
+        ],
+        '2v2': [
+          { x: -5.5, y: 0, z: -1.25, rotY: -Math.PI / 2 },
+          { x: 5.5, y: 0, z: 1.25, rotY: Math.PI / 2 },
+          { x: -5.5, y: 0, z: 1.25, rotY: -Math.PI / 2 },
+          { x: 5.5, y: 0, z: -1.25, rotY: Math.PI / 2 }
+        ]
+      },
+      bounds: { minX: -8, maxX: 8, minZ: -7.4, maxZ: 7.2 },
+      scale: 1,
+      rotation: { x: 180, y: 180, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: -2.2,
+      collisionErasers: [],
+      collisionWalls: [
+        {
+          id: 'ramp-mon5ftww',
+          x: 6.5,
+          z: -0.1,
+          width: 8.6,
+          depth: 4,
+          height: 2.7,
+          rotY: 1.5687,
+          climbable: false,
+          ramp: true
+        }
+      ]
+    });
+
+    expect(preset.collisionMeshUrl).toBeNull();
+    expect(preset.voxelCollisionUrl).toBeNull();
+    expect(preset.enabledModes).toEqual(['1v1', '2v2']);
+    expect(preset.spawnPointsByMode['2v2']).toHaveLength(4);
+    expect(preset.collisionWalls.some((wall) => wall.ramp)).toBe(true);
   });
 });
