@@ -26,6 +26,7 @@ interface SplatCollisionDevStatus {
   ok?: boolean;
   enabled?: boolean;
   production?: boolean;
+  message?: string;
 }
 
 interface AutoCollisionCell {
@@ -57,7 +58,7 @@ export async function requestDevSplatMapPublish(preset: SplatArenaPreset): Promi
       continue;
     }
     if (!status.enabled) {
-      errors.push(`${baseUrl}: map publish disabled${status.production ? ' in production' : ''}`);
+      errors.push(`${baseUrl}: map publish disabled${status.message ? ` (${status.message})` : status.production ? ' in production' : ''}`);
       continue;
     }
 
@@ -212,7 +213,7 @@ async function postDevCollisionApi(action: 'generate' | 'delete', preset: SplatA
       continue;
     }
     if (!status.enabled) {
-      errors.push(`${baseUrl}: generator disabled${status.production ? ' in production' : ''}`);
+      errors.push(`${baseUrl}: generator disabled${status.message ? ` (${status.message})` : status.production ? ' in production' : ''}`);
       continue;
     }
 
@@ -296,7 +297,7 @@ async function postDevCollisionApiToBaseUrl(
 async function fetchDevApiStatus(
   baseUrl: string,
   path: '/api/dev/splat-collision/status' | '/api/dev/splat-map/status'
-): Promise<{ available: boolean; enabled: boolean; production: boolean; error?: string }> {
+): Promise<{ available: boolean; enabled: boolean; production: boolean; message?: string; error?: string }> {
   try {
     const response = await fetch(`${baseUrl}${path}`, {
       method: 'GET',
@@ -313,7 +314,8 @@ async function fetchDevApiStatus(
     return {
       available: true,
       enabled: status.enabled === true,
-      production: status.production === true
+      production: status.production === true,
+      message: status.message
     };
   } catch (error) {
     return {

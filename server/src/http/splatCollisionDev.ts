@@ -8,7 +8,7 @@ import {
   resolveSpawnPointsForMode,
   type SplatMapPoolCatalog
 } from '../../../shared/splatMapPool.js';
-import { defaultDevAccessState, requireDevAccessToken, type DevAccessState } from './devAccessAuth.js';
+import { applyDevAccessCorsHeaders, defaultDevAccessState, isDevAccessConfigured, isDevAccessRequestAllowed, isProductionLike, isRemoteDevAccessEnabled, requireDevAccessToken, type DevAccessState } from './devAccessAuth.js';
 import { invalidateServerVoxelCollision } from '../systems/ServerVoxelCollision.js';
 
 const API_PREFIX = '/api/dev/splat-collision/';
@@ -33,11 +33,18 @@ interface CollisionPresetUrls {
   voxelCollisionUrl: string | null;
 }
 
+interface ClientAssetRoot {
+  absolute: string;
+  relative: 'client/public' | 'client/dist';
+}
+
 interface SplatCollisionDevStatus {
   ok: true;
   enabled: boolean;
-  localOnly: true;
+  localOnly: boolean;
+  remoteEnabled: boolean;
   production: boolean;
+  message?: string;
 }
 
 let activeGeneration = false;
@@ -51,7 +58,7 @@ export function handleSplatCollisionDevApi(
   const pathname = safeApiPathname(request.url);
   if (!pathname.startsWith(API_PREFIX) && !pathname.startsWith(MAP_API_PREFIX) && !pathname.startsWith(VFX_MAP_API_PREFIX)) return false;
 
-  applyCorsHeaders(request, response);
+  applyDevAccessCorsHeaders(response, env, request.headers.origin, request.headers.host, request.socket.remoteAddress);
 
   if (request.method === 'OPTIONS') {
     response.writeHead(204);
@@ -72,7 +79,7 @@ export function handleSplatCollisionDevApi(
   if (!isLocalDevSplatCollisionRequestAllowed(env, request.headers.host, request.socket.remoteAddress)) {
     sendJson(response, 403, {
       ok: false,
-      error: 'Splat collision generation is local/dev only.',
+      error: devApiDisabledMessage(env),
       command: 'npm run splat:collision -- --input client/public/splats/<arena>.sog --arena <arena-id>'
     });
     return true;
@@ -111,10 +118,13 @@ export function isLocalDevSplatCollisionRequestAllowed(
   host: string | undefined,
   remoteAddress: string | undefined
 ): boolean {
-  if (env.NODE_ENV === 'production' || env.RENDER === 'true' || env.DISABLE_SPLAT_COLLISION_API === '1') {
+  if (env.DISABLE_SPLAT_COLLISION_API === '1') {
     return false;
   }
-  return isLocalHostname(host) && isLocalRemoteAddress(remoteAddress);
+  if (isProductionLike(env) && isRemoteDevAccessEnabled(env) && !isDevAccessConfigured(env)) {
+    return false;
+  }
+  return isDevAccessRequestAllowed(env, host, remoteAddress);
 }
 
 export function normalizeSplatCollisionDevRequest(body: unknown): SplatCollisionDevRequest {
@@ -165,16 +175,13 @@ async function routeVfxMapRequest(pathname: string, body: unknown, response: Ser
     const repoRoot = findRepoRoot();
     const config = normalizeVfxMapConfig(body);
     const presetId = sanitizeArenaId(config.presetId);
-    const vfxDir = resolve(repoRoot, 'client', 'public', 'vfx', 'maps');
+    const assetRoot = writableClientAssetRoot(repoRoot);
+    const vfxDir = resolve(assetRoot.absolute, 'vfx', 'maps');
     await mkdir(vfxDir, { recursive: true });
-    const configPath = resolve(vfxDir, `${presetId}-vfx.json`);
+    const configPath = resolveUnderBase(vfxDir, `${presetId}-vfx.json`);
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
-    const distVfxDir = resolve(repoRoot, 'client', 'dist', 'vfx', 'maps');
-    if (existsSync(distVfxDir)) {
-      await mkdir(distVfxDir, { recursive: true });
-      await copyFile(configPath, resolve(distVfxDir, `${presetId}-vfx.json`));
-    }
+    await mirrorClientAssetFilesToDist(repoRoot, assetRoot, [`vfx/maps/${presetId}-vfx.json`]);
 
     sendJson(response, 200, { ok: true, presetId, file: `vfx/maps/${presetId}-vfx.json` });
     return;
@@ -213,13 +220,32 @@ export function getSplatCollisionDevStatus(
   host: string | undefined,
   remoteAddress: string | undefined
 ): SplatCollisionDevStatus {
-  const production = env.NODE_ENV === 'production' || env.RENDER === 'true';
+  const production = isProductionLike(env);
+  const enabled = isLocalDevSplatCollisionRequestAllowed(env, host, remoteAddress);
+  const remoteEnabled = production && isRemoteDevAccessEnabled(env) && isDevAccessConfigured(env);
   return {
     ok: true,
-    enabled: isLocalDevSplatCollisionRequestAllowed(env, host, remoteAddress),
-    localOnly: true,
-    production
+    enabled,
+    localOnly: !production,
+    remoteEnabled,
+    production,
+    message: enabled ? undefined : devApiDisabledMessage(env)
   };
+}
+
+function devApiDisabledMessage(env: NodeJS.ProcessEnv | Record<string, string | undefined>): string {
+  if (env.DISABLE_SPLAT_COLLISION_API === '1') {
+    return 'Map editing API is disabled by DISABLE_SPLAT_COLLISION_API.';
+  }
+  if (isProductionLike(env)) {
+    if (!isRemoteDevAccessEnabled(env)) {
+      return 'Remote map editing is not enabled. Set DEV_ACCESS_REMOTE_ENABLED=1.';
+    }
+    if (!isDevAccessConfigured(env)) {
+      return 'Remote map editing password verifier is not configured.';
+    }
+  }
+  return 'Map editing API is only available from local dev or an enabled remote server.';
 }
 
 async function generateSplatCollision(body: unknown, response: ServerResponse): Promise<void> {
@@ -230,26 +256,26 @@ async function generateSplatCollision(body: unknown, response: ServerResponse): 
 
   const request = normalizeSplatCollisionDevRequest(body);
   const repoRoot = findRepoRoot();
-  const splatPath = resolveUnder(repoRoot, join('client', 'public', 'splats'), request.splatFilename);
-  const collisionDir = resolve(repoRoot, 'client', 'public', 'collision');
-  const glbPath = resolveUnder(repoRoot, join('client', 'public', 'collision'), `${request.arenaId}.collision.glb`);
-  const voxelJsonPath = resolveUnder(repoRoot, join('client', 'public', 'collision'), `${request.arenaId}.voxel.json`);
-  const voxelBinPath = resolveUnder(repoRoot, join('client', 'public', 'collision'), `${request.arenaId}.voxel.bin`);
+  const assetRoot = writableClientAssetRoot(repoRoot);
+  const splatPath = resolveUnderBase(resolve(assetRoot.absolute, 'splats'), request.splatFilename);
+  const collisionDir = resolve(assetRoot.absolute, 'collision');
+  const glbPath = resolveUnderBase(collisionDir, `${request.arenaId}.collision.glb`);
+  const voxelJsonPath = resolveUnderBase(collisionDir, `${request.arenaId}.voxel.json`);
+  const voxelBinPath = resolveUnderBase(collisionDir, `${request.arenaId}.voxel.bin`);
 
   if (!existsSync(splatPath)) {
-    sendJson(response, 404, { ok: false, error: `SOG not found: client/public/splats/${request.splatFilename}` });
+    sendJson(response, 404, { ok: false, error: `SOG not found: ${assetRoot.relative}/splats/${request.splatFilename}` });
     return;
   }
 
   mkdirSync(collisionDir, { recursive: true });
   const splatSizeBytes = statSync(splatPath).size;
   const largeMode = splatSizeBytes >= LARGE_SPLAT_THRESHOLD_BYTES;
-  const command = collisionCommandForRequest(request, largeMode);
+  const command = collisionCommandForRequest(request, largeMode, assetRoot);
   if (existsSync(glbPath) && existsSync(voxelJsonPath) && existsSync(voxelBinPath)) {
-    await writeGeneratedCollisionMarker(repoRoot, request);
-    await mirrorGeneratedCollisionToDist(repoRoot, request.arenaId);
+    await writeGeneratedCollisionMarker(repoRoot, assetRoot, request);
+    await mirrorGeneratedCollisionToDist(repoRoot, assetRoot, request.arenaId);
     const updatedPresets = await persistCollisionUrlsToPresetFiles(repoRoot, request);
-    await mirrorPresetFilesToDist(repoRoot, updatedPresets);
     sendJson(response, 200, {
       ok: true,
       collisionMeshUrl: request.collisionMeshUrl,
@@ -264,17 +290,16 @@ async function generateSplatCollision(body: unknown, response: ServerResponse): 
 
   activeGeneration = true;
   try {
-    const result = await runCollisionScript(repoRoot, request.splatFilename, request.arenaId, {
+    const result = await runCollisionScript(repoRoot, assetRoot, request.splatFilename, request.arenaId, {
       largeMode,
       filterBox: request.playableFilterBox
     });
     const generatedOk = result.exitCode === 0 && existsSync(glbPath) && existsSync(voxelJsonPath) && existsSync(voxelBinPath);
     let updatedPresets: string[] = [];
     if (generatedOk) {
-      await writeGeneratedCollisionMarker(repoRoot, request);
-      await mirrorGeneratedCollisionToDist(repoRoot, request.arenaId);
+      await writeGeneratedCollisionMarker(repoRoot, assetRoot, request);
+      await mirrorGeneratedCollisionToDist(repoRoot, assetRoot, request.arenaId);
       updatedPresets = await persistCollisionUrlsToPresetFiles(repoRoot, request);
-      await mirrorPresetFilesToDist(repoRoot, updatedPresets);
     }
     sendJson(response, generatedOk ? 200 : 500, {
       ok: generatedOk,
@@ -298,8 +323,9 @@ async function generateSplatCollision(body: unknown, response: ServerResponse): 
 async function deleteSplatCollision(body: unknown, response: ServerResponse): Promise<void> {
   const request = normalizeSplatCollisionDevRequest(body);
   const repoRoot = findRepoRoot();
-  const collisionDir = resolve(repoRoot, 'client', 'public', 'collision');
-  const markerPath = resolveUnder(repoRoot, join('client', 'public', 'collision'), `${request.arenaId}.generated.json`);
+  const assetRoot = writableClientAssetRoot(repoRoot);
+  const collisionDir = resolve(assetRoot.absolute, 'collision');
+  const markerPath = resolveUnderBase(collisionDir, `${request.arenaId}.generated.json`);
   const candidates = existsSync(markerPath) ? [
     `${request.arenaId}.collision.glb`,
     `${request.arenaId}.voxel.json`,
@@ -309,22 +335,23 @@ async function deleteSplatCollision(body: unknown, response: ServerResponse): Pr
   const deleted: string[] = [];
 
   for (const filename of candidates) {
-    const path = resolveUnder(repoRoot, join('client', 'public', 'collision'), filename);
+    const path = resolveUnderBase(collisionDir, filename);
     if (!existsSync(path)) continue;
     await unlink(path);
     deleted.push(path.slice(collisionDir.length + 1).replaceAll('\\', '/'));
   }
-  for (const filename of candidates) {
-    const path = resolveUnder(repoRoot, join('client', 'dist', 'collision'), filename);
-    if (!existsSync(path)) continue;
-    await unlink(path);
-    deleted.push(`dist/${filename}`);
+  if (assetRoot.relative !== 'client/dist') {
+    for (const filename of candidates) {
+      const path = resolveUnder(repoRoot, join('client', 'dist', 'collision'), filename);
+      if (!existsSync(path)) continue;
+      await unlink(path);
+      deleted.push(`dist/${filename}`);
+    }
   }
   const updatedPresets = await persistCollisionUrlsToPresetFiles(repoRoot, request, {
     collisionMeshUrl: null,
     voxelCollisionUrl: null
   });
-  await mirrorPresetFilesToDist(repoRoot, updatedPresets);
 
   sendJson(response, 200, {
     ok: true,
@@ -344,7 +371,8 @@ export async function persistCollisionUrlsToPresetFiles(
     voxelCollisionUrl: request.voxelCollisionUrl
   }
 ): Promise<string[]> {
-  const presetDir = resolve(repoRoot, 'client', 'public', 'arena-presets');
+  const assetRoot = writableClientAssetRoot(repoRoot);
+  const presetDir = resolve(assetRoot.absolute, 'arena-presets');
   if (!existsSync(presetDir)) return [];
 
   const splatUrl = `/splats/${request.splatFilename}`;
@@ -354,7 +382,7 @@ export async function persistCollisionUrlsToPresetFiles(
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name === 'splat-catalog.json') continue;
 
-    const presetPath = resolveUnder(repoRoot, join('client', 'public', 'arena-presets'), entry.name);
+    const presetPath = resolveUnderBase(presetDir, entry.name);
     let preset: unknown;
     try {
       preset = JSON.parse(await readFile(presetPath, 'utf8')) as unknown;
@@ -373,22 +401,24 @@ export async function persistCollisionUrlsToPresetFiles(
     updated.push(`arena-presets/${entry.name}`);
   }
 
+  await mirrorClientAssetFilesToDist(repoRoot, assetRoot, updated);
   return updated.sort();
 }
 
 export async function persistArenaPresetToProject(repoRoot: string, value: unknown): Promise<string[]> {
   const preset = normalizePublishableArenaPreset(value);
-  const presetDir = resolve(repoRoot, 'client', 'public', 'arena-presets');
+  const assetRoot = writableClientAssetRoot(repoRoot);
+  const presetDir = resolve(assetRoot.absolute, 'arena-presets');
   await mkdir(presetDir, { recursive: true });
 
   const presetFilename = `${preset.presetId}.json`;
-  const presetPath = resolveUnder(repoRoot, join('client', 'public', 'arena-presets'), presetFilename);
+  const presetPath = resolveUnderBase(presetDir, presetFilename);
   const existingPreset = await readJsonRecordIfExists(presetPath);
   const mergedPreset = mergePublishedPreset(existingPreset, preset);
   await writeFile(presetPath, `${JSON.stringify(mergedPreset, null, 2)}\n`);
   invalidateServerVoxelCollision(asNullableString(mergedPreset.voxelCollisionUrl));
 
-  const catalogPath = resolveUnder(repoRoot, join('client', 'public', 'arena-presets'), 'splat-catalog.json');
+  const catalogPath = resolveUnderBase(presetDir, 'splat-catalog.json');
   const catalog = await readSplatCatalog(catalogPath, preset.presetId);
   const entry = {
     presetId: mergedPreset.presetId,
@@ -409,7 +439,7 @@ export async function persistArenaPresetToProject(repoRoot: string, value: unkno
   await writeFile(catalogPath, `${JSON.stringify(nextCatalog, null, 2)}\n`);
 
   const updated = [`arena-presets/${presetFilename}`, 'arena-presets/splat-catalog.json'];
-  await mirrorPresetFilesToDist(repoRoot, updated);
+  await mirrorClientAssetFilesToDist(repoRoot, assetRoot, updated);
   return updated.sort();
 }
 
@@ -521,36 +551,35 @@ function asFilterBox(value: unknown): string | null {
   return parts.map((part) => String(Math.round(part * 1000) / 1000)).join(',');
 }
 
-async function mirrorGeneratedCollisionToDist(repoRoot: string, arenaId: string): Promise<void> {
-  const distDir = resolve(repoRoot, 'client', 'dist');
-  if (!existsSync(distDir)) return;
+async function mirrorGeneratedCollisionToDist(repoRoot: string, assetRoot: ClientAssetRoot, arenaId: string): Promise<void> {
+  if (assetRoot.relative === 'client/dist') return;
 
-  const distCollisionDir = resolve(distDir, 'collision');
+  const distCollisionDir = resolve(repoRoot, 'client', 'dist', 'collision');
   await mkdir(distCollisionDir, { recursive: true });
   for (const filename of [`${arenaId}.collision.glb`, `${arenaId}.voxel.json`, `${arenaId}.voxel.bin`, `${arenaId}.generated.json`]) {
-    const source = resolveUnder(repoRoot, join('client', 'public', 'collision'), filename);
+    const source = resolveUnderBase(resolve(assetRoot.absolute, 'collision'), filename);
     if (!existsSync(source)) continue;
     const target = resolveUnder(repoRoot, join('client', 'dist', 'collision'), filename);
     await copyFile(source, target);
   }
 }
 
-async function mirrorPresetFilesToDist(repoRoot: string, relativePublicPaths: string[]): Promise<void> {
-  if (relativePublicPaths.length === 0) return;
+async function mirrorClientAssetFilesToDist(repoRoot: string, assetRoot: ClientAssetRoot, relativeAssetPaths: string[]): Promise<void> {
+  if (relativeAssetPaths.length === 0 || assetRoot.relative === 'client/dist') return;
 
   const distDir = resolve(repoRoot, 'client', 'dist');
   if (!existsSync(distDir)) return;
 
-  for (const relativePublicPath of relativePublicPaths) {
-    const source = resolveUnder(repoRoot, join('client', 'public'), relativePublicPath);
-    const target = resolveUnder(repoRoot, join('client', 'dist'), relativePublicPath);
+  for (const relativeAssetPath of relativeAssetPaths) {
+    const source = resolveUnderBase(assetRoot.absolute, relativeAssetPath);
+    const target = resolveUnder(repoRoot, join('client', 'dist'), relativeAssetPath);
     await mkdir(resolve(target, '..'), { recursive: true });
     await copyFile(source, target);
   }
 }
 
-async function writeGeneratedCollisionMarker(repoRoot: string, request: SplatCollisionDevRequest): Promise<void> {
-  const markerPath = resolveUnder(repoRoot, join('client', 'public', 'collision'), `${request.arenaId}.generated.json`);
+async function writeGeneratedCollisionMarker(repoRoot: string, assetRoot: ClientAssetRoot, request: SplatCollisionDevRequest): Promise<void> {
+  const markerPath = resolveUnderBase(resolve(assetRoot.absolute, 'collision'), `${request.arenaId}.generated.json`);
   await writeFile(markerPath, `${JSON.stringify({
     generatedBy: 'magic-casters-dev-api',
     arenaId: request.arenaId,
@@ -563,6 +592,7 @@ async function writeGeneratedCollisionMarker(repoRoot: string, request: SplatCol
 
 function runCollisionScript(
   repoRoot: string,
+  assetRoot: ClientAssetRoot,
   splatFilename: string,
   arenaId: string,
   options: { largeMode: boolean; filterBox: string | null }
@@ -571,9 +601,11 @@ function runCollisionScript(
     const args = [
       'tools/generate-splat-collision.mjs',
       '--input',
-      `client/public/splats/${splatFilename}`,
+      `${assetRoot.relative}/splats/${splatFilename}`,
       '--arena',
-      arenaId
+      arenaId,
+      '--outputDir',
+      `${assetRoot.relative}/collision`
     ];
     if (options.largeMode) {
       args.push('--large');
@@ -617,8 +649,8 @@ function runCollisionScript(
   });
 }
 
-function collisionCommandForRequest(request: SplatCollisionDevRequest, largeMode: boolean): string {
-  return `npm run splat:collision -- --input "client/public/splats/${request.splatFilename}" --arena ${request.arenaId}${largeMode ? ' --large' : ''}${request.playableFilterBox ? ` --filter-box "${request.playableFilterBox}"` : ''}`;
+function collisionCommandForRequest(request: SplatCollisionDevRequest, largeMode: boolean, assetRoot: ClientAssetRoot = { absolute: '', relative: 'client/public' }): string {
+  return `npm run splat:collision -- --input "${assetRoot.relative}/splats/${request.splatFilename}" --arena ${request.arenaId} --outputDir "${assetRoot.relative}/collision"${largeMode ? ' --large' : ''}${request.playableFilterBox ? ` --filter-box "${request.playableFilterBox}"` : ''}`;
 }
 
 function formatCollisionScriptError(
@@ -649,8 +681,20 @@ function findRepoRoot(start = process.cwd()): string {
   }
 }
 
+function writableClientAssetRoot(repoRoot: string): ClientAssetRoot {
+  const publicRoot = resolve(repoRoot, 'client', 'public');
+  if (existsSync(publicRoot)) {
+    return { absolute: publicRoot, relative: 'client/public' };
+  }
+  return { absolute: resolve(repoRoot, 'client', 'dist'), relative: 'client/dist' };
+}
+
 function resolveUnder(root: string, relativeBase: string, filename: string): string {
   const base = resolve(root, relativeBase);
+  return resolveUnderBase(base, filename);
+}
+
+function resolveUnderBase(base: string, filename: string): string {
   const candidate = resolve(base, filename);
   const normalizedBase = normalize(base + sep);
   if (!candidate.startsWith(normalizedBase)) {
@@ -681,16 +725,6 @@ function readJsonBody(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-function applyCorsHeaders(request: IncomingMessage, response: ServerResponse): void {
-  const origin = request.headers.origin;
-  if (typeof origin === 'string' && isLocalOrigin(origin)) {
-    response.setHeader('access-control-allow-origin', origin);
-    response.setHeader('vary', 'origin');
-  }
-  response.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
-  response.setHeader('access-control-allow-headers', 'content-type, authorization');
-}
-
 function sendJson(response: ServerResponse, status: number, payload: object): void {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(payload));
@@ -714,27 +748,6 @@ function safeDecodedPathname(url: string): string {
 
 function sanitizeArenaId(value: string): string {
   return value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^[._-]+|[._-]+$/g, '') || 'splat-arena';
-}
-
-function isLocalHostname(host: string | undefined): boolean {
-  const hostname = (host ?? '').split(':')[0].replace(/^\[|\]$/g, '').toLowerCase();
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '';
-}
-
-function isLocalRemoteAddress(address: string | undefined): boolean {
-  return !address
-    || address === '::1'
-    || address === '127.0.0.1'
-    || address === '::ffff:127.0.0.1'
-    || address === '::ffff:7f00:1';
-}
-
-function isLocalOrigin(origin: string): boolean {
-  try {
-    return isLocalHostname(new URL(origin).host);
-  } catch {
-    return false;
-  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

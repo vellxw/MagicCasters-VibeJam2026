@@ -1,9 +1,7 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { defaultDevAccessState, requireDevAccessToken, type DevAccessState } from './devAccessAuth.js';
-
-const VFX_DIR = resolve(process.cwd(), 'client', 'public', 'vfx');
+import { applyDevAccessCorsHeaders, defaultDevAccessState, requireDevAccessToken, type DevAccessState } from './devAccessAuth.js';
 
 function getBody(request: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -16,10 +14,7 @@ function getBody(request: IncomingMessage): Promise<string> {
 
 function sendJson(response: ServerResponse, status: number, data: unknown): void {
   response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type, authorization'
+    'content-type': 'application/json; charset=utf-8'
   });
   response.end(JSON.stringify(data));
 }
@@ -34,12 +29,10 @@ export async function handleVfxDevApi(
     return false;
   }
 
+  applyDevAccessCorsHeaders(response, env, request.headers.origin, request.headers.host, request.socket.remoteAddress);
+
   if (request.method === 'OPTIONS') {
-    response.writeHead(204, {
-      'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': 'content-type, authorization'
-    });
+    response.writeHead(204);
     response.end();
     return true;
   }
@@ -69,9 +62,9 @@ export async function handleVfxDevApi(
       return true;
     }
 
-    // Ensure directory exists
-    if (!existsSync(VFX_DIR)) {
-      mkdirSync(VFX_DIR, { recursive: true });
+    const vfxDir = resolveWritableVfxDir();
+    if (!existsSync(vfxDir)) {
+      mkdirSync(vfxDir, { recursive: true });
     }
 
     // Sanitize id to prevent path traversal
@@ -81,11 +74,11 @@ export async function handleVfxDevApi(
       return true;
     }
 
-    const filePath = join(VFX_DIR, `${id}.json`);
+    const filePath = join(vfxDir, `${id}.json`);
     writeFileSync(filePath, JSON.stringify(data, null, 2));
 
     // Update index.json
-    const indexPath = join(VFX_DIR, 'index.json');
+    const indexPath = join(vfxDir, 'index.json');
     let index: string[] = [];
     if (existsSync(indexPath)) {
       try {
@@ -105,6 +98,11 @@ export async function handleVfxDevApi(
   }
 
   return true;
+}
+
+export function resolveWritableVfxDir(root = process.cwd()): string {
+  const publicDir = resolve(root, 'client', 'public');
+  return resolve(existsSync(publicDir) ? publicDir : resolve(root, 'client', 'dist'), 'vfx');
 }
 
 export function isVfxDevPostAuthorized(

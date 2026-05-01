@@ -16,6 +16,12 @@ describe('splat collision dev api helpers', () => {
     expect(isLocalDevSplatCollisionRequestAllowed({ NODE_ENV: 'development' }, '127.0.0.1:3001', '::1')).toBe(true);
     expect(isLocalDevSplatCollisionRequestAllowed({ NODE_ENV: 'production' }, '127.0.0.1:3001', '::1')).toBe(false);
     expect(isLocalDevSplatCollisionRequestAllowed({ NODE_ENV: 'development' }, 'game.example.com', '203.0.113.1')).toBe(false);
+    expect(isLocalDevSplatCollisionRequestAllowed({
+      NODE_ENV: 'production',
+      DEV_ACCESS_REMOTE_ENABLED: '1',
+      DEV_ACCESS_PASSWORD_SALT: '00112233445566778899aabbccddeeff',
+      DEV_ACCESS_PASSWORD_KEY: '00'.repeat(32)
+    }, 'gamejam-proyect.fly.dev', '203.0.113.1')).toBe(true);
   });
 
   it('normalizes splat collision requests to safe local filenames', () => {
@@ -55,13 +61,28 @@ describe('splat collision dev api helpers', () => {
       ok: true,
       enabled: true,
       localOnly: true,
+      remoteEnabled: false,
       production: false
     });
 
     expect(getSplatCollisionDevStatus({ NODE_ENV: 'production' }, '127.0.0.1:3001', '::1')).toMatchObject({
       ok: true,
       enabled: false,
-      localOnly: true,
+      localOnly: false,
+      remoteEnabled: false,
+      production: true
+    });
+
+    expect(getSplatCollisionDevStatus({
+      NODE_ENV: 'production',
+      DEV_ACCESS_REMOTE_ENABLED: '1',
+      DEV_ACCESS_PASSWORD_SALT: '00112233445566778899aabbccddeeff',
+      DEV_ACCESS_PASSWORD_KEY: '00'.repeat(32)
+    }, 'gamejam-proyect.fly.dev', '203.0.113.1')).toMatchObject({
+      ok: true,
+      enabled: true,
+      localOnly: false,
+      remoteEnabled: true,
       production: true
     });
   });
@@ -167,6 +188,42 @@ describe('splat collision dev api helpers', () => {
     });
     const preset = JSON.parse(await readFile(join(presetDir, 'businesspark-belp-1og-ost.json'), 'utf8'));
     expect(preset.spawnPointsByMode['2v2']).toHaveLength(4);
+  });
+
+  it('publishes a calibrated map into runtime dist when public assets are absent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-runtime-publish-'));
+    const presetDir = join(root, 'client', 'dist', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'businesspark-belp-1og-ost',
+      maps: []
+    }, null, 2));
+
+    const updated = await persistArenaPresetToProject(root, {
+      presetId: 'businesspark-belp-1og-ost',
+      displayName: 'Businesspark Runtime',
+      splatUrl: '/splats/businesspark-belp-1og-ost.sog',
+      enabledModes: ['1v1'],
+      spawnPoints: [
+        { x: -1, y: 0, z: 0, rotY: -1 },
+        { x: 1, y: 0, z: 0, rotY: 1 }
+      ],
+      bounds: { minX: -8, maxX: 8, minZ: -6, maxZ: 6 },
+      scale: 1,
+      rotation: { x: 180, y: 180, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: 0
+    });
+
+    expect(updated).toEqual([
+      'arena-presets/businesspark-belp-1og-ost.json',
+      'arena-presets/splat-catalog.json'
+    ]);
+    await expect(readFile(join(root, 'client', 'public', 'arena-presets', 'businesspark-belp-1og-ost.json'), 'utf8')).rejects.toThrow();
+    const preset = JSON.parse(await readFile(join(presetDir, 'businesspark-belp-1og-ost.json'), 'utf8'));
+    expect(preset.displayName).toBe('Businesspark Runtime');
+    const catalog = JSON.parse(await readFile(join(presetDir, 'splat-catalog.json'), 'utf8'));
+    expect(catalog.maps[0]).toMatchObject({ presetId: 'businesspark-belp-1og-ost' });
   });
 
   it('keeps published collision assets when a later publish omits them', async () => {

@@ -47,6 +47,25 @@ describe('dev access auth', () => {
     });
   });
 
+  it('allows configured remote production requests only when the remote flag is enabled', () => {
+    const state = createDevAccessState();
+    const productionEnv = { ...configuredEnv, NODE_ENV: 'production' };
+    const remoteEnabledEnv = { ...productionEnv, DEV_ACCESS_REMOTE_ENABLED: '1' };
+
+    expect(createDevAccessChallenge(productionEnv, state, 'gamejam-proyect.fly.dev', '203.0.113.10')).toMatchObject({
+      ok: false,
+      error: 'Dev access remote editing is not enabled.'
+    });
+
+    const challenge = createDevAccessChallenge(remoteEnabledEnv, state, 'gamejam-proyect.fly.dev', '203.0.113.10');
+    expect(challenge.ok).toBe(true);
+    expect(challenge.salt).toBe(saltHex);
+
+    const unlocked = unlockDevAccess(remoteEnabledEnv, state, { challenge: challenge.challenge, proof: proofFor(challenge.challenge) }, 'gamejam-proyect.fly.dev', '203.0.113.10');
+    expect(unlocked.ok).toBe(true);
+    expect(requireDevAccessToken(remoteEnabledEnv, state, `Bearer ${unlocked.token}`, 'gamejam-proyect.fly.dev', '203.0.113.10')).toEqual({ ok: true });
+  });
+
   it('unlocks a temporary bearer token with a one-use proof', () => {
     const state = createDevAccessState();
     const challenge = createDevAccessChallenge(configuredEnv, state, '127.0.0.1:3001', '::1');

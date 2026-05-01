@@ -57,7 +57,7 @@ export function handleDevAccessAuthApi(
   const pathname = safePathname(request.url);
   if (!pathname.startsWith('/api/dev/access/')) return false;
 
-  applyCorsHeaders(response);
+  applyDevAccessCorsHeaders(response, env, request.headers.origin, request.headers.host, request.socket.remoteAddress);
 
   if (request.method === 'OPTIONS') {
     response.writeHead(204);
@@ -175,13 +175,46 @@ export function requireDevAccessToken(
   return { ok: true };
 }
 
+export function isDevAccessRequestAllowed(
+  env: Env,
+  host: string | undefined,
+  remoteAddress: string | undefined
+): boolean {
+  return resolveDevAccessMode(env, host, remoteAddress).ok;
+}
+
+export function isRemoteDevAccessEnabled(env: Env): boolean {
+  return env.DEV_ACCESS_REMOTE_ENABLED === '1';
+}
+
+export function isProductionLike(env: Env): boolean {
+  return env.NODE_ENV === 'production' || env.RENDER === 'true';
+}
+
+export function applyDevAccessCorsHeaders(
+  response: ServerResponse,
+  env: Env,
+  origin: string | undefined,
+  host: string | undefined,
+  remoteAddress: string | undefined
+): void {
+  const allowedOrigin = resolveAllowedDevAccessOrigin(env, origin, host, remoteAddress);
+  if (allowedOrigin) {
+    response.setHeader('access-control-allow-origin', allowedOrigin);
+    response.setHeader('vary', 'origin');
+  }
+  response.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+  response.setHeader('access-control-allow-headers', 'content-type, authorization');
+}
+
 function validateBaseAccess(
   env: Env,
   host: string | undefined,
   remoteAddress: string | undefined
 ): AuthFailure | { ok: true; salt: Buffer; key: Buffer } {
-  if (!isLocalDevAccessRequestAllowed(env, host, remoteAddress)) {
-    return failure(403, 'Dev access is local/development only.');
+  const access = resolveDevAccessMode(env, host, remoteAddress);
+  if (!access.ok) {
+    return failure(403, access.error);
   }
 
   const salt = readSalt(env);
@@ -198,10 +231,54 @@ export function isLocalDevAccessRequestAllowed(
   host: string | undefined,
   remoteAddress: string | undefined
 ): boolean {
-  if (env.NODE_ENV === 'production' || env.RENDER === 'true') {
-    return false;
+  return !isProductionLike(env) && isLocalHostname(host) && isLocalRemoteAddress(remoteAddress);
+}
+
+function resolveDevAccessMode(
+  env: Env,
+  host: string | undefined,
+  remoteAddress: string | undefined
+): { ok: true; mode: 'local' | 'remote' } | { ok: false; error: string } {
+  if (isLocalDevAccessRequestAllowed(env, host, remoteAddress)) {
+    return { ok: true, mode: 'local' };
   }
-  return isLocalHostname(host) && isLocalRemoteAddress(remoteAddress);
+
+  if (isRemoteDevAccessEnabled(env)) {
+    return { ok: true, mode: 'remote' };
+  }
+
+  if (isProductionLike(env) && isLocalHostname(host) && isLocalRemoteAddress(remoteAddress)) {
+    return { ok: false, error: 'Dev access is local/development only.' };
+  }
+
+  return { ok: false, error: 'Dev access remote editing is not enabled.' };
+}
+
+function resolveAllowedDevAccessOrigin(
+  env: Env,
+  origin: string | undefined,
+  host: string | undefined,
+  remoteAddress: string | undefined
+): string | null {
+  if (!origin) return null;
+
+  const originUrl = safeUrl(origin);
+  if (!originUrl) return null;
+
+  if (isLocalDevAccessRequestAllowed(env, host, remoteAddress) && isLocalHostname(originUrl.host)) {
+    return origin;
+  }
+
+  if (!isRemoteDevAccessEnabled(env)) return null;
+
+  const requestHost = (host ?? '').toLowerCase();
+  if (originUrl.host.toLowerCase() === requestHost) return origin;
+
+  const allowed = (env.DEV_ACCESS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return allowed.includes(origin) ? origin : null;
 }
 
 function readSalt(env: Env): Buffer | null {
@@ -240,8 +317,12 @@ function cleanupExpired(state: DevAccessState): void {
 }
 
 function isLocalHostname(host: string | undefined): boolean {
-  const hostname = (host ?? '').split(':')[0]?.toLowerCase();
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+  const raw = host ?? '';
+  const hostname = raw.startsWith('[')
+    ? raw.slice(1, raw.indexOf(']'))
+    : raw.split(':')[0];
+  const normalized = hostname.toLowerCase();
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
 }
 
 function isLocalRemoteAddress(remoteAddress: string | undefined): boolean {
@@ -286,18 +367,9 @@ function readJsonBody(request: IncomingMessage): Promise<unknown> {
 
 function sendJson(response: ServerResponse, status: number, data: unknown): void {
   response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type, authorization'
+    'content-type': 'application/json; charset=utf-8'
   });
   response.end(JSON.stringify(data));
-}
-
-function applyCorsHeaders(response: ServerResponse): void {
-  response.setHeader('access-control-allow-origin', '*');
-  response.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
-  response.setHeader('access-control-allow-headers', 'content-type, authorization');
 }
 
 function failure(status: number, error: string): AuthFailure {
@@ -306,4 +378,12 @@ function failure(status: number, error: string): AuthFailure {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function safeUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
 }
