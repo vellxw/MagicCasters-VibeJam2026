@@ -15,65 +15,65 @@
   "voxelCollisionUrl": null,
   "spawnPoints": [
     {
-      "x": 0,
+      "x": -5.5,
       "y": 0,
-      "z": 11,
-      "rotY": 0
+      "z": 0,
+      "rotY": -1.5707963267948966
     },
     {
-      "x": 0,
+      "x": 5.5,
       "y": 0,
-      "z": -4,
-      "rotY": 3.129
+      "z": 0,
+      "rotY": 1.5707963267948966
     }
   ],
   "spawnPointsByMode": {
     "1v1": [
       {
-        "x": 0,
+        "x": -5.5,
         "y": 0,
-        "z": 11,
-        "rotY": 0
+        "z": 0,
+        "rotY": -1.5707963267948966
       },
       {
-        "x": 0,
+        "x": 5.5,
         "y": 0,
-        "z": -4,
-        "rotY": 3.129
+        "z": 0,
+        "rotY": 1.5707963267948966
       }
     ],
     "2v2": [
       {
         "x": -5.5,
         "y": 0,
-        "z": 4,
+        "z": -1.25,
         "rotY": -1.5707963267948966
       },
       {
         "x": 5.5,
         "y": 0,
-        "z": 6,
+        "z": 1.25,
         "rotY": 1.5707963267948966
       },
       {
         "x": -5.5,
         "y": 0,
-        "z": 6,
+        "z": 1.25,
         "rotY": -1.5707963267948966
       },
       {
         "x": 5.5,
         "y": 0,
-        "z": 4,
+        "z": -1.25,
         "rotY": 1.5707963267948966
       }
     ]
   },
   "bounds": {
-    "minX": -6.8,
-    "maxX": 6.7,
-    "minZ": -4.7,
-    "maxZ": 12.2
+    "minX": -8,
+    "maxX": 8,
+    "minZ": -6,
+    "maxZ": 12.9
   },
   "scale": 1,
   "rotation": {
@@ -86,7 +86,48 @@
     "y": 0,
     "z": 0
   },
-  "floorY": -1.28,
+  "floorY": -2,
   "collisionErasers": [],
-  "collisionWalls": []
+  "collisionWalls": [
+    {
+      "id": "wall-momgl4ix",
+      "x": 8,
+      "z": 0.17293522178142948,
+      "width": 30,
+      "depth": 0.35,
+      "height": 5,
+      "rotY": -1.5917963267948987,
+      "climbable": false
+    },
+    {
+      "id": "wall-momglwgo",
+      "x": -0.42721393662097984,
+      "z": -6,
+      "width": 20,
+      "depth": 0.35,
+      "height": 7,
+      "rotY": -0.006296326794898071,
+      "climbable": false
+    },
+    {
+      "id": "wall-momgmyq6",
+      "x": 0.08427287218792381,
+      "z": 12.9,
+      "width": 20,
+      "depth": 0.35,
+      "height": 7,
+      "rotY": 3.1472036732050945,
+      "climbable": false
+    },
+    {
+      "id": "wall-momgoqmt",
+      "x": -8,
+      "z": 2.96281182489882,
+      "width": 30,
+      "depth": 0.35,
+      "height": 7,
+      "rotY": 1.6072036732050945,
+      "climbable": false
+    }
+  ]
 }

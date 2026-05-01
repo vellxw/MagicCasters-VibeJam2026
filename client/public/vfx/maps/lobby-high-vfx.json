@@ -6,11 +6,11 @@
       "vfxId": "portal_electric_orange",
       "position": {
         "x": -4.6,
-        "y": 1.05,
+        "y": 1.55,
         "z": -9.81
       },
       "rotation": {
-        "x": -18.403,
+        "x": 0,
         "y": 0,
         "z": 0
       },
@@ -21,11 +21,11 @@
       "vfxId": "portal_electric_blue",
       "position": {
         "x": -0.21,
-        "y": 1.05,
+        "y": 1.55,
         "z": -11.19
       },
       "rotation": {
-        "x": -18.595,
+        "x": 0,
         "y": 0,
         "z": 0
       },
@@ -36,11 +36,11 @@
       "vfxId": "portal_electric",
       "position": {
         "x": 4.25,
-        "y": 1.05,
+        "y": 1.55,
         "z": -9.95
       },
       "rotation": {
-        "x": -18.802,
+        "x": 0,
         "y": 0,
         "z": 0
       },

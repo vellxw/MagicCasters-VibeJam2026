@@ -20,6 +20,8 @@ export interface LobbyPortal {
   label: string;
   position: THREE.Vector3;
   mesh: THREE.Mesh | null;
+  visual: THREE.Object3D | null;
+  currentScale: number;
 }
 
 export class LobbyScene {
@@ -30,6 +32,7 @@ export class LobbyScene {
   private splatLayer: PlayCanvasSplatLayer | null = null;
   private vfxRuntime: VfxRuntime | null = null;
   private vfxInstanceIds: string[] = [];
+  private portalUiObjects: THREE.Object3D[] = [];
   private bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   private floorY: number;
 
@@ -83,12 +86,16 @@ export class LobbyScene {
     this.clearPortals();
     const config = await loadMapVfxConfig(presetId);
     const ids: string[] = [];
+    const instanceIdsByEntryId = new Map<string, string>();
     if (!config) return ids;
     for (const entry of config.effects) {
       const id = this.playVfxEntry(entry);
-      if (id) ids.push(id);
+      if (id) {
+        ids.push(id);
+        instanceIdsByEntryId.set(entry.id, id);
+      }
     }
-    this.buildPortalsFromVfx(config);
+    this.buildPortalsFromVfx(config, instanceIdsByEntryId);
     return ids;
   }
 
@@ -144,13 +151,11 @@ export class LobbyScene {
       ? 'jump'
       : length > 0 ? 'run' : 'idle';
     this.player.update(this.snapshot, dt, true);
+    this.vfxRuntime?.update(dt);
 
+    const nearest = this.nearestPortal();
     for (const portal of this.portals) {
-      if (portal.mesh) {
-        const nearest = this.nearestPortal();
-        const near = nearest === portal;
-        portal.mesh.scale.setScalar(near ? 1.12 : 1);
-      }
+      this.updatePortalVisual(portal, nearest === portal, dt);
     }
 
     if (camera && this.splatLayer) {
@@ -218,91 +223,121 @@ export class LobbyScene {
   }
 
   clearPortals(): void {
-    for (const portal of this.portals) {
-      if (portal.mesh) {
-        this.group.remove(portal.mesh);
-        portal.mesh.geometry.dispose();
-        const mat = portal.mesh.material as THREE.Material;
-        mat?.dispose?.();
+    if (this.portalUiObjects.length > 0) {
+      for (const object of this.portalUiObjects) {
+        this.group.remove(object);
+        disposeObject(object);
+      }
+      this.portalUiObjects = [];
+    } else {
+      for (const portal of this.portals) {
+        if (portal.mesh) {
+          this.group.remove(portal.mesh);
+          portal.mesh.geometry.dispose();
+          const mat = portal.mesh.material as THREE.Material;
+          mat?.dispose?.();
+        }
       }
     }
     this.portals.length = 0;
   }
 
-  buildPortalsFromVfx(config: MapVfxConfig): void {
+  buildPortalsFromVfx(config: MapVfxConfig, instanceIdsByEntryId = new Map<string, string>()): void {
     this.clearPortals();
     const portalDefs: Array<{ mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string }> = [
-      { mode: '1v1', label: '1v1 Duel', color: 0xff6b35, arenaId: undefined },
+      { mode: '1v1', label: '1v1 Duel', color: 0xff9f43, arenaId: undefined },
       { mode: '2v2', label: '2v2 Team Duel', color: 0x7dd3fc, arenaId: undefined },
       { mode: '1v1', label: 'Realistic Arena Test', color: 0xa78bfa, arenaId: SPLAT_TEST_ARENA_ID, badge: 'EXPERIMENTAL' }
     ];
 
     for (let i = 0; i < config.effects.length && i < portalDefs.length; i++) {
       const entry = config.effects[i];
-      const def = portalDefs[i];
-      const pos = new THREE.Vector3(entry.position.x, entry.position.y, entry.position.z);
-
-      const markerGeo = new THREE.RingGeometry(0.15, 0.22, 16);
-      const markerMat = new THREE.MeshBasicMaterial({
-        color: def.color,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide
-      });
-      const marker = new THREE.Mesh(markerGeo, markerMat);
-      marker.rotation.x = -Math.PI / 2;
-      marker.position.set(entry.position.x, 0.02, entry.position.z);
-      this.group.add(marker);
-
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(def.label, def.badge), transparent: true }));
-      sprite.position.set(entry.position.x, entry.position.y + 1.3, entry.position.z);
-      sprite.scale.set(def.badge ? 3.1 : 2.4, def.badge ? 0.8 : 0.55, 1);
-      this.group.add(sprite);
-
-      this.portals.push({
-        mode: def.mode,
-        arenaId: def.arenaId,
-        label: def.label,
-        position: new THREE.Vector3(entry.position.x, 0, entry.position.z),
-        mesh: marker
-      });
+      const instanceId = instanceIdsByEntryId.get(entry.id);
+      const visual = instanceId ? this.vfxRuntime?.getInstance(instanceId)?.group ?? null : null;
+      this.addPortal(portalDefs[i], {
+        x: entry.position.x,
+        y: entry.position.y,
+        z: entry.position.z
+      }, visual);
     }
 
     for (let i = config.effects.length; i < portalDefs.length; i++) {
-      const def = portalDefs[i];
       const defaultPositions = [
-        { x: -6, z: 15 },
-        { x: 6, z: 15 },
-        { x: 0, z: 18 }
+        { x: -6, y: 1.55, z: 15 },
+        { x: 6, y: 1.55, z: 15 },
+        { x: 0, y: 1.55, z: 18 }
       ];
-      const pos = defaultPositions[i];
-
-      const markerGeo = new THREE.RingGeometry(0.15, 0.22, 16);
-      const markerMat = new THREE.MeshBasicMaterial({
-        color: def.color,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide
-      });
-      const marker = new THREE.Mesh(markerGeo, markerMat);
-      marker.rotation.x = -Math.PI / 2;
-      marker.position.set(pos.x, 0.02, pos.z);
-      this.group.add(marker);
-
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(def.label, def.badge), transparent: true }));
-      sprite.position.set(pos.x, 1.35, pos.z);
-      sprite.scale.set(def.badge ? 3.1 : 2.4, def.badge ? 0.8 : 0.55, 1);
-      this.group.add(sprite);
-
-      this.portals.push({
-        mode: def.mode,
-        arenaId: def.arenaId,
-        label: def.label,
-        position: new THREE.Vector3(pos.x, 0, pos.z),
-        mesh: marker
-      });
+      this.addPortal(portalDefs[i], defaultPositions[i], null);
     }
   }
+
+  private addPortal(
+    def: { mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string },
+    pos: { x: number; y: number; z: number },
+    visual: THREE.Object3D | null
+  ): void {
+    const markerGeo = new THREE.CircleGeometry(0.92, 48);
+    const markerMat = new THREE.MeshBasicMaterial({
+      color: def.color,
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.set(pos.x, 0.035, pos.z);
+    this.group.add(marker);
+    this.portalUiObjects.push(marker);
+
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabelTexture(def.label, def.badge), transparent: true }));
+    sprite.position.set(pos.x, pos.y + 1.75, pos.z);
+    sprite.scale.set(def.badge ? 3.1 : 2.4, def.badge ? 0.8 : 0.55, 1);
+    this.group.add(sprite);
+    this.portalUiObjects.push(sprite);
+
+    this.portals.push({
+      mode: def.mode,
+      arenaId: def.arenaId,
+      label: def.label,
+      position: new THREE.Vector3(pos.x, 0, pos.z),
+      mesh: marker,
+      visual,
+      currentScale: 1
+    });
+  }
+
+  private updatePortalVisual(portal: LobbyPortal, near: boolean, dt: number): void {
+    const t = Math.min(1, dt * 5);
+    portal.currentScale = THREE.MathUtils.lerp(portal.currentScale, near ? 1.12 : 1, t);
+    portal.mesh?.scale.setScalar(portal.currentScale);
+    portal.visual?.scale.setScalar(portal.currentScale);
+
+    if (portal.mesh) {
+      const mat = portal.mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = THREE.MathUtils.lerp(mat.opacity, near ? 0.34 : 0.16, t);
+    }
+  }
+}
+
+function disposeObject(object: THREE.Object3D): void {
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    mesh.geometry?.dispose?.();
+    const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    if (Array.isArray(material)) {
+      material.forEach((entry) => disposeMaterial(entry));
+    } else if (material) {
+      disposeMaterial(material);
+    }
+  });
+}
+
+function disposeMaterial(material: THREE.Material): void {
+  const materialWithMap = material as THREE.Material & { map?: THREE.Texture };
+  materialWithMap.map?.dispose?.();
+  material.dispose();
 }
 
 function makeLabelTexture(label: string, badge?: string): THREE.CanvasTexture {

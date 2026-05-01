@@ -30,7 +30,7 @@ export interface SpellDefinition {
 export const SPELLS: Record<SpellId, SpellDefinition> = {
   shadow_dart: {
     id: 'shadow_dart',
-    label: 'Dardo Sombrio',
+    label: 'Shadow Dart',
     incantation: 'nox',
     key: '1',
     manaCost: 12,
@@ -45,7 +45,7 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   },
   void_trap: {
     id: 'void_trap',
-    label: 'Trampa del Vacio',
+    label: 'Void Trap',
     incantation: 'umbra',
     key: '2',
     manaCost: 16,
@@ -60,7 +60,7 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   },
   abyssal_claw: {
     id: 'abyssal_claw',
-    label: 'Garras Abisales',
+    label: 'Abyssal Claws',
     incantation: 'abyssus',
     key: '3',
     manaCost: 20,
@@ -90,7 +90,7 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   },
   judgment_ray: {
     id: 'judgment_ray',
-    label: 'Rayo del Juicio',
+    label: 'Judgment Ray',
     incantation: 'fulgur',
     key: '1',
     manaCost: 14,
@@ -105,7 +105,7 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   },
   penitent_seal: {
     id: 'penitent_seal',
-    label: 'Sello Penitente',
+    label: 'Penitent Seal',
     incantation: 'judicium',
     key: '2',
     manaCost: 22,
@@ -120,7 +120,7 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   },
   glacial_spikes: {
     id: 'glacial_spikes',
-    label: 'Picos Glaciales',
+    label: 'Glacial Spikes',
     incantation: 'glacius',
     key: '3',
     manaCost: 24,
@@ -135,7 +135,7 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   },
   firmament_shield: {
     id: 'firmament_shield',
-    label: 'Escudo del Firmamento',
+    label: 'Firmament Shield',
     incantation: 'scutum',
     key: '4',
     manaCost: 18,
@@ -167,26 +167,26 @@ export const CLASS_SPELL_VARIANTS: Record<
   arcanist: {
     shadow_dart: {
       id: 'shadow_dart',
-      label: 'Dardo Sombrio',
+      label: 'Shadow Dart',
       incantation: 'nox',
       description:
-        'Proyectil veloz de sombra que marca al enemigo. La Marca Umbría prepara el terreno para combos devastadores.',
+        'A fast shadow projectile that marks the enemy. The Umbral Mark sets up devastating combos.',
       color: 0x8b5cf6
     },
     void_trap: {
       id: 'void_trap',
-      label: 'Trampa del Vacio',
+      label: 'Void Trap',
       incantation: 'umbra',
       description:
-        'Coloca una trampa invisible en el suelo. Al ser pisada, daña y marca al enemigo con la Marca Umbría.',
+        'Places an invisible trap on the ground. When triggered, it damages and marks the enemy with an Umbral Mark.',
       color: 0x4c1d95
     },
     abyssal_claw: {
       id: 'abyssal_claw',
-      label: 'Garras Abisales',
+      label: 'Abyssal Claws',
       incantation: 'abyssus',
       description:
-        'Proyectil oscuro que consume la Marca Umbría para infligir daño extra y silenciar al enemigo.',
+        'A dark projectile that consumes an Umbral Mark to deal bonus damage and silence the enemy.',
       color: 0x7c3aed
     },
     eclipse: {
@@ -194,97 +194,97 @@ export const CLASS_SPELL_VARIANTS: Record<
       label: 'Eclipse',
       incantation: 'exanima',
       description:
-        'Nova de energía oscura. Por cada enemigo marcado en el área, consume la marca para infligir daño masivo y curarte.',
+        'A nova of dark energy. For each marked enemy in the area, consumes the mark to deal massive damage and heal you.',
       color: 0x1e1b4b
     },
     judgment_ray: {
       id: 'judgment_ray',
-      label: 'Rayo del Juicio',
+      label: 'Judgment Ray',
       incantation: 'fulgur',
-      description: 'Rayo sagrado que castiga con más fuerza a los enemigos debilitados.',
+      description: 'A sacred ray that hits weakened enemies harder.',
       color: 0xf59e0b
     },
     penitent_seal: {
       id: 'penitent_seal',
-      label: 'Sello Penitente',
+      label: 'Penitent Seal',
       incantation: 'judicium',
-      description: 'Sello de control que silencia y ralentiza a los enemigos cercanos.',
+      description: 'A control seal that silences and slows nearby enemies.',
       color: 0xfef08a
     },
     glacial_spikes: {
       id: 'glacial_spikes',
-      label: 'Picos Glaciales',
+      label: 'Glacial Spikes',
       incantation: 'glacius',
-      description: 'Picos de hielo que emergen del suelo. Congelan a enemigos ya debilitados.',
+      description: 'Ice spikes erupt from the ground. They freeze enemies that are already weakened.',
       color: 0x7dd3fc
     },
     firmament_shield: {
       id: 'firmament_shield',
-      label: 'Escudo del Firmamento',
+      label: 'Firmament Shield',
       incantation: 'scutum',
-      description: 'Escudo defensivo que puede volverse explosivo cerca de enemigos debilitados.',
+      description: 'A defensive shield that can become explosive near weakened enemies.',
       color: 0x93c5fd
     }
   },
   divine: {
     shadow_dart: {
       id: 'shadow_dart',
-      label: 'Dardo Sombrio',
+      label: 'Shadow Dart',
       incantation: 'nox',
-      description: 'Proyectil veloz de sombra que marca al enemigo.',
+      description: 'A fast shadow projectile that marks the enemy.',
       color: 0x8b5cf6
     },
     void_trap: {
       id: 'void_trap',
-      label: 'Trampa del Vacio',
+      label: 'Void Trap',
       incantation: 'umbra',
-      description: 'Coloca una trampa invisible que daña y marca al enemigo.',
+      description: 'Places an invisible trap that damages and marks the enemy.',
       color: 0x4c1d95
     },
     abyssal_claw: {
       id: 'abyssal_claw',
-      label: 'Garras Abisales',
+      label: 'Abyssal Claws',
       incantation: 'abyssus',
-      description: 'Proyectil oscuro que consume marcas para silenciar.',
+      description: 'A dark projectile that consumes marks to silence enemies.',
       color: 0x7c3aed
     },
     eclipse: {
       id: 'eclipse',
       label: 'Eclipse',
       incantation: 'exanima',
-      description: 'Nova oscura que consume marcas para curar.',
+      description: 'A dark nova that consumes marks to heal.',
       color: 0x1e1b4b
     },
     judgment_ray: {
       id: 'judgment_ray',
-      label: 'Rayo del Juicio',
+      label: 'Judgment Ray',
       incantation: 'fulgur',
       description:
-        'Rayo eléctrico sagrado que viaja veloz. Inflige daño devastador a enemigos silenciados o ralentizados.',
+        'A sacred lightning ray that travels quickly. Deals devastating damage to silenced or slowed enemies.',
       color: 0xf59e0b
     },
     penitent_seal: {
       id: 'penitent_seal',
-      label: 'Sello Penitente',
+      label: 'Penitent Seal',
       incantation: 'judicium',
       description:
-        'Explosión circular de luz divina que silencia y ralentiza a los enemigos cercanos.',
+        'A circular burst of divine light that silences and slows nearby enemies.',
       color: 0xfef08a
     },
     glacial_spikes: {
       id: 'glacial_spikes',
-      label: 'Picos Glaciales',
+      label: 'Glacial Spikes',
       incantation: 'glacius',
       description:
-        'Picos de hielo emergen del suelo en línea recta. Si el enemigo está silenciado o ralentizado, lo congelan en el sitio.',
+        'Ice spikes erupt from the ground in a straight line. If the enemy is silenced or slowed, they freeze in place.',
       color: 0x7dd3fc
     },
     firmament_shield: {
       id: 'firmament_shield',
-      label: 'Escudo del Firmamento',
+      label: 'Firmament Shield',
       incantation: 'scutum',
       description:
-        'Escudo celestial que absorbe el siguiente golpe. Si hay un enemigo debilitado cerca, el escudo explota al romperse empujándolo.',
+        'A celestial shield that absorbs the next hit. If a weakened enemy is nearby, the shield explodes when it breaks and knocks them back.',
       color: 0x93c5fd
     }
   }

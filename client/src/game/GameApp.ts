@@ -63,7 +63,7 @@ import {
   type SplatCalibrationSettings
 } from '../world/ArenaPreset';
 import { LobbyScene } from '../world/LobbyScene';
-import { type CharacterClass, isCharacterClass } from '../../../shared/classes';
+import { CLASSES, type CharacterClass, isCharacterClass } from '../../../shared/classes';
 import {
   requestDevSplatCollisionDeletion,
   requestDevSplatCollisionGeneration,
@@ -289,8 +289,8 @@ export class GameApp {
     overlay.dataset.ready = 'false';
     overlay.innerHTML = `
       <button type="button">
-        <strong>Jugar en pantalla completa</strong>
-        <span>Usa el celular de costado</span>
+        <strong>Play fullscreen</strong>
+        <span>Use your phone sideways</span>
       </button>
     `;
     this.root.appendChild(overlay);
@@ -454,7 +454,7 @@ export class GameApp {
     for (const player of players) {
       activeIds.add(player.id);
 
-      // Reconciliación para jugador local con client-side prediction
+      // Reconcile local player with client-side prediction
       if (player.id === this.network.localSessionId && this.sceneMode === 'MATCH') {
         const existing = this.playerSnapshots.get(player.id);
         if (existing && needsReconciliation(existing, player, 0.8)) {
@@ -662,7 +662,7 @@ export class GameApp {
     const localId = this.network.localSessionId;
     const localSnapshot = localId ? this.playerSnapshots.get(localId) : undefined;
     if (localSnapshot && this.controlsEnabled && this.sceneMode === 'MATCH' && this.phase === 'PLAYING') {
-      // No consumir acciones aquí; eso lo hace sendMoveIfNeeded
+      // Do not consume actions here; sendMoveIfNeeded handles that.
       const input = this.currentInput(false);
       applyPredictedHorizontalMovement(localSnapshot, input, dt);
     }
@@ -1092,6 +1092,10 @@ export class GameApp {
   private async enterCharacterSelect(mode: MatchMode, arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
     const token = ++this.queueToken;
     this.sceneMode = 'CHARACTER_SELECT';
+    this.qualityPicker?.dispose();
+    this.qualityPicker = null;
+    this.qualityModal?.dispose();
+    this.qualityModal = null;
     this.renderer.setClearColor(0x15120f, 1);
     this.selectedMode = mode;
     this.selectedArenaId = arenaId;
@@ -1111,7 +1115,7 @@ export class GameApp {
     this.lobby?.dispose();
     this.lobby = null;
     this.network.leave();
-    this.characterSelectUi.show();
+    this.characterSelectUi.show(makeCharacterSelectContext(mode, arenaId));
     this.ui.showToast('Choose your mage');
     await this.loadPreviewModel(this.selectedCharacterClass);
     if (token !== this.queueToken || this.sceneMode !== 'CHARACTER_SELECT') {
@@ -1300,12 +1304,27 @@ export class GameApp {
     rim.position.set(-2.6, 2.2, -2.2);
     previewGroup.add(rim);
 
+    const classTheme = CLASSES[characterClass].themeColor;
     const pedestal = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.82, 0.96, 0.16, 36),
-      new THREE.MeshStandardMaterial({ color: 0x2a2118, roughness: 0.74, metalness: 0.08 })
+      new THREE.CylinderGeometry(0.92, 1.08, 0.18, 48),
+      new THREE.MeshStandardMaterial({ color: 0x211912, roughness: 0.78, metalness: 0.1 })
     );
     pedestal.position.y = 0.08;
     previewGroup.add(pedestal);
+
+    const pedestalRim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.92, 0.018, 8, 64),
+      new THREE.MeshStandardMaterial({
+        color: classTheme,
+        emissive: classTheme,
+        emissiveIntensity: 0.22,
+        roughness: 0.42,
+        metalness: 0.18
+      })
+    );
+    pedestalRim.rotation.x = Math.PI / 2;
+    pedestalRim.position.y = 0.18;
+    previewGroup.add(pedestalRim);
 
     const gltf = await this.loadCharacterGltfCached(characterClass);
     if (token !== this.previewToken || this.sceneMode !== 'CHARACTER_SELECT' || this.previewGroup !== previewGroup) {
@@ -1331,8 +1350,8 @@ export class GameApp {
       this.playPreviewAnim('reposo');
     }
 
-    this.camera.position.set(0, 1.45, 2.9);
-    this.camera.lookAt(0, 1.05, 0);
+    this.camera.position.set(0, 1.34, 2.68);
+    this.camera.lookAt(0, 1.0, 0);
   }
 
   private addFallbackPreview(previewGroup: THREE.Group, characterClass: CharacterClass): void {
@@ -2147,6 +2166,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function coerceArenaId(value: unknown): ArenaId {
   return value === SPLAT_TEST_ARENA_ID ? SPLAT_TEST_ARENA_ID : DEFAULT_ARENA_ID;
+}
+
+function makeCharacterSelectContext(mode: MatchMode, arenaId: ArenaId): { modeLabel: string; arenaLabel: string } {
+  if (arenaId === SPLAT_TEST_ARENA_ID) {
+    return { modeLabel: 'Realistic Arena', arenaLabel: 'Realistic Arena Test' };
+  }
+  return {
+    modeLabel: mode === '2v2' ? '2v2 Team Duel' : '1v1 Duel',
+    arenaLabel: "Demon Lord's Throne"
+  };
 }
 
 function resolveCharacterClass(value: unknown): CharacterClass {
