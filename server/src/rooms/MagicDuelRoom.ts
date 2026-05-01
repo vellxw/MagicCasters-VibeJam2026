@@ -5,6 +5,8 @@ import { Room } from '@colyseus/core';
 import { SPELLS, isSpellId, type SpellId } from '../../../shared/spells.js';
 import { isCharacterClass, type CharacterClass } from '../../../shared/classes.js';
 import {
+  AUTO_BOT_FILL_MS,
+  DEFAULT_AUTO_BOT_SKILL,
   DEFAULT_ARENA_ID,
   PLAYER_RADIUS,
   SPLAT_TEST_ARENA_ID,
@@ -12,9 +14,11 @@ import {
   TICK_MS,
   type ArenaCollisionConfig,
   type ArenaId,
+  type BotSkill,
   type MatchConfig,
   type MatchMode,
-  type MoveInput
+  type MoveInput,
+  type TeamId
 } from '../../../shared/types.js';
 import { circleIntersectsWall, defaultArenaCollisionConfig, normalizeArenaCollisionConfig } from '../../../shared/arenaCollision.js';
 import type { SparseVoxelCollision } from '../../../shared/voxelCollision.js';
@@ -22,18 +26,31 @@ import { GameState } from '../schema/GameState.js';
 import { PlayerState } from '../schema/PlayerState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { applyMovement, regenerateMana } from '../systems/MovementSystem.js';
-import { selectPublishedSplatArenaForMode } from '../systems/ServerSplatMapPool.js';
+import { selectPublishedSplatArenaByPresetId, selectPublishedSplatArenaForMode } from '../systems/ServerSplatMapPool.js';
 import { loadServerVoxelCollisionSync } from '../systems/ServerVoxelCollision.js';
 import {
   assignTeamId,
+  buildRematchStatus,
+  findWinningTeam,
   getMatchConfig,
   getSpawnForSlot,
+  missingPlayersToStart,
   normalizeMatchMode,
   phaseAfterPlayerLeave,
   shouldDamagePlayer,
   shouldLockRoom,
+  shouldScheduleAutoBotFill,
   shouldStartMatch
 } from '../systems/MatchSystem.js';
+import {
+  chooseBotSpell,
+  chooseBotTarget,
+  createBotController,
+  createBotMoveInput,
+  getBotSkillConfig,
+  normalizeBotSkill,
+  type BotControllerState
+} from '../systems/BotSystem.js';
 import {
   applyDamage,
   applyProjectileHitEffects,
@@ -47,6 +64,10 @@ interface JoinOptions {
   name?: string;
   mode?: MatchMode;
   characterClass?: CharacterClass;
+  partyCode?: string;
+  custom?: boolean;
+  arenaPresetId?: string;
+  botSkill?: BotSkill;
 }
 
 export class MagicDuelRoom extends Room<GameState> {
@@ -58,15 +79,27 @@ export class MagicDuelRoom extends Room<GameState> {
   private arenaPresetId = '';
   private arenaPresetUrl = '';
   private arenaDisplayName = '';
+  private partyCode = '';
   private config: MatchConfig = getMatchConfig('1v1');
   private arenaCollision: ArenaCollisionConfig = defaultArenaCollisionConfig();
   private voxelCollision: SparseVoxelCollision | null = null;
+  private phaseTimers: NodeJS.Timeout[] = [];
+  private autoBotFillTimer: NodeJS.Timeout | null = null;
   private traps = new Map<string, { x: number; z: number; radius: number; ownerId: string; spellId: SpellId; expiresAt: number }>();
   private glacialSpikes = new Map<string, GlacialSpikeHazard>();
+  private rematchVotes = new Set<string>();
+  private botControllers = new Map<string, BotControllerState>();
+  private requestedBotSkill: BotSkill | null = null;
+  private botSerial = 0;
 
   onCreate(options?: JoinOptions): void {
     this.mode = normalizeMatchMode(options?.mode);
-    const selectedArena = selectPublishedSplatArenaForMode(this.mode, resolveProjectRoot());
+    this.partyCode = normalizePartyCode(options?.partyCode);
+    this.requestedBotSkill = this.partyCode ? normalizeBotSkill(options?.botSkill) : null;
+    const projectRoot = resolveProjectRoot();
+    const selectedArena = options?.arenaPresetId
+      ? selectPublishedSplatArenaByPresetId(options.arenaPresetId, this.mode, projectRoot)
+      : selectPublishedSplatArenaForMode(this.mode, projectRoot);
     if (selectedArena) {
       this.arenaId = SPLAT_TEST_ARENA_ID;
       this.arenaPresetId = selectedArena.presetId;
@@ -97,8 +130,16 @@ export class MagicDuelRoom extends Room<GameState> {
     this.state.requiredPlayers = this.config.requiredPlayers;
     this.state.maxPlayers = this.config.maxPlayers;
     this.state.message = this.arenaDisplayName
-      ? `${this.mode} queue: ${this.arenaDisplayName}`
-      : `${this.mode} queue`;
+      ? `${this.partyCode ? 'Custom' : this.mode} queue: ${this.arenaDisplayName}`
+      : `${this.partyCode ? 'Custom' : this.mode} queue`;
+    this.setMetadata({
+      mode: this.mode,
+      partyCode: this.partyCode,
+      custom: Boolean(this.partyCode),
+      arenaPresetId: this.arenaPresetId,
+      arenaDisplayName: this.arenaDisplayName,
+      botSkill: this.requestedBotSkill ?? ''
+    });
     this.setSimulationInterval(() => this.tick(), TICK_MS);
 
     this.onMessage('move', (client, input: MoveInput) => {
@@ -107,6 +148,10 @@ export class MagicDuelRoom extends Room<GameState> {
 
     this.onMessage('cast', (client, message: { spellId?: string }) => {
       this.handleCast(client, message?.spellId ?? '');
+    });
+
+    this.onMessage('rematch_ready', (client) => {
+      this.handleRematchReady(client);
     });
   }
 
@@ -130,31 +175,57 @@ export class MagicDuelRoom extends Room<GameState> {
     }
 
     this.syncLockState();
+    this.applyWaitingBotPolicy();
   }
 
   onLeave(client: Client): void {
     const previousPhase = this.state.phase;
     this.state.players.delete(client.sessionId);
     this.inputs.delete(client.sessionId);
+    this.rematchVotes.delete(client.sessionId);
     this.clearProjectiles();
     this.updatePlayerCount();
+
+    if (this.humanPlayerCount() <= 0) {
+      this.clearAutoBotFillTimer();
+      this.removeAllBots();
+      this.disableRematch();
+      this.updatePlayerCount();
+      this.syncLockState();
+      return;
+    }
 
     const remaining = Array.from(this.state.players.values());
     if (remaining.length > 0) {
       this.state.phase = phaseAfterPlayerLeave(previousPhase, remaining.length);
       this.state.winnerId = '';
+      this.state.winnerTeamId = '';
       this.state.message = this.state.phase === 'ENDED'
         ? 'A mage left the match. Return to lobby.'
         : 'A mage left. Returning to queue.';
+      if (this.state.phase === 'ENDED') {
+        this.clearPhaseTimers();
+        this.disableRematch();
+      }
       if (this.state.phase === 'WAITING') {
         this.reassignWaitingPlayers();
       }
       this.broadcastPhase();
       this.syncLockState();
+      this.applyWaitingBotPolicy();
+    } else {
+      this.clearAutoBotFillTimer();
     }
   }
 
+  onDispose(): void {
+    this.clearPhaseTimers();
+    this.clearAutoBotFillTimer();
+  }
+
   private startDuel(message: string): void {
+    this.clearPhaseTimers();
+    this.clearAutoBotFillTimer();
     let index = 0;
     for (const player of this.state.players.values()) {
       const teamId = assignTeamId(this.mode, index);
@@ -164,21 +235,55 @@ export class MagicDuelRoom extends Room<GameState> {
     this.clearProjectiles();
     this.traps.clear();
     this.glacialSpikes.clear();
+    this.resetRematchState();
     this.updatePlayerCount();
-    this.state.phase = 'PLAYING';
+    this.state.phase = 'SELECTING';
     this.state.winnerId = '';
-    this.state.message = message;
+    this.state.winnerTeamId = '';
+    this.state.message = this.arenaDisplayName
+      ? `Selecting ${this.arenaDisplayName}`
+      : 'Selecting arena';
     this.lock();
+    this.broadcastPhase();
+    this.phaseTimers.push(setTimeout(() => this.startCountdown(), 3200));
+    this.phaseTimers.push(setTimeout(() => this.startPlaying(message), 6400));
+  }
+
+  private startCountdown(): void {
+    if (this.state.phase !== 'SELECTING') return;
+    this.state.phase = 'COUNTDOWN';
+    this.state.message = 'Duel begins';
+    this.broadcastPhase();
+  }
+
+  private startPlaying(message: string): void {
+    if (this.state.phase !== 'SELECTING' && this.state.phase !== 'COUNTDOWN') return;
+    this.state.phase = 'PLAYING';
+    this.state.message = message;
     this.broadcastPhase();
   }
 
   private handleCast(client: Client, rawSpellId: string): void {
     const caster = this.state.players.get(client.sessionId);
     if (!caster) return;
+    this.handleCastForPlayer(caster, rawSpellId, (reason) => {
+      client.send('cast_denied', { spellId: rawSpellId, reason });
+    });
+  }
+
+  private handleCastForPlayer(
+    caster: PlayerState,
+    rawSpellId: string,
+    onDenied?: (reason: string) => void
+  ): boolean {
+    if (caster.hp <= 0) {
+      onDenied?.('defeated');
+      return false;
+    }
 
     if (!isSpellId(rawSpellId)) {
-      client.send('cast_denied', { spellId: rawSpellId, reason: 'unknown_spell' });
-      return;
+      onDenied?.('unknown_spell');
+      return false;
     }
 
     const targets = Array.from(this.state.players.values()).filter((player) => shouldDamagePlayer(caster, player));
@@ -198,8 +303,8 @@ export class MagicDuelRoom extends Room<GameState> {
     caster.syncCooldownFields();
 
     if (!result.ok) {
-      client.send('cast_denied', { spellId: rawSpellId, reason: result.reason });
-      return;
+      onDenied?.(result.reason);
+      return false;
     }
 
     this.broadcast('spell_confirmed', {
@@ -276,6 +381,8 @@ export class MagicDuelRoom extends Room<GameState> {
         }))
       });
     }
+
+    return true;
   }
 
   private applyClassSpellEffects(
@@ -373,7 +480,14 @@ export class MagicDuelRoom extends Room<GameState> {
 
     if (this.state.phase !== 'PLAYING') return;
 
+    this.updateBots(now);
+
     for (const player of this.state.players.values()) {
+      if (player.hp <= 0) {
+        player.casting = false;
+        player.anim = 'defeat';
+        continue;
+      }
       const input = this.inputs.get(player.id) ?? emptyInput();
       if (typeof input.rotY === 'number' && Number.isFinite(input.rotY)) {
         player.rotY = input.rotY;
@@ -394,6 +508,35 @@ export class MagicDuelRoom extends Room<GameState> {
     this.checkForWinner();
   }
 
+  private updateBots(now: number): void {
+    for (const [botId, controller] of this.botControllers) {
+      const bot = this.state.players.get(botId);
+      if (!bot || bot.hp <= 0) {
+        this.inputs.set(botId, emptyInput());
+        continue;
+      }
+
+      const target = chooseBotTarget(bot, this.state.players.values());
+      if (!target) {
+        this.inputs.set(botId, emptyInput());
+        continue;
+      }
+
+      if (now >= controller.nextThinkAt) {
+        this.inputs.set(botId, createBotMoveInput(bot, target, controller, now));
+        controller.nextThinkAt = now + getBotSkillConfig(controller.skill).reactionMs;
+      }
+
+      if (now >= controller.nextCastAt) {
+        const spellId = chooseBotSpell(bot, target, controller.skill, now, this.state.phase);
+        if (spellId) {
+          this.handleCastForPlayer(bot, spellId);
+        }
+        controller.nextCastAt = now + getBotSkillConfig(controller.skill).reactionMs;
+      }
+    }
+  }
+
   private updateGlacialSpikes(now: number): void {
     const readyByCaster = new Map<string, GlacialSpikeHazard[]>();
     for (const hazard of this.glacialSpikes.values()) {
@@ -405,7 +548,7 @@ export class MagicDuelRoom extends Room<GameState> {
 
     for (const [casterId, hazards] of readyByCaster) {
       const caster = this.state.players.get(casterId);
-      if (!caster) {
+      if (!caster || caster.hp <= 0) {
         for (const hazard of hazards) this.glacialSpikes.delete(hazard.id);
         continue;
       }
@@ -443,6 +586,11 @@ export class MagicDuelRoom extends Room<GameState> {
         this.traps.delete(trapId);
         continue;
       }
+      const owner = this.state.players.get(trap.ownerId);
+      if (!owner || owner.hp <= 0) {
+        this.traps.delete(trapId);
+        continue;
+      }
       for (const player of this.state.players.values()) {
         if (player.id === trap.ownerId || player.hp <= 0) continue;
         const dist = Math.hypot(player.x - trap.x, player.z - trap.z);
@@ -455,7 +603,6 @@ export class MagicDuelRoom extends Room<GameState> {
             this.explodeShield(player);
           }
 
-          const owner = this.state.players.get(trap.ownerId);
           if (owner && owner.characterClass === 'arcanist') {
             player.markedUntil = now + 3000;
             this.broadcast('mark_applied', {
@@ -539,18 +686,50 @@ export class MagicDuelRoom extends Room<GameState> {
 
   private checkForWinner(): void {
     if (this.state.phase !== 'PLAYING') return;
-    const defeated = Array.from(this.state.players.values()).find((player) => player.hp <= 0);
-    if (!defeated) return;
+    const players = Array.from(this.state.players.values());
+    const defeated = players.filter((player) => player.hp <= 0);
+    if (defeated.length === 0) return;
 
-    const winner = Array.from(this.state.players.values()).find((player) => player.id !== defeated.id);
+    const winnerTeamId = findWinningTeam(players);
+    const hasLivingPlayer = players.some((player) => player.hp > 0);
+    if (!winnerTeamId && hasLivingPlayer) {
+      for (const player of defeated) {
+        player.casting = false;
+        player.anim = 'defeat';
+      }
+      this.clearDefeatedCombatArtifacts();
+      return;
+    }
+
+    const winner = winnerTeamId
+      ? players.find((player) => player.teamId === winnerTeamId && player.hp > 0)
+      : undefined;
     this.state.phase = 'ENDED';
     this.state.winnerId = winner?.id ?? '';
-    this.state.message = winner ? `Team ${winner.teamId} wins` : 'Duel ended';
+    this.state.winnerTeamId = winnerTeamId ?? '';
+    this.state.message = winnerTeamId ? `Team ${winnerTeamId} wins` : 'Duel ended';
+    for (const player of players) {
+      player.casting = false;
+      player.anim = winnerTeamId && player.teamId === winnerTeamId ? 'victory' : 'defeat';
+    }
     this.clearProjectiles();
     this.traps.clear();
     this.glacialSpikes.clear();
     this.lock();
+    this.syncRematchState();
     this.broadcastPhase();
+  }
+
+  private handleRematchReady(client: Client): void {
+    if (this.state.phase !== 'ENDED' || !this.state.rematchAvailable) return;
+    if (!this.state.players.has(client.sessionId)) return;
+
+    this.rematchVotes.add(client.sessionId);
+    const status = this.syncRematchState();
+    this.broadcastPhase();
+    if (status.ready) {
+      this.startDuel(`${this.mode} rematch started`);
+    }
   }
 
   private explodeShield(player: PlayerState): void {
@@ -575,8 +754,118 @@ export class MagicDuelRoom extends Room<GameState> {
     }
   }
 
+  private clearDefeatedCombatArtifacts(): void {
+    const defeatedIds = new Set(
+      Array.from(this.state.players.values())
+        .filter((player) => player.hp <= 0)
+        .map((player) => player.id)
+    );
+    if (defeatedIds.size === 0) return;
+
+    for (const projectile of Array.from(this.state.projectiles.values())) {
+      if (defeatedIds.has(projectile.ownerId)) {
+        this.state.projectiles.delete(projectile.id);
+      }
+    }
+    for (const [trapId, trap] of Array.from(this.traps)) {
+      if (defeatedIds.has(trap.ownerId)) {
+        this.traps.delete(trapId);
+      }
+    }
+    for (const [hazardId, hazard] of Array.from(this.glacialSpikes)) {
+      if (defeatedIds.has(hazard.casterId)) {
+        this.glacialSpikes.delete(hazardId);
+      }
+    }
+  }
+
   private updatePlayerCount(): void {
     this.state.playerCount = this.state.players.size;
+  }
+
+  private applyWaitingBotPolicy(): void {
+    if (this.state.phase !== 'WAITING') {
+      this.clearAutoBotFillTimer();
+      return;
+    }
+
+    if (this.requestedBotSkill && missingPlayersToStart(this.state.playerCount, this.config) > 0) {
+      this.fillMissingSlotsWithBots(this.requestedBotSkill, `${capitalize(this.requestedBotSkill)} bot duel started`);
+      return;
+    }
+
+    this.refreshAutoBotFillTimer();
+  }
+
+  private refreshAutoBotFillTimer(): void {
+    if (!shouldScheduleAutoBotFill(this.state.phase, this.humanPlayerCount(), this.state.playerCount, this.config)) {
+      this.clearAutoBotFillTimer();
+      return;
+    }
+
+    if (this.autoBotFillTimer) return;
+    this.autoBotFillTimer = setTimeout(() => {
+      this.autoBotFillTimer = null;
+      if (!shouldScheduleAutoBotFill(this.state.phase, this.humanPlayerCount(), this.state.playerCount, this.config)) {
+        return;
+      }
+      this.fillMissingSlotsWithBots(DEFAULT_AUTO_BOT_SKILL, `${capitalize(DEFAULT_AUTO_BOT_SKILL)} bot joined after the wait`);
+    }, AUTO_BOT_FILL_MS);
+  }
+
+  private clearAutoBotFillTimer(): void {
+    if (!this.autoBotFillTimer) return;
+    clearTimeout(this.autoBotFillTimer);
+    this.autoBotFillTimer = null;
+  }
+
+  private fillMissingSlotsWithBots(skill: BotSkill, message: string): void {
+    const missing = missingPlayersToStart(this.state.playerCount, this.config);
+    if (missing <= 0) return;
+
+    for (let i = 0; i < missing; i++) {
+      this.addBot(skill);
+    }
+    this.updatePlayerCount();
+    this.broadcast('bot_added', { count: missing, skill });
+
+    if (shouldStartMatch(this.state.playerCount, this.config)) {
+      this.startDuel(message);
+    } else {
+      this.broadcastPhase();
+      this.syncLockState();
+    }
+  }
+
+  private addBot(skill: BotSkill): void {
+    const slotIndex = this.state.players.size;
+    const teamId = assignTeamId(this.mode, slotIndex);
+    const characterClass: CharacterClass = slotIndex % 2 === 0 ? 'arcanist' : 'divine';
+    const botId = `bot_${++this.botSerial}_${Math.random().toString(36).slice(2, 7)}`;
+    const bot = new PlayerState(
+      botId,
+      `${capitalize(skill)} Bot`,
+      teamId,
+      slotIndex,
+      characterClass,
+      true,
+      skill
+    );
+    this.state.players.set(botId, bot);
+    this.inputs.set(botId, emptyInput());
+    this.botControllers.set(botId, createBotController(botId, skill));
+  }
+
+  private humanPlayerCount(): number {
+    return Array.from(this.state.players.values()).filter((player) => !player.isBot).length;
+  }
+
+  private removeAllBots(): void {
+    for (const botId of Array.from(this.botControllers.keys())) {
+      this.state.players.delete(botId);
+      this.inputs.delete(botId);
+    }
+    this.botControllers.clear();
   }
 
   private reassignWaitingPlayers(): void {
@@ -628,6 +917,43 @@ export class MagicDuelRoom extends Room<GameState> {
     }
   }
 
+  private clearPhaseTimers(): void {
+    for (const timer of this.phaseTimers) {
+      clearTimeout(timer);
+    }
+    this.phaseTimers = [];
+  }
+
+  private resetRematchState(): void {
+    this.rematchVotes.clear();
+    this.state.rematchAvailable = false;
+    this.state.rematchVotes = 0;
+    this.state.rematchRequired = this.config.requiredPlayers;
+  }
+
+  private disableRematch(): void {
+    this.rematchVotes.clear();
+    this.state.rematchAvailable = false;
+    this.state.rematchVotes = 0;
+    this.state.rematchRequired = this.config.requiredPlayers;
+  }
+
+  private syncRematchState(): { available: boolean; votes: number; required: number; ready: boolean } {
+    if (this.botControllers.size > 0) {
+      const status = { available: false, votes: 0, required: this.config.requiredPlayers, ready: false };
+      this.state.rematchAvailable = status.available;
+      this.state.rematchVotes = status.votes;
+      this.state.rematchRequired = status.required;
+      return status;
+    }
+
+    const status = buildRematchStatus(this.state.players.values(), this.rematchVotes, this.config);
+    this.state.rematchAvailable = status.available;
+    this.state.rematchVotes = status.votes;
+    this.state.rematchRequired = status.required;
+    return status;
+  }
+
   private broadcastPhase(): void {
     this.broadcast('phase', {
       phase: this.state.phase,
@@ -640,7 +966,11 @@ export class MagicDuelRoom extends Room<GameState> {
       arenaPresetId: this.state.arenaPresetId,
       arenaPresetUrl: this.state.arenaPresetUrl,
       arenaDisplayName: this.state.arenaDisplayName,
-      winnerId: this.state.winnerId
+      winnerId: this.state.winnerId,
+      winnerTeamId: this.state.winnerTeamId,
+      rematchAvailable: this.state.rematchAvailable,
+      rematchVotes: this.state.rematchVotes,
+      rematchRequired: this.state.rematchRequired
     });
   }
 }
@@ -678,4 +1008,14 @@ function resolveProjectRoot(): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function capitalize(value: string): string {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function normalizePartyCode(value: unknown): string {
+  return typeof value === 'string'
+    ? value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+    : '';
 }

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, normalize, resolve, sep } from 'node:path';
 import { normalizeArenaCollisionConfig } from '../../../shared/arenaCollision.js';
 import {
+  compactSplatMapCatalog,
   resolveSplatQualityEntry,
   selectRandomSplatMapForMode,
   resolveSpawnPointsForMode,
@@ -27,7 +28,7 @@ export function selectPublishedSplatArenaForMode(
   const catalog = readPublishedSplatCatalog(root);
   if (!catalog) return null;
 
-  const candidates = [...catalog.maps];
+  const candidates = playablePublishedMaps(catalog);
   while (candidates.length > 0) {
     const selected = selectRandomSplatMapForMode({ ...catalog, maps: candidates }, mode, random);
     if (!selected) return null;
@@ -44,7 +45,7 @@ export function selectPublishedSplatArenaForMode(
       }
       return {
         presetId: stringField(preset.presetId, selected.presetId),
-        displayName: stringField(preset.displayName, selected.displayName),
+        displayName: stripQualityLabel(selected.displayName || stringField(preset.displayName, selected.displayName)),
         presetUrl: selectedVariant.presetUrl,
         collision
       };
@@ -56,6 +57,34 @@ export function selectPublishedSplatArenaForMode(
   }
 
   return null;
+}
+
+export function selectPublishedSplatArenaByPresetId(
+  presetId: string,
+  mode: MatchMode,
+  root = process.cwd()
+): PublishedSplatArenaSelection | null {
+  const catalog = readPublishedSplatCatalog(root);
+  if (!catalog) return null;
+  const selected = playablePublishedMaps(catalog).find((entry) => (
+    entry.presetId === presetId ||
+    entry.calibrationGroupId === presetId ||
+    Object.values(entry.qualities ?? {}).some((quality) => quality?.presetId === presetId)
+  ));
+  if (!selected) return null;
+
+  const selectedVariant = resolveSplatQualityEntry(selected);
+  const preset = readPublishedSplatPreset(root, selectedVariant);
+  if (!preset) return null;
+  const collision = stabilizedCollisionConfigFromPublishedPreset(preset, mode, root);
+  if (!collision) return null;
+
+  return {
+    presetId: stringField(preset.presetId, selectedVariant.presetId),
+    displayName: stripQualityLabel(selected.displayName || stringField(preset.displayName, selected.displayName)),
+    presetUrl: selectedVariant.presetUrl,
+    collision
+  };
 }
 
 function readPublishedSplatCatalog(root: string): SplatMapPoolCatalog | null {
@@ -87,6 +116,13 @@ function readPublishedSplatPreset(root: string, entry: Pick<SplatMapPoolEntry | 
     console.warn(`[server] Splat preset unavailable for ${entry.presetId}:`, error);
     return null;
   }
+}
+
+function playablePublishedMaps(catalog: SplatMapPoolCatalog): SplatMapPoolEntry[] {
+  return compactSplatMapCatalog(catalog, {
+    includeUnassigned: true,
+    excludePresetIds: ['lobby-high']
+  });
 }
 
 function collisionConfigFromPublishedPreset(preset: Record<string, unknown>, mode: MatchMode): ArenaCollisionConfig {
@@ -131,4 +167,8 @@ function resolveUnder(base: string, filename: string): string | null {
 
 function stringField(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function stripQualityLabel(value: string): string {
+  return value.replace(/\s*\((LOW|MID|HIGH)\)\s*$/i, '').trim();
 }

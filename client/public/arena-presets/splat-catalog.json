@@ -133,6 +133,28 @@
       ]
     },
     {
+      "presetId": "the-arcane-ritual-library-low",
+      "displayName": "The Arcane Ritual Library (LOW)",
+      "presetUrl": "/arena-presets/the-arcane-ritual-library-low.json",
+      "splatUrl": "/splats/the-arcane-ritual-library-low.sog",
+      "splatFileSizeBytes": 6644263,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "the-arcane-ritual-library-mid",
+      "displayName": "The Arcane Ritual Library (MID)",
+      "presetUrl": "/arena-presets/the-arcane-ritual-library-mid.json",
+      "splatUrl": "/splats/the-arcane-ritual-library-mid.sog",
+      "splatFileSizeBytes": 13329223,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
       "presetId": "the-dark-gothic-citadel-bridge",
       "calibrationGroupId": "the-dark-gothic-citadel-bridge",
       "displayName": "The Dark Gothic Citadel Bridge",
@@ -164,11 +186,33 @@
     },
     {
       "presetId": "lobby-high",
+      "calibrationGroupId": "lobby-high",
       "displayName": "The Demon Lord's Throne",
       "presetUrl": "/arena-presets/lobby-high.json",
       "splatUrl": "/splats/lobby-high.sog",
       "splatFileSizeBytes": 24023343,
-      "enabledModes": []
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "lobby-low",
+          "presetUrl": "/arena-presets/lobby-low.json",
+          "splatUrl": "/splats/lobby-low.sog",
+          "splatFileSizeBytes": 6715908
+        },
+        "mid": {
+          "presetId": "lobby-mid",
+          "presetUrl": "/arena-presets/lobby-mid.json",
+          "splatUrl": "/splats/lobby-mid.sog",
+          "splatFileSizeBytes": 13367668
+        },
+        "high": {
+          "presetId": "lobby-high",
+          "presetUrl": "/arena-presets/lobby-high.json",
+          "splatUrl": "/splats/lobby-high.sog",
+          "splatFileSizeBytes": 24023343
+        }
+      }
     },
     {
       "presetId": "the-dragon-gate-bridge",
@@ -206,6 +250,26 @@
       "presetUrl": "/arena-presets/the-dragon-gate-bridge-high.json",
       "splatUrl": "/splats/the-dragon-gate-bridge-high.sog",
       "splatFileSizeBytes": 24616928,
+      "enabledModes": [
+        "1v1"
+      ]
+    },
+    {
+      "presetId": "the-dragon-gate-bridge-low",
+      "displayName": "The Dragon Gate Bridge (LOW)",
+      "presetUrl": "/arena-presets/the-dragon-gate-bridge-low.json",
+      "splatUrl": "/splats/the-dragon-gate-bridge-low.sog",
+      "splatFileSizeBytes": 6687730,
+      "enabledModes": [
+        "1v1"
+      ]
+    },
+    {
+      "presetId": "the-dragon-gate-bridge-mid",
+      "displayName": "The Dragon Gate Bridge (MID)",
+      "presetUrl": "/arena-presets/the-dragon-gate-bridge-mid.json",
+      "splatUrl": "/splats/the-dragon-gate-bridge-mid.sog",
+      "splatFileSizeBytes": 13382581,
       "enabledModes": [
         "1v1"
       ]

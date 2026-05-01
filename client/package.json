@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "colyseus.js": "^0.16.22",
+    "howler": "^2.2.4",
     "three": "^0.176.0"
   },
   "devDependencies": {
+    "@types/howler": "^2.2.12",
     "@types/three": "^0.176.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.2",

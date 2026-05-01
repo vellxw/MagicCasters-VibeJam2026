@@ -9,7 +9,41 @@ describe('NetworkClient join options', () => {
       options: {
         name: 'Mage 101',
         mode: '2v2',
-        characterClass: 'divine'
+        characterClass: 'divine',
+        partyCode: ''
+      }
+    });
+  });
+
+  it('includes custom room code and selected map when creating an invite match', () => {
+    expect(createJoinOptions('Mage 202', '1v1', 'arcanist', {
+      partyCode: 'AB12CD',
+      arenaPresetId: 'the-dragon-gate-bridge',
+      botSkill: 'novice'
+    })).toEqual({
+      roomName: ROOM_NAME,
+      options: {
+        name: 'Mage 202',
+        mode: '1v1',
+        characterClass: 'arcanist',
+        partyCode: 'AB12CD',
+        arenaPresetId: 'the-dragon-gate-bridge',
+        botSkill: 'novice',
+        custom: true
+      }
+    });
+  });
+
+  it('does not send a bot skill for public matchmaking', () => {
+    expect(createJoinOptions('Mage 303', '2v2', 'divine', {
+      botSkill: 'master'
+    })).toEqual({
+      roomName: ROOM_NAME,
+      options: {
+        name: 'Mage 303',
+        mode: '2v2',
+        characterClass: 'divine',
+        partyCode: ''
       }
     });
   });
@@ -25,7 +59,8 @@ describe('NetworkClient join options', () => {
       'ground_line_hit',
       'glacial_spike_telegraph',
       'glacial_spike_erupted',
-      'shield_exploded'
+      'shield_exploded',
+      'bot_added'
     ]));
   });
 });

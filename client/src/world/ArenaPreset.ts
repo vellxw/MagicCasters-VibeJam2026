@@ -9,6 +9,7 @@ import type {
   MatchMode
 } from '../../../shared/types';
 import {
+  findSplatMapEntry as findSplatMapPoolEntry,
   normalizeSplatQuality,
   resolveEnabledModes,
   resolveSplatQualityEntry,
@@ -121,7 +122,10 @@ export async function loadConfiguredSplatArenaPreset(
   quality = getStoredSplatQuality()
 ): Promise<{ catalog: SplatMapCatalog; entry: SplatMapEntry; quality: SplatQuality; basePreset: SplatArenaPreset; preset: SplatArenaPreset }> {
   const catalog = await loadSplatMapCatalog();
-  const entry = findSplatMapEntry(catalog, presetId);
+  const entry = findSplatMapPoolEntry(catalog, presetId) as SplatMapEntry | null;
+  if (!entry) {
+    throw new Error('Splat map catalog has no maps');
+  }
   const variant = resolveSplatQualityEntry(entry, quality);
   const basePreset = await loadSplatArenaPreset(variant.presetUrl);
   const savedPreset = loadSavedSplatPreset(getSplatCalibrationStorageKey(basePreset));
@@ -296,12 +300,6 @@ function normalizeSplatMapEntry(value: unknown): SplatMapEntry {
     defaultQuality,
     qualities
   };
-}
-
-function findSplatMapEntry(catalog: SplatMapCatalog, presetId: string | undefined): SplatMapEntry {
-  return catalog.maps.find((entry) => entry.presetId === presetId)
-    ?? catalog.maps.find((entry) => entry.presetId === catalog.defaultPresetId)
-    ?? catalog.maps[0];
 }
 
 export function loadSavedSplatPreset(presetId: string): SplatArenaPreset | null {

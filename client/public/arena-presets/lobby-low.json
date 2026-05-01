@@ -1,0 +1,130 @@
+{
+  "presetId": "lobby-low",
+  "calibrationGroupId": "lobby-high",
+  "quality": "low",
+  "arenaId": "splat-test",
+  "displayName": "The Demon Lord's Throne",
+  "type": "splat",
+  "splatUrl": "/splats/lobby-low.sog",
+  "splatFileSizeBytes": 6715908,
+  "enabledModes": [],
+  "collisionMeshUrl": null,
+  "voxelCollisionUrl": null,
+  "spawnPoints": [
+    {
+      "x": 0,
+      "y": 0,
+      "z": 30,
+      "rotY": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 30,
+      "rotY": 0
+    }
+  ],
+  "spawnPointsByMode": {
+    "1v1": [
+      {
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotY": 0
+      },
+      {
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotY": 0
+      }
+    ],
+    "2v2": [
+      {
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotY": 3.141592653589793
+      },
+      {
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotY": 3.141592653589793
+      },
+      {
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotY": 3.141592653589793
+      },
+      {
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotY": 3.141592653589793
+      }
+    ]
+  },
+  "bounds": {
+    "minX": -6,
+    "maxX": 6,
+    "minZ": -15,
+    "maxZ": 2
+  },
+  "scale": 1,
+  "rotation": {
+    "x": 180,
+    "y": 1,
+    "z": 0
+  },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "floorY": -1,
+  "collisionErasers": [],
+  "collisionWalls": [
+    {
+      "id": "wall-molsmcpu",
+      "x": 1.51,
+      "z": 1.1,
+      "width": 0.4,
+      "depth": 0.5,
+      "height": 15,
+      "rotY": 3.118500000000006,
+      "climbable": false
+    },
+    {
+      "id": "wall-molso5zn",
+      "x": -1.3921831420903257,
+      "z": 1.3918019288231815,
+      "width": 0.4,
+      "depth": 0.5,
+      "height": 15,
+      "rotY": 3.0905000000000102,
+      "climbable": false
+    },
+    {
+      "id": "wall-molspwby",
+      "x": 5.976421700047552,
+      "z": 1.7120746172536354,
+      "width": 0.7,
+      "depth": 0.5,
+      "height": 15,
+      "rotY": 3.1920000000000095,
+      "climbable": false
+    },
+    {
+      "id": "wall-molsqw4d",
+      "x": -6,
+      "z": 1.9290423984122211,
+      "width": 0.7,
+      "depth": 0.5,
+      "height": 15,
+      "rotY": 3.0345000000000106,
+      "climbable": false
+    }
+  ]
+}

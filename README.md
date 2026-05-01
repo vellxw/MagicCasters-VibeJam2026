@@ -55,30 +55,33 @@ SERVER_PORT=3001
 VITE_COLYSEUS_URL=ws://localhost:3001
 ```
 
-For local Vite development, the client defaults to `ws://localhost:3001`. In production, when the built client is served by the Colyseus server, the client defaults to the same origin (`wss://your-domain` on HTTPS), so Render does not need `VITE_COLYSEUS_URL`.
+For local Vite development, the client defaults to `ws://localhost:3001`. In production, when the built client is served by the Colyseus server, the client defaults to the same origin (`wss://your-domain` on HTTPS), so Fly.io does not need `VITE_COLYSEUS_URL`.
 
-## Render Deployment
+## Fly.io Deployment
 
-Use a Render Web Service connected to the repo branch.
+Use the Dockerized Fly.io app config in the repo root.
 
-Build Command:
+For public playtests, keep one Machine running in `iad` (Ashburn, Virginia / US East). The default `fly.toml` disables autostop so players do not hit cold starts.
 
-```bash
-npm install && npm run build
-```
-
-Start Command:
+First setup:
 
 ```bash
-npm run start
+fly auth login
+fly apps create vibejam-magic-duel
+fly deploy
 ```
 
-The root `start` script runs the compiled Colyseus server. The server reads `process.env.PORT`, serves `client/dist` over HTTP, and hosts Colyseus WebSockets on the same Render URL.
+After the app exists, deploy updates with:
 
-The client uses same-origin WebSockets in production, so both the built client and the `magic_match` Colyseus room run from the same Render URL. Render can keep:
+```bash
+fly deploy
+```
 
-- Build Command: `npm install && npm run build`
-- Start Command: `npm run start`
+Fly app names are globally unique. If `vibejam-magic-duel` is taken, create a different app name and update the `app` field in `fly.toml`.
+
+The root `start` script runs the compiled Colyseus server. The Docker image sets `PORT=8080`; the server reads `process.env.PORT`, serves `client/dist` over HTTP, and hosts Colyseus WebSockets on the same Fly URL.
+
+The client uses same-origin WebSockets in production, so both the built client and the `magic_match` Colyseus room run from the same Fly URL. See `docs/fly-production.md` before changing Fly environment variables; production should normally leave `VITE_COLYSEUS_URL` unset so the client connects with `wss://` on the current Fly origin.
 
 ## Project Layout
 

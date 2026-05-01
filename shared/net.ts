@@ -1,14 +1,34 @@
 import type { SpellId } from './spells.js';
-import type { MatchMode, MoveInput } from './types.js';
+import type { BotSkill, MatchMode, MoveInput } from './types.js';
 
 export interface JoinOptions {
   name?: string;
   mode?: MatchMode;
+  partyCode?: string;
+  custom?: boolean;
+  arenaPresetId?: string;
+  botSkill?: BotSkill;
+}
+
+export interface GlobalChatJoinOptions {
+  name?: string;
+}
+
+export interface GlobalChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  sentAt: number;
 }
 
 export type ClientMessage =
   | { type: 'move'; input: MoveInput }
-  | { type: 'cast'; spellId: SpellId };
+  | { type: 'cast'; spellId: SpellId }
+  | { type: 'rematch_ready' };
+
+export type GlobalChatClientMessage =
+  | { type: 'chat_send'; text: string };
 
 export type ServerEvent =
   | { type: 'spell_confirmed'; playerId: string; spellId: SpellId; x: number; y: number; z: number }
@@ -32,6 +52,7 @@ export type ServerEvent =
       hazards: Array<{ id: string; x: number; z: number; radius: number; hitTargetIds: string[] }>;
     }
   | { type: 'shield_exploded'; casterId: string; x: number; z: number }
+  | { type: 'bot_added'; count: number; skill: BotSkill }
   | {
       type: 'phase';
       phase: string;
@@ -45,4 +66,13 @@ export type ServerEvent =
       arenaPresetUrl?: string;
       arenaDisplayName?: string;
       winnerId?: string;
+      winnerTeamId?: string;
+      rematchAvailable?: boolean;
+      rematchVotes?: number;
+      rematchRequired?: number;
     };
+
+export type GlobalChatServerEvent =
+  | { type: 'chat_history'; messages: GlobalChatMessage[]; onlineCount: number }
+  | { type: 'chat_message'; message: GlobalChatMessage; onlineCount: number }
+  | { type: 'chat_presence'; onlineCount: number };

@@ -1,6 +1,7 @@
 import type { CharacterClass } from './classes.js';
 
 export const ROOM_NAME = 'magic_match';
+export const GLOBAL_CHAT_ROOM_NAME = 'global_chat';
 
 export const TICK_RATE = 20;
 export const TICK_MS = 1000 / TICK_RATE;
@@ -49,6 +50,7 @@ export interface ArenaCollisionWall {
   height: number;
   rotY: number;
   climbable?: boolean;
+  ramp?: boolean;
 }
 
 export interface ArenaCollisionConfig {
@@ -63,9 +65,13 @@ export interface ArenaCollisionConfig {
 export type MatchMode = '1v1' | '2v2';
 export type ArenaId = 'lightweight' | 'splat-test';
 export type TeamId = 'A' | 'B';
+export type BotSkill = 'novice' | 'adept' | 'master';
 
 export const DEFAULT_ARENA_ID: ArenaId = 'lightweight';
 export const SPLAT_TEST_ARENA_ID: ArenaId = 'splat-test';
+export const BOT_SKILLS = ['novice', 'adept', 'master'] as const satisfies readonly BotSkill[];
+export const DEFAULT_AUTO_BOT_SKILL: BotSkill = 'adept';
+export const AUTO_BOT_FILL_MS = 60000;
 
 export function arenaIdForMatchMode(_mode: MatchMode): ArenaId {
   return DEFAULT_ARENA_ID;
@@ -100,7 +106,7 @@ export const TEAM_SPAWNS: Record<MatchMode, Array<{ x: number; y: number; z: num
   ]
 };
 
-export type RoomPhase = 'WAITING' | 'PLAYING' | 'ENDED';
+export type RoomPhase = 'WAITING' | 'SELECTING' | 'COUNTDOWN' | 'PLAYING' | 'ENDED';
 
 export interface MoveInput {
   forward: boolean;
@@ -128,6 +134,8 @@ export interface PublicPlayerState {
   casting: boolean;
   selectedSpell: string;
   characterClass: CharacterClass;
+  isBot?: boolean;
+  botSkill?: string;
   shieldActive?: boolean;
   silencedUntil?: number;
   slowedUntil?: number;

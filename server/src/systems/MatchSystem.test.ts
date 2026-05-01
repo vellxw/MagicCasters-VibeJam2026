@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   assignTeamId,
+  buildRematchStatus,
+  findWinningTeam,
   getMatchConfig,
   getSpawnForSlot,
   normalizeArenaId,
   normalizeMatchMode,
   phaseAfterPlayerLeave,
+  missingPlayersToStart,
   shouldDamagePlayer,
+  shouldScheduleAutoBotFill,
   shouldLockRoom,
   shouldStartMatch
 } from './MatchSystem';
@@ -39,11 +43,33 @@ describe('MatchSystem', () => {
 
     expect(shouldLockRoom('WAITING', 1, getMatchConfig('1v1'))).toBe(false);
     expect(shouldLockRoom('WAITING', 2, getMatchConfig('1v1'))).toBe(true);
+    expect(shouldLockRoom('SELECTING', 1, getMatchConfig('2v2'))).toBe(true);
+    expect(shouldLockRoom('COUNTDOWN', 1, getMatchConfig('2v2'))).toBe(true);
     expect(shouldLockRoom('PLAYING', 1, getMatchConfig('2v2'))).toBe(true);
+  });
+
+  it('computes bot fill needs for waiting rooms', () => {
+    expect(missingPlayersToStart(1, getMatchConfig('1v1'))).toBe(1);
+    expect(missingPlayersToStart(2, getMatchConfig('1v1'))).toBe(0);
+    expect(missingPlayersToStart(1, getMatchConfig('2v2'))).toBe(3);
+    expect(missingPlayersToStart(3, getMatchConfig('2v2'))).toBe(1);
+    expect(missingPlayersToStart(4, getMatchConfig('2v2'))).toBe(0);
+  });
+
+  it('schedules automatic bot fill only for human players waiting on a non-full room', () => {
+    const config = getMatchConfig('2v2');
+
+    expect(shouldScheduleAutoBotFill('WAITING', 1, 1, config)).toBe(true);
+    expect(shouldScheduleAutoBotFill('WAITING', 0, 0, config)).toBe(false);
+    expect(shouldScheduleAutoBotFill('WAITING', 0, 1, config)).toBe(false);
+    expect(shouldScheduleAutoBotFill('WAITING', 4, 4, config)).toBe(false);
+    expect(shouldScheduleAutoBotFill('PLAYING', 1, 1, config)).toBe(false);
   });
 
   it('ends an active match when a player leaves', () => {
     expect(phaseAfterPlayerLeave('PLAYING', 1)).toBe('ENDED');
+    expect(phaseAfterPlayerLeave('SELECTING', 1)).toBe('ENDED');
+    expect(phaseAfterPlayerLeave('COUNTDOWN', 1)).toBe('ENDED');
     expect(phaseAfterPlayerLeave('PLAYING', 3)).toBe('ENDED');
     expect(phaseAfterPlayerLeave('WAITING', 1)).toBe('WAITING');
     expect(phaseAfterPlayerLeave('ENDED', 1)).toBe('ENDED');
@@ -62,5 +88,93 @@ describe('MatchSystem', () => {
 
     expect(shouldDamagePlayer(attacker, ally)).toBe(false);
     expect(shouldDamagePlayer(attacker, enemy)).toBe(true);
+  });
+
+  it('finds a 1v1 winner when one player is defeated', () => {
+    const teamA = createTestPlayer('team-a', 'A');
+    const teamB = createTestPlayer('team-b', 'B');
+    teamA.hp = 0;
+
+    expect(findWinningTeam([teamA, teamB])).toBe('B');
+  });
+
+  it('keeps a 2v2 match alive while each team still has one living player', () => {
+    const players = [
+      createTestPlayer('a1', 'A'),
+      createTestPlayer('b1', 'B'),
+      createTestPlayer('a2', 'A'),
+      createTestPlayer('b2', 'B')
+    ];
+    players[0].hp = 0;
+
+    expect(findWinningTeam(players)).toBeNull();
+  });
+
+  it('finds the winning 2v2 team only after the full opposing team is defeated', () => {
+    const players = [
+      createTestPlayer('a1', 'A'),
+      createTestPlayer('b1', 'B'),
+      createTestPlayer('a2', 'A'),
+      createTestPlayer('b2', 'B')
+    ];
+    players[0].hp = 0;
+    players[2].hp = 0;
+
+    expect(findWinningTeam(players)).toBe('B');
+
+    players[0].hp = 100;
+    players[2].hp = 100;
+    players[1].hp = 0;
+    players[3].hp = 0;
+
+    expect(findWinningTeam(players)).toBe('A');
+  });
+
+  it('does not choose a winner when every team is defeated at the same time', () => {
+    const players = [
+      createTestPlayer('a1', 'A'),
+      createTestPlayer('b1', 'B'),
+      createTestPlayer('a2', 'A'),
+      createTestPlayer('b2', 'B')
+    ];
+    for (const player of players) {
+      player.hp = 0;
+    }
+
+    expect(findWinningTeam(players)).toBeNull();
+  });
+
+  it('offers rematch only when every required player is still connected and confirmed', () => {
+    const config = getMatchConfig('2v2');
+    const players = [
+      createTestPlayer('a1', 'A'),
+      createTestPlayer('b1', 'B'),
+      createTestPlayer('a2', 'A'),
+      createTestPlayer('b2', 'B')
+    ];
+    const votes = new Set(['a1', 'b1', 'a2']);
+
+    expect(buildRematchStatus(players, votes, config)).toEqual({
+      available: true,
+      votes: 3,
+      required: 4,
+      ready: false
+    });
+
+    votes.add('b2');
+
+    expect(buildRematchStatus(players, votes, config)).toEqual({
+      available: true,
+      votes: 4,
+      required: 4,
+      ready: true
+    });
+
+    expect(buildRematchStatus(players.slice(0, 3), votes, config)).toEqual({
+      available: false,
+      votes: 0,
+      required: 4,
+      ready: false
+    });
   });
 });

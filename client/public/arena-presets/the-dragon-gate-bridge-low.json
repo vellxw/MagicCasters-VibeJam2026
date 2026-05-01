@@ -7,36 +7,38 @@
   "type": "splat",
   "splatUrl": "/splats/the-dragon-gate-bridge-low.sog",
   "splatFileSizeBytes": 6687730,
-  "enabledModes": [],
+  "enabledModes": [
+    "1v1"
+  ],
   "collisionMeshUrl": null,
   "voxelCollisionUrl": null,
   "spawnPoints": [
     {
-      "x": -5.5,
-      "y": 0,
-      "z": 0,
-      "rotY": -1.5707963267948966
+      "x": 0,
+      "y": -2.14,
+      "z": 9,
+      "rotY": 0
     },
     {
-      "x": 5.5,
-      "y": 0,
-      "z": 0,
-      "rotY": 1.5707963267948966
+      "x": 0,
+      "y": -2.14,
+      "z": -4,
+      "rotY": 3.2
     }
   ],
   "spawnPointsByMode": {
     "1v1": [
       {
-        "x": -5.5,
-        "y": 0,
-        "z": 0,
-        "rotY": -1.5707963267948966
+        "x": 0,
+        "y": -2.14,
+        "z": 9,
+        "rotY": 0
       },
       {
-        "x": 5.5,
-        "y": 0,
-        "z": 0,
-        "rotY": 1.5707963267948966
+        "x": 0,
+        "y": -2.14,
+        "z": -4,
+        "rotY": 3.2
       }
     ],
     "2v2": [
@@ -67,10 +69,10 @@
     ]
   },
   "bounds": {
-    "minX": -8,
-    "maxX": 8,
-    "minZ": -6,
-    "maxZ": 6
+    "minX": -2.1,
+    "maxX": 2.5,
+    "minZ": -10,
+    "maxZ": 15
   },
   "scale": 1,
   "rotation": {
@@ -83,7 +85,48 @@
     "y": 0,
     "z": 0
   },
-  "floorY": 0,
+  "floorY": -2.29,
   "collisionErasers": [],
-  "collisionWalls": []
+  "collisionWalls": [
+    {
+      "id": "wall-momf5857",
+      "x": -0.10792255709701139,
+      "z": -6.004,
+      "width": 5,
+      "depth": 0.35,
+      "height": 5,
+      "rotY": -6.2957963267948855,
+      "climbable": false
+    },
+    {
+      "id": "wall-momf74og",
+      "x": 0.11999940221070966,
+      "z": 11.313870752163774,
+      "width": 5,
+      "depth": 0.35,
+      "height": 5,
+      "rotY": -3.1317963267948805,
+      "climbable": false
+    },
+    {
+      "id": "wall-momimx3y",
+      "x": -2.1,
+      "z": 5.510232716012757,
+      "width": 30,
+      "depth": 0.1,
+      "height": 2,
+      "rotY": 1.5785,
+      "climbable": false
+    },
+    {
+      "id": "wall-momiq2pt",
+      "x": 2.5,
+      "z": 1.0685055523311446,
+      "width": 30,
+      "depth": 0.1,
+      "height": 2,
+      "rotY": 23.583000000000037,
+      "climbable": false
+    }
+  ]
 }

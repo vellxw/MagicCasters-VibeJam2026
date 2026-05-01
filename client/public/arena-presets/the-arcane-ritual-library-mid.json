@@ -7,7 +7,10 @@
   "type": "splat",
   "splatUrl": "/splats/the-arcane-ritual-library-mid.sog",
   "splatFileSizeBytes": 13329223,
-  "enabledModes": [],
+  "enabledModes": [
+    "1v1",
+    "2v2"
+  ],
   "collisionMeshUrl": null,
   "voxelCollisionUrl": null,
   "spawnPoints": [
@@ -70,7 +73,7 @@
     "minX": -8,
     "maxX": 8,
     "minZ": -6,
-    "maxZ": 6
+    "maxZ": 12.9
   },
   "scale": 1,
   "rotation": {
@@ -83,7 +86,48 @@
     "y": 0,
     "z": 0
   },
-  "floorY": 0,
+  "floorY": -1.5,
   "collisionErasers": [],
-  "collisionWalls": []
+  "collisionWalls": [
+    {
+      "id": "wall-momgl4ix",
+      "x": 8,
+      "z": 0.17293522178142948,
+      "width": 30,
+      "depth": 0.35,
+      "height": 5,
+      "rotY": -1.5917963267948987,
+      "climbable": false
+    },
+    {
+      "id": "wall-momglwgo",
+      "x": -0.42721393662097984,
+      "z": -6,
+      "width": 20,
+      "depth": 0.35,
+      "height": 7,
+      "rotY": -0.006296326794898071,
+      "climbable": false
+    },
+    {
+      "id": "wall-momgmyq6",
+      "x": 0.08427287218792381,
+      "z": 12.9,
+      "width": 20,
+      "depth": 0.35,
+      "height": 7,
+      "rotY": 3.1472036732050945,
+      "climbable": false
+    },
+    {
+      "id": "wall-momgoqmt",
+      "x": -8,
+      "z": 2.96281182489882,
+      "width": 30,
+      "depth": 0.35,
+      "height": 7,
+      "rotY": 1.6072036732050945,
+      "climbable": false
+    }
+  ]
 }

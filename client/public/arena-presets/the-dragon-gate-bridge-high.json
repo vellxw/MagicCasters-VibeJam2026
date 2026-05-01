@@ -85,7 +85,7 @@
     "y": 0,
     "z": 0
   },
-  "floorY": -2.14,
+  "floorY": -2.29,
   "collisionErasers": [],
   "collisionWalls": [
     {
@@ -106,6 +106,26 @@
       "depth": 0.35,
       "height": 5,
       "rotY": -3.1317963267948805,
+      "climbable": false
+    },
+    {
+      "id": "wall-momimx3y",
+      "x": -2.1,
+      "z": 5.510232716012757,
+      "width": 30,
+      "depth": 0.1,
+      "height": 2,
+      "rotY": 1.5785,
+      "climbable": false
+    },
+    {
+      "id": "wall-momiq2pt",
+      "x": 2.5,
+      "z": 1.0685055523311446,
+      "width": 30,
+      "depth": 0.1,
+      "height": 2,
+      "rotY": 23.583000000000037,
       "climbable": false
     }
   ]

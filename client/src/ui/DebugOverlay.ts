@@ -4,7 +4,7 @@ import type { ArenaId, MatchMode } from '../../../shared/types';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
 
-type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
+type SceneMode = 'LOBBY' | 'CUSTOM' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 
 export class DebugOverlay {
   readonly element: HTMLDivElement;
@@ -22,8 +22,11 @@ export class DebugOverlay {
   private queueModeEl: HTMLElement;
   private queueCountEl: HTMLElement;
   private resultsEl: HTMLElement;
+  private resultsImageEl: HTMLImageElement;
+  private resultsTitleEl: HTMLElement;
   private resultsMessageEl: HTMLElement;
-  private debugEl: HTMLElement;
+  private rematchStatusEl: HTMLElement;
+  private rematchButtonEl: HTMLButtonElement;
   private toastEl: HTMLElement;
   private spellButtons = new Map<SpellId, HTMLButtonElement>();
   private toastTimer = 0;
@@ -32,6 +35,8 @@ export class DebugOverlay {
   onVoiceToggle?: () => void;
   onCancelQueue?: () => void;
   onReturnLobby?: () => void;
+  onRematch?: () => void;
+  onPlayDifferentMatch?: () => void;
   onPortalAction?: () => void;
   onQualitySettings?: () => void;
 
@@ -50,7 +55,7 @@ export class DebugOverlay {
           </div>
         </div>
         <div class="hud__top-right">
-          <button type="button" class="quality-chip" data-quality-settings>⚙ Quality</button>
+          <button type="button" class="quality-chip" data-quality-settings>⚙ Settings</button>
           <div class="phase-chip" data-phase>Entering arena</div>
         </div>
       </div>
@@ -65,13 +70,17 @@ export class DebugOverlay {
         <button type="button" data-cancel-queue>Cancel</button>
       </div>
       <div class="results-panel" data-results>
-        <strong>Match ended</strong>
+        <img class="results-panel__image" data-results-image alt="Match result" />
+        <strong data-results-title>Match ended</strong>
         <span data-results-message>Return to lobby to play again.</span>
-        <button type="button" data-return-lobby>Return to lobby</button>
+        <span class="results-panel__rematch" data-rematch-status></span>
+        <div class="results-panel__actions">
+          <button type="button" data-rematch>Rematch</button>
+          <button type="button" data-different-match>Play Different Match</button>
+        </div>
       </div>
       <div class="spell-dock" data-spells></div>
       <div class="crosshair" aria-hidden="true"></div>
-      <div class="debug" data-debug></div>
       <div class="toast" data-toast></div>
     `;
 
@@ -88,11 +97,15 @@ export class DebugOverlay {
     this.queueModeEl = this.element.querySelector('[data-queue-mode]')!;
     this.queueCountEl = this.element.querySelector('[data-queue-count]')!;
     this.resultsEl = this.element.querySelector('[data-results]')!;
+    this.resultsImageEl = this.element.querySelector('[data-results-image]')!;
+    this.resultsTitleEl = this.element.querySelector('[data-results-title]')!;
     this.resultsMessageEl = this.element.querySelector('[data-results-message]')!;
-    this.debugEl = this.element.querySelector('[data-debug]')!;
+    this.rematchStatusEl = this.element.querySelector('[data-rematch-status]')!;
+    this.rematchButtonEl = this.element.querySelector('[data-rematch]')!;
     this.toastEl = this.element.querySelector('[data-toast]')!;
     this.element.querySelector('[data-cancel-queue]')?.addEventListener('click', () => this.onCancelQueue?.());
-    this.element.querySelector('[data-return-lobby]')?.addEventListener('click', () => this.onReturnLobby?.());
+    this.rematchButtonEl.addEventListener('click', () => this.onRematch?.());
+    this.element.querySelector('[data-different-match]')?.addEventListener('click', () => this.onPlayDifferentMatch?.());
     this.promptButtonEl.addEventListener('click', () => this.onPortalAction?.());
     this.element.querySelector('[data-quality-settings]')?.addEventListener('click', () => this.onQualitySettings?.());
 
@@ -152,7 +165,12 @@ export class DebugOverlay {
     portalActionLabel: string;
     queueActive: boolean;
     resultsActive: boolean;
+    resultKind: 'victory' | 'defeat';
     resultsMessage: string;
+    rematchAvailable: boolean;
+    rematchVotes: number;
+    rematchRequired: number;
+    rematchRequested: boolean;
     arenaDebug: ArenaDebugInfo | null;
   }): void {
     this.element.dataset.scene = args.scene.toLowerCase();
@@ -173,7 +191,16 @@ export class DebugOverlay {
     this.queueModeEl.textContent = `Mode: ${labelForSelection(args.selectedMode, args.selectedArenaId)}`;
     this.queueCountEl.textContent = `${args.playerCount} / ${args.requiredPlayers} players`;
     this.resultsEl.dataset.visible = String(args.resultsActive);
+    this.resultsEl.dataset.result = args.resultKind;
+    this.resultsImageEl.src = args.resultKind === 'victory' ? '/results/victory.png' : '/results/defeat.png';
+    this.resultsImageEl.alt = args.resultKind === 'victory' ? 'Victory' : 'Defeat';
+    this.resultsTitleEl.textContent = args.resultKind === 'victory' ? 'Victory' : 'Defeat';
     this.resultsMessageEl.textContent = args.resultsMessage || 'Return to lobby to play again.';
+    this.rematchButtonEl.disabled = !args.rematchAvailable || args.rematchRequested;
+    this.rematchButtonEl.textContent = args.rematchRequested ? 'Rematch Ready' : 'Rematch';
+    this.rematchStatusEl.textContent = args.rematchAvailable
+      ? `Waiting for players ${args.rematchVotes}/${args.rematchRequired}`
+      : 'Rematch unavailable';
 
     const now = Date.now();
     for (const [id, button] of this.spellButtons) {
@@ -184,26 +211,6 @@ export class DebugOverlay {
       button.disabled = cooldown > 0 || args.local.mana < SPELLS[id].manaCost || args.phase !== 'PLAYING';
     }
 
-    this.debugEl.textContent = [
-      `scene ${args.scene.toLowerCase()}`,
-      `net ${args.status}`,
-      `selected ${args.selectedMode ?? 'none'}`,
-      `arena ${args.selectedArenaId}`,
-      `room ${args.roomId ? args.roomId.slice(0, 6) : 'none'}`,
-      `mode ${args.selectedMode ?? 'none'}`,
-      `team ${args.teamId ?? 'none'}`,
-      `phase ${args.phase}`,
-      `players ${args.playerCount}/${args.requiredPlayers}`,
-      `projectiles ${args.projectileCount}`,
-      `session ${args.localSessionId?.slice(0, 6) ?? 'none'}`,
-      `local ${args.localPlayerBound ? 'yes' : 'no'}`,
-      `controls ${args.controlsEnabled ? 'yes' : 'no'}`,
-      `camera first-person pitch ${toDegrees(args.cameraPitch)}`,
-      ...arenaDebugLines(args.arenaDebug),
-      args.local ? `pos ${args.local.x.toFixed(2)},${args.local.y.toFixed(2)},${args.local.z.toFixed(2)}` : 'pos none',
-      `voice ${args.voiceActive ? 'on' : 'off'}`,
-      args.voiceText ? `heard ${args.voiceText.slice(0, 24)}` : ''
-    ].filter(Boolean).join('\n');
   }
 
   showToast(message: string): void {
@@ -214,10 +221,6 @@ export class DebugOverlay {
       this.toastEl.dataset.visible = 'false';
     }, 1300);
   }
-}
-
-function toDegrees(value: number): string {
-  return `${Math.round(value * 180 / Math.PI)}deg`;
 }
 
 function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
@@ -245,6 +248,7 @@ function cooldownFor(player: PlayerSnapshot, spellId: SpellId): number {
 
 function messageForPhase(scene: SceneMode, phase: string, count: number, required: number): string {
   if (scene === 'LOBBY') return 'Choose a duel portal';
+  if (scene === 'CUSTOM') return 'Custom invite';
   if (scene === 'CHARACTER_SELECT') return 'Choose your mage';
   if (scene === 'CALIBRATION') return 'Splat calibration';
   if (scene === 'QUEUE') return `Queue ${count}/${required}`;
@@ -256,39 +260,9 @@ function messageForPhase(scene: SceneMode, phase: string, count: number, require
 }
 
 function labelForSelection(mode: MatchMode | null, arenaId: ArenaId): string {
-  if (arenaId === 'splat-test') return 'Realistic Arena Test';
+  if (arenaId === 'splat-test') return 'CUSTOM Arena';
   if (mode === '2v2') return '2v2 Team Duel';
   if (mode === '1v1') return '1v1 Duel';
   return 'Portal';
 }
 
-function arenaDebugLines(info: ArenaDebugInfo | null): string[] {
-  if (!info) return [];
-  return [
-    `splat ${info.splatLoadStatus}`,
-    `splatUrl ${shortUrl(info.splatUrl)}`,
-    `splatSize ${formatBytes(info.splatFileSizeBytes)}`,
-    `collision ${info.collisionStatus === 'loaded' ? 'mesh' : info.collisionStatus} debug ${info.collisionDebugVisible ? 'on' : 'off'}`,
-    `occlusion ${info.occlusionStatus ?? 'none'}`,
-    `voxel ${info.voxelCollisionStatus ?? 'none'} ${info.voxelCollisionUrl ? shortUrl(info.voxelCollisionUrl) : 'none'}`,
-    `scale ${info.scale}`,
-    `offset ${vectorLine(info.offset)}`,
-    `rotation ${vectorLine(info.rotation)}`,
-    `floorY ${info.floorY}`,
-    `bounds x${info.bounds.minX}..${info.bounds.maxX} z${info.bounds.minZ}..${info.bounds.maxZ}`,
-    `walls ${info.collisionWallCount ?? 0} erasers ${info.collisionEraserCount ?? 0}`
-  ];
-}
-
-function vectorLine(value: { x: number; y: number; z: number }): string {
-  return `${value.x},${value.y},${value.z}`;
-}
-
-function shortUrl(value: string): string {
-  return value.length > 34 ? `...${value.slice(-31)}` : value;
-}
-
-function formatBytes(value: number | undefined): string {
-  if (!value) return 'unknown';
-  return `${(value / (1024 * 1024)).toFixed(2)} MiB`;
-}

@@ -1,9 +1,18 @@
 import * as THREE from 'three';
 import {
+  findClimbableWall,
+  findStandingSurfaceY,
+  moveWithArenaCollision,
+  resolveArenaVerticalCollision
+} from '../../../shared/arenaCollision';
+import {
+  PLAYER_CLIMB_SPEED,
   PLAYER_GRAVITY,
+  PLAYER_AIR_DASH_DISTANCE,
   PLAYER_JUMP_VELOCITY,
   SPLAT_TEST_ARENA_ID,
   type ArenaId,
+  type ArenaCollisionWall,
   type MatchMode,
   type MoveInput
 } from '../../../shared/types';
@@ -15,6 +24,7 @@ import type { MapVfxConfig, MapVfxEntry } from '../vfx/MapVfxConfig';
 import { loadMapVfxConfig } from '../vfx/MapVfxConfig';
 
 export interface LobbyPortal {
+  kind: 'queue' | 'custom';
   mode: MatchMode;
   arenaId?: ArenaId;
   label: string;
@@ -35,6 +45,8 @@ export class LobbyScene {
   private portalUiObjects: THREE.Object3D[] = [];
   private bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   private floorY: number;
+  private collisionWalls: ArenaCollisionWall[];
+  private airDashAvailable = true;
 
   private snapshot: PlayerSnapshot;
 
@@ -47,6 +59,7 @@ export class LobbyScene {
       ? { ...preset.bounds }
       : { minX: -16, maxX: 15, minZ: -11, maxZ: 39 };
     this.floorY = preset?.floorY ?? 0;
+    this.collisionWalls = preset?.collisionWalls ? [...preset.collisionWalls] : [];
 
     const spawn = preset?.spawnPoints[0];
     this.snapshot = {
@@ -138,14 +151,33 @@ export class LobbyScene {
     if (input.backward) { mx -= forward.x; mz -= forward.z; }
     if (input.right) { mx += right.x; mz += right.z; }
     if (input.left) { mx -= right.x; mz -= right.z; }
-    const length = Math.hypot(mx, mz);
+    let length = Math.hypot(mx, mz);
     if (length > 0) {
       mx /= length;
       mz /= length;
+    } else if (input.dash) {
+      mx = forward.x;
+      mz = forward.z;
+      length = 1;
     }
 
-    this.snapshot.x = clamp(this.snapshot.x + mx * 4.8 * dt, this.bounds.minX, this.bounds.maxX);
-    this.snapshot.z = clamp(this.snapshot.z + mz * 4.8 * dt, this.bounds.minZ, this.bounds.maxZ);
+    const dashDistance = this.consumeAirDash(input);
+    const nextX = this.snapshot.x + mx * (4.8 * dt + dashDistance);
+    const nextZ = this.snapshot.z + mz * (4.8 * dt + dashDistance);
+    const resolved = moveWithArenaCollision(
+      this.snapshot.x,
+      this.snapshot.z,
+      nextX,
+      nextZ,
+      this.bounds,
+      this.collisionWalls,
+      {
+        playerY: this.snapshot.y,
+        floorY: this.floorY
+      }
+    );
+    this.snapshot.x = resolved.x;
+    this.snapshot.z = resolved.z;
     this.applyJump(input, dt);
     this.snapshot.anim = this.snapshot.y > this.floorY + 0.03 || Math.abs(this.velocityY) > 0.01
       ? 'jump'
@@ -164,24 +196,63 @@ export class LobbyScene {
   }
 
   private applyJump(input: MoveInput, dt: number): void {
-    const grounded = this.snapshot.y <= this.floorY + 0.02;
-    if (grounded && input.jump) {
-      this.snapshot.y = this.floorY;
-      this.velocityY = PLAYER_JUMP_VELOCITY;
-    } else if (grounded && this.velocityY <= 0) {
-      this.snapshot.y = this.floorY;
+    const climbableWall = findClimbableWall(this.snapshot.x, this.snapshot.z, this.collisionWalls);
+    if (climbableWall) {
+      const maxY = this.floorY + Math.max(0.1, climbableWall.height);
+      const climbDirection = (input.forward || input.jump ? 1 : 0) - (input.backward ? 1 : 0);
+      this.snapshot.y = clamp(this.snapshot.y + climbDirection * PLAYER_CLIMB_SPEED * dt, this.floorY, maxY);
       this.velocityY = 0;
+      return;
+    }
+
+    const groundY = findStandingSurfaceY(this.snapshot.x, this.snapshot.z, this.snapshot.y, this.floorY, this.collisionWalls);
+    const grounded = Math.abs(this.snapshot.y - groundY) <= 0.02;
+    if (grounded && input.jump) {
+      this.snapshot.y = groundY;
+      this.velocityY = PLAYER_JUMP_VELOCITY;
+      this.airDashAvailable = true;
+    } else if (grounded && this.velocityY <= 0) {
+      this.snapshot.y = groundY;
+      this.velocityY = 0;
+      this.airDashAvailable = true;
     }
 
     if (!grounded || this.velocityY > 0) {
+      const previousY = this.snapshot.y;
       this.velocityY -= PLAYER_GRAVITY * dt;
-      this.snapshot.y += this.velocityY * dt;
+      const vertical = resolveArenaVerticalCollision(
+        this.snapshot.x,
+        this.snapshot.z,
+        previousY,
+        this.snapshot.y + this.velocityY * dt,
+        this.velocityY,
+        this.floorY,
+        this.collisionWalls
+      );
+      this.snapshot.y = vertical.y;
+      this.velocityY = vertical.velocityY;
     }
 
-    if (this.snapshot.y <= this.floorY) {
-      this.snapshot.y = this.floorY;
+    if (this.snapshot.y <= groundY) {
+      this.snapshot.y = groundY;
       this.velocityY = 0;
+      this.airDashAvailable = true;
     }
+  }
+
+  private consumeAirDash(input: MoveInput): number {
+    const groundY = findStandingSurfaceY(this.snapshot.x, this.snapshot.z, this.snapshot.y, this.floorY, this.collisionWalls);
+    const grounded = Math.abs(this.snapshot.y - groundY) <= 0.02;
+    if (grounded) {
+      this.airDashAvailable = true;
+      return 0;
+    }
+    if (!input.dash || !this.airDashAvailable) {
+      return 0;
+    }
+
+    this.airDashAvailable = false;
+    return PLAYER_AIR_DASH_DISTANCE;
   }
 
   nearestPortal(): LobbyPortal | null {
@@ -244,10 +315,10 @@ export class LobbyScene {
 
   buildPortalsFromVfx(config: MapVfxConfig, instanceIdsByEntryId = new Map<string, string>()): void {
     this.clearPortals();
-    const portalDefs: Array<{ mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string }> = [
-      { mode: '1v1', label: '1v1 Duel', color: 0xff9f43, arenaId: undefined },
-      { mode: '2v2', label: '2v2 Team Duel', color: 0x7dd3fc, arenaId: undefined },
-      { mode: '1v1', label: 'Realistic Arena Test', color: 0xa78bfa, arenaId: SPLAT_TEST_ARENA_ID, badge: 'EXPERIMENTAL' }
+    const portalDefs: Array<{ kind: 'queue' | 'custom'; mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string }> = [
+      { kind: 'queue', mode: '1v1', label: '1v1 Duel', color: 0xff9f43, arenaId: undefined },
+      { kind: 'queue', mode: '2v2', label: '2v2 Team Duel', color: 0x7dd3fc, arenaId: undefined },
+      { kind: 'custom', mode: '1v1', label: 'CUSTOM', color: 0xa78bfa, arenaId: SPLAT_TEST_ARENA_ID, badge: 'INVITE CODE' }
     ];
 
     for (let i = 0; i < config.effects.length && i < portalDefs.length; i++) {
@@ -272,7 +343,7 @@ export class LobbyScene {
   }
 
   private addPortal(
-    def: { mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string },
+    def: { kind: 'queue' | 'custom'; mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string },
     pos: { x: number; y: number; z: number },
     visual: THREE.Object3D | null
   ): void {
@@ -298,6 +369,7 @@ export class LobbyScene {
     this.portalUiObjects.push(sprite);
 
     this.portals.push({
+      kind: def.kind,
       mode: def.mode,
       arenaId: def.arenaId,
       label: def.label,

@@ -86,7 +86,7 @@
     "y": 0,
     "z": 0
   },
-  "floorY": -2,
+  "floorY": -1.5,
   "collisionErasers": [],
   "collisionWalls": [
     {

@@ -22,7 +22,13 @@ import {
 } from '../../../shared/types';
 import type { SplatQuality } from '../../../shared/splatMapPool';
 import { FirstPersonCamera, clampPitch } from '../camera/FirstPersonCamera';
+import { AudioManager } from '../audio/AudioManager';
+import {
+  audioCuesForMatchResult,
+  audioCuesForNetEvent
+} from '../audio/AudioEventRouter';
 import { TouchControls } from '../input/TouchControls';
+import { GlobalChatClient } from '../network/GlobalChatClient';
 import { NetworkClient } from '../network/NetworkClient';
 import { applyPredictedHorizontalMovement, needsReconciliation } from '../network/PredictedMovement';
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
@@ -31,6 +37,9 @@ import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } f
 import { SpellVfxManager } from '../spells/SpellVfxManager';
 import { CharacterSelectOverlay } from '../ui/CharacterSelectOverlay';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import { GlobalChatOverlay } from '../ui/GlobalChatOverlay';
+import { CustomMatchOverlay, type CustomCreateRequest } from '../ui/CustomMatchOverlay';
+import { MapIntroOverlay } from '../ui/MapIntroOverlay';
 import { QualityPicker } from '../ui/QualityPicker';
 import { QualitySettingsModal } from '../ui/QualitySettingsModal';
 import { SplatCalibrationOverlay } from '../ui/SplatCalibrationOverlay';
@@ -49,9 +58,6 @@ import {
   loadLatestSplatPresetBackupEntry,
   loadLatestSplatPresetHistoryEntry,
   loadConfiguredSplatArenaPreset,
-  loadSavedSplatPreset,
-  loadSplatArenaPreset,
-  mergeSplatArenaPresetForRuntime,
   saveConfiguredSplatArenaPreset,
   getSplatCalibrationStorageKey,
   setStoredSplatPresetId,
@@ -63,6 +69,11 @@ import {
   type SplatCalibrationSettings
 } from '../world/ArenaPreset';
 import { LobbyScene } from '../world/LobbyScene';
+import {
+  findPublishedMapChoice,
+  loadPublishedMapChoices,
+  type PublishedMapChoice
+} from '../world/PublishedMaps';
 import { CLASSES, type CharacterClass, isCharacterClass } from '../../../shared/classes';
 import {
   requestDevSplatCollisionDeletion,
@@ -78,9 +89,13 @@ interface ProjectileSnapshot {
   z: number;
 }
 
-type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
+export type SceneMode = 'LOBBY' | 'CUSTOM' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 type CharacterGltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
 type PlayerController = LocalPlayerController | RemotePlayerController | AnimatedPlayerController;
+type QueueRequest =
+  | { kind: 'public' }
+  | { kind: 'custom-create'; partyCode: string; arenaPresetId: string; arenaName: string; botSkill?: CustomCreateRequest['botSkill'] }
+  | { kind: 'custom-join'; partyCode: string };
 
 export function resolveKeyboardSpellForClass(characterClass: CharacterClass, key: string): SpellId | null {
   return spellIdFromClassSlot(characterClass, key);
@@ -95,6 +110,35 @@ export function normalizeDamageAmount(payload: { amount?: unknown; damage?: unkn
   return amount;
 }
 
+export function clampMediaVolume(value: number): number {
+  return Math.min(Math.max(value, 0), 1);
+}
+
+export type MatchResultKind = 'victory' | 'defeat';
+
+export interface DifferentMatchQueueIntent {
+  mode: MatchMode;
+  request: { kind: 'public' };
+}
+
+export function resolveMatchResultKind(
+  local: Pick<PlayerSnapshot, 'teamId'> | undefined,
+  winnerTeamId: string
+): MatchResultKind {
+  return local?.teamId && winnerTeamId && local.teamId === winnerTeamId ? 'victory' : 'defeat';
+}
+
+export function createDifferentMatchQueueIntent(selectedMode: MatchMode | null): DifferentMatchQueueIntent {
+  return {
+    mode: selectedMode ?? '1v1',
+    request: { kind: 'public' }
+  };
+}
+
+export function sceneSupportsLocalDash(sceneMode: SceneMode): boolean {
+  return sceneMode === 'MATCH' || sceneMode === 'LOBBY' || sceneMode === 'QUEUE' || sceneMode === 'VFX_EDITOR';
+}
+
 export class GameApp {
   private shell: HTMLDivElement;
   private renderer: THREE.WebGLRenderer;
@@ -103,16 +147,21 @@ export class GameApp {
   private clock = new THREE.Clock();
   private cameraRig = new FirstPersonCamera();
   private vfx = new SpellVfxManager(this.scene);
+  private audio = new AudioManager();
   private touchControls: TouchControls;
   private ui: DebugOverlay;
   private calibrationUi: SplatCalibrationOverlay;
   private vfxEditorUi: VfxEditorOverlay | null = null;
+  private customMatchUi: CustomMatchOverlay;
+  private mapIntroUi: MapIntroOverlay;
   private vfxEditorRuntime: VfxRuntime | null = null;
   private vfxEditorEffects: MapVfxEntry[] = [];
   private vfxEditorInstanceIds: string[] = [];
   private characterSelectUi: CharacterSelectOverlay;
   private mobileStartEl: HTMLDivElement;
   private voice = new VoiceCommandManager();
+  private chatClient: GlobalChatClient;
+  private chatOverlay: GlobalChatOverlay;
   private network: NetworkClient;
   private lobby: LobbyScene | null = null;
   private arenaRuntime: ArenaRuntime | null = null;
@@ -121,6 +170,8 @@ export class GameApp {
   private referenceCharacterSnapshot: PlayerSnapshot | null = null;
   private referenceCharacterClass: CharacterClass = 'arcanist';
   private splatCatalog: SplatMapCatalog | null = null;
+  private publishedMaps: PublishedMapChoice[] = [];
+  private publishedMapsLoad: Promise<PublishedMapChoice[]> | null = null;
   private calibrationBasePreset: SplatArenaPreset | null = null;
   private calibrationPreset: SplatArenaPreset | null = null;
   private calibrationSettings: SplatCalibrationSettings | null = null;
@@ -146,9 +197,15 @@ export class GameApp {
   private selectedArenaDisplayName = '';
   private selectedSplatQuality: SplatQuality = tierToSplatQuality(resolveEffectiveTier());
   private selectedCharacterClass: CharacterClass = 'arcanist';
+  private pendingQueueRequest: QueueRequest = { kind: 'public' };
   private phase = 'WAITING';
   private phaseMessage = '';
   private winnerId = '';
+  private winnerTeamId = '';
+  private rematchAvailable = false;
+  private rematchVotes = 0;
+  private rematchRequired = 0;
+  private rematchRequested = false;
   private localControllerId: string | null = null;
   private localPlayerBound = false;
   private controlsEnabled = false;
@@ -168,6 +225,10 @@ export class GameApp {
   private qualityPicker: QualityPicker | null = null;
   private qualityModal: QualitySettingsModal | null = null;
   private initialQualitySelected = false;
+  private lastAudioPhase = '';
+  private lobbyAudio: HTMLAudioElement | null = null;
+  private lobbyFadeInterval: number | null = null;
+  private localWasAirborne = false;
 
   constructor(private root: HTMLElement) {
     this.shell = document.createElement('div');
@@ -188,29 +249,51 @@ export class GameApp {
     this.ui = new DebugOverlay(this.root);
     this.calibrationUi = new SplatCalibrationOverlay(this.root);
     this.vfxEditorUi = new VfxEditorOverlay(this.root);
+    this.customMatchUi = new CustomMatchOverlay(this.root);
+    this.mapIntroUi = new MapIntroOverlay(this.root);
     this.characterSelectUi = new CharacterSelectOverlay(this.root);
+    this.chatOverlay = new GlobalChatOverlay(this.root);
     this.mobileStartEl = this.createMobileStartOverlay();
     this.createPortraitBlocker();
     this.network = new NetworkClient(resolveServerUrl());
+    this.chatClient = new GlobalChatClient(resolveServerUrl());
     this.voice.setCharacterClass(this.selectedCharacterClass);
 
     this.characterSelectUi.onBack = () => void this.returnToLobby();
     this.characterSelectUi.onClassSelect = (characterClass) => this.switchPreviewClass(characterClass);
     this.characterSelectUi.onConfirm = (characterClass) => this.confirmCharacterSelection(characterClass);
     this.characterSelectUi.onSpellHover = (spellId) => this.playPreviewAnim(spellId ? 'lanzarmagia' : 'reposo');
+    this.customMatchUi.onBack = () => void this.returnToLobby();
+    this.customMatchUi.onCreate = (request) => void this.createCustomMatch(request);
+    this.customMatchUi.onJoin = (partyCode) => void this.joinCustomMatch(partyCode);
+    this.chatOverlay.onSend = (text) => this.chatClient.send(text);
+    this.chatClient.onHistory = (messages, onlineCount) => this.chatOverlay.setHistory(messages, onlineCount);
+    this.chatClient.onMessage = (message, onlineCount) => this.chatOverlay.addMessage(message, onlineCount);
+    this.chatClient.onPresence = (onlineCount) => this.chatOverlay.setPresence(onlineCount);
+    this.chatClient.onStatus = (status) => this.chatOverlay.setStatus(status);
     this.bindCharacterPreviewEvents();
   }
 
   start(): void {
     this.setupScene();
     this.bindEvents();
+    this.audio.preload();
     void this.preloadCharacterModels();
+    void this.connectGlobalChat();
     if (new URLSearchParams(window.location.search).get('calibrateSplat') === '1') {
       void this.enterCalibration();
     } else {
       this.promptInitialQualityIfNeeded();
     }
     this.loop();
+  }
+
+  private async connectGlobalChat(): Promise<void> {
+    try {
+      await this.chatClient.connect(this.localName);
+    } catch (error) {
+      console.warn('[GameApp] Global chat unavailable', error);
+    }
   }
 
   private setupScene(): void {
@@ -247,10 +330,14 @@ export class GameApp {
   }
 
   private bindEvents(): void {
+    const unlockAudio = () => this.audio.unlock();
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('keydown', (event) => this.onKey(event, true));
     window.addEventListener('keyup', (event) => this.onKey(event, false));
     this.renderer.domElement.addEventListener('click', () => {
+      this.audio.unlock();
       this.renderer.domElement.requestPointerLock().catch(() => undefined);
     });
     window.addEventListener('mousemove', (event) => {
@@ -260,12 +347,35 @@ export class GameApp {
       }
     });
 
-    this.ui.onCast = (spellId) => this.cast(spellId);
-    this.ui.onVoiceToggle = () => this.voice.toggle();
-    this.ui.onCancelQueue = () => void this.returnToLobby();
-    this.ui.onReturnLobby = () => void this.returnToLobby();
+    this.ui.onCast = (spellId) => {
+      this.audio.play('ui.confirm');
+      this.cast(spellId);
+    };
+    this.ui.onVoiceToggle = () => {
+      this.audio.play('ui.confirm');
+      this.voice.toggle();
+    };
+    this.ui.onCancelQueue = () => {
+      this.audio.play('ui.denied');
+      void this.returnToLobby();
+    };
+    this.ui.onReturnLobby = () => {
+      this.audio.play('ui.confirm');
+      void this.returnToLobby();
+    };
+    this.ui.onRematch = () => {
+      this.audio.play('ui.confirm');
+      this.requestRematch();
+    };
+    this.ui.onPlayDifferentMatch = () => {
+      this.audio.play('ui.confirm');
+      void this.playDifferentMatch();
+    };
     this.ui.onPortalAction = () => this.activateNearestPortal();
-    this.ui.onQualitySettings = () => this.openQualityModal();
+    this.ui.onQualitySettings = () => {
+      this.audio.play('ui.confirm');
+      this.openQualityModal();
+    };
     this.calibrationUi.onChange = (settings, options) => this.applyCalibrationSettings(settings, options);
     this.calibrationUi.onBeforeReset = (settings) => this.backupCalibrationSettings(settings, 'before-reset');
     this.calibrationUi.onSelectMap = (presetId) => void this.switchCalibrationPreset(presetId, this.selectedSplatQuality);
@@ -309,6 +419,8 @@ export class GameApp {
     `;
     this.root.appendChild(overlay);
     overlay.querySelector('button')?.addEventListener('click', () => {
+      this.audio.unlock();
+      this.audio.play('ui.confirm');
       void this.enterMobileFullscreen();
     });
     return overlay;
@@ -354,10 +466,16 @@ export class GameApp {
     if (this.sceneMode !== 'LOBBY') return;
     const portal = this.lobby?.nearestPortal();
     if (!portal) return;
+    this.audio.play('ui.portal');
+    if (portal.kind === 'custom') {
+      void this.enterCustomMatch();
+      return;
+    }
     void this.enterCharacterSelect(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
   }
 
   private onKey(event: KeyboardEvent, down: boolean): void {
+    if (down) this.audio.unlock();
     const key = event.key.toLowerCase();
     if (isEditableTarget(event.target) && key !== 'escape') {
       return;
@@ -398,8 +516,18 @@ export class GameApp {
       const portal = this.lobby?.nearestPortal();
       if (portal) {
         event.preventDefault();
-        void this.enterCharacterSelect(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
+        this.audio.play('ui.portal');
+        if (portal.kind === 'custom') {
+          void this.enterCustomMatch();
+        } else {
+          void this.enterCharacterSelect(portal.mode, portal.arenaId ?? DEFAULT_ARENA_ID);
+        }
       }
+      return;
+    }
+
+    if (key === 'escape' && this.sceneMode === 'CUSTOM') {
+      void this.returnToLobby();
       return;
     }
 
@@ -430,6 +558,7 @@ export class GameApp {
 
     if (key === 'enter' && this.sceneMode === 'CHARACTER_SELECT') {
       event.preventDefault();
+      this.audio.play('ui.confirm');
       this.confirmCharacterSelection(this.selectedCharacterClass);
       return;
     }
@@ -439,6 +568,7 @@ export class GameApp {
     const spell = resolveKeyboardSpellForClass(this.getLocalCharacterClass(), event.key);
     if (spell) {
       event.preventDefault();
+      this.audio.play('ui.confirm');
       this.cast(spell);
     }
   }
@@ -458,14 +588,19 @@ export class GameApp {
     this.phase = state.phase ?? this.phase;
     this.phaseMessage = state.message ?? this.phaseMessage;
     this.winnerId = state.winnerId ?? '';
+    this.winnerTeamId = state.winnerTeamId ?? '';
+    this.rematchAvailable = Boolean(state.rematchAvailable);
+    this.rematchVotes = Number(state.rematchVotes ?? 0);
+    this.rematchRequired = Number(state.rematchRequired ?? 0);
+    if (this.phase !== 'ENDED' || !this.rematchAvailable) {
+      this.rematchRequested = false;
+    }
     this.selectedMode = state.mode ?? this.selectedMode;
     this.selectedArenaId = coerceArenaId(state.arenaId ?? this.selectedArenaId);
     this.selectedArenaPresetId = stringValue(state.arenaPresetId, this.selectedArenaPresetId);
     this.selectedArenaPresetUrl = stringValue(state.arenaPresetUrl, this.selectedArenaPresetUrl);
     this.selectedArenaDisplayName = stringValue(state.arenaDisplayName, this.selectedArenaDisplayName);
-    if ((this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY') && this.phase === 'PLAYING') {
-      this.enterMatch();
-    }
+    this.handleMatchPhaseTransition();
 
     this.playerSnapshots.clear();
     const players = Array.from(state.players?.values?.() ?? []) as PlayerSnapshot[];
@@ -536,18 +671,26 @@ export class GameApp {
   }
 
   private handleNetEvent(type: string, payload: any): void {
+    this.playNetworkAudio(type, payload);
+
     if (type === 'phase') {
       this.phase = payload.phase;
       this.phaseMessage = payload.message ?? this.phaseMessage;
       this.winnerId = payload.winnerId ?? '';
+      this.winnerTeamId = payload.winnerTeamId ?? '';
+      this.rematchAvailable = Boolean(payload.rematchAvailable);
+      this.rematchVotes = Number(payload.rematchVotes ?? 0);
+      this.rematchRequired = Number(payload.rematchRequired ?? 0);
+      if (this.phase !== 'ENDED' || !this.rematchAvailable) {
+        this.rematchRequested = false;
+      }
+      this.selectedMode = payload.mode ?? this.selectedMode;
       this.selectedArenaId = coerceArenaId(payload.arenaId ?? this.selectedArenaId);
       this.selectedArenaPresetId = stringValue(payload.arenaPresetId, this.selectedArenaPresetId);
       this.selectedArenaPresetUrl = stringValue(payload.arenaPresetUrl, this.selectedArenaPresetUrl);
       this.selectedArenaDisplayName = stringValue(payload.arenaDisplayName, this.selectedArenaDisplayName);
       this.syncControlState();
-      if ((this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY') && payload.phase === 'PLAYING') {
-        this.enterMatch();
-      }
+      this.handleMatchPhaseTransition();
       if (this.sceneMode === 'MATCH' && payload.phase === 'ENDED') {
         this.enterResults();
       }
@@ -558,6 +701,11 @@ export class GameApp {
     }
     if (type === 'cast_denied') {
       this.ui.showToast(payload.reason ?? 'Cast denied');
+    }
+    if (type === 'bot_added') {
+      const count = typeof payload.count === 'number' ? payload.count : 1;
+      const skill = typeof payload.skill === 'string' ? payload.skill : 'adept';
+      this.ui.showToast(`${count} ${skill} bot${count === 1 ? '' : 's'} joined`);
     }
     if (type === 'damage') {
       const amount = normalizeDamageAmount(payload);
@@ -597,6 +745,17 @@ export class GameApp {
     }
   }
 
+  private playNetworkAudio(type: string, payload: Record<string, unknown>): void {
+    if (type === 'phase') {
+      const nextPhase = typeof payload.phase === 'string' ? payload.phase : '';
+      if (nextPhase && nextPhase === this.lastAudioPhase) return;
+      this.lastAudioPhase = nextPhase;
+    }
+    this.audio.playCues(audioCuesForNetEvent(type, payload, {
+      localSessionId: this.network.localSessionId
+    }));
+  }
+
   private loop(): void {
     this.animationId = requestAnimationFrame(() => this.loop());
     try {
@@ -605,6 +764,7 @@ export class GameApp {
       this.applyTouchCameraDelta();
       this.applyTouchAction();
       this.updateScene(dt);
+      this.updateMovementAudio();
       this.sendMoveIfNeeded();
       this.vfx.update(dt);
       const local = this.sceneMode === 'CALIBRATION' ? this.calibrationSnapshot ?? undefined : this.getLocalSnapshot();
@@ -631,9 +791,15 @@ export class GameApp {
       portalActionLabel: this.sceneMode === 'LOBBY' && portal ? portal.label : '',
       queueActive: this.sceneMode === 'QUEUE',
       resultsActive: this.sceneMode === 'RESULTS',
+      resultKind: resolveMatchResultKind(local, this.winnerTeamId),
       resultsMessage: this.phaseMessage,
+      rematchAvailable: this.rematchAvailable,
+      rematchVotes: this.rematchVotes,
+      rematchRequired: this.rematchRequired,
+      rematchRequested: this.rematchRequested,
       arenaDebug: this.getArenaDebugInfo()
     });
+    this.chatOverlay.setScene(this.sceneMode);
     if (this.sceneMode === 'CALIBRATION') {
       this.calibrationUi.updateStatus(this.getArenaDebugInfo(), this.calibrationSnapshot);
     }
@@ -679,6 +845,20 @@ export class GameApp {
       return;
     }
 
+    if (this.sceneMode === 'CUSTOM') {
+      this.lobby?.update({
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        rotY: this.aimYaw
+      }, dt, this.camera);
+      if (this.lobby) {
+        this.cameraRig.update(this.camera, this.lobby.getPlayerPosition(), this.lobby.getPlayerRotation(), this.aimPitch, dt);
+      }
+      return;
+    }
+
     if (this.sceneMode === 'VFX_EDITOR') {
       this.lobby?.update(input, dt, this.camera);
       if (this.lobby) {
@@ -714,6 +894,34 @@ export class GameApp {
     }
   }
 
+  private updateMovementAudio(): void {
+    const position = this.currentLocalAudioPosition();
+    if (!position) {
+      this.localWasAirborne = false;
+      return;
+    }
+
+    const floorY = this.getArenaDebugInfo()?.floorY ?? 0;
+    const airborne = position.y > floorY + 0.08;
+    if (this.localWasAirborne && !airborne) {
+      this.audio.play('movement.land');
+    }
+    this.localWasAirborne = airborne;
+  }
+
+  private currentLocalAudioPosition(): THREE.Vector3 | null {
+    if (this.sceneMode === 'LOBBY' || this.sceneMode === 'QUEUE' || this.sceneMode === 'CUSTOM' || this.sceneMode === 'VFX_EDITOR') {
+      return this.lobby?.getPlayerPosition() ?? null;
+    }
+    if (this.sceneMode === 'CALIBRATION') {
+      return this.calibrationSnapshot
+        ? new THREE.Vector3(this.calibrationSnapshot.x, this.calibrationSnapshot.y, this.calibrationSnapshot.z)
+        : null;
+    }
+    const local = this.getLocalSnapshot();
+    return local ? new THREE.Vector3(local.x, local.y, local.z) : null;
+  }
+
   private currentInput(consumeActions = false): MoveInput {
     const touch = this.touchControls.getMovement();
     const jump = consumeActions ? this.consumeJumpQueued() : false;
@@ -737,7 +945,7 @@ export class GameApp {
 
   private consumeDashQueuedIfReady(): boolean {
     if (!this.dashQueued) return false;
-    if (this.sceneMode !== 'MATCH') {
+    if (!sceneSupportsLocalDash(this.sceneMode)) {
       this.dashQueued = false;
       return false;
     }
@@ -750,11 +958,12 @@ export class GameApp {
     }
 
     this.dashQueued = false;
+    this.audio.play('movement.dash');
     return true;
   }
 
   private queueJumpOrDash(): void {
-    if (this.sceneMode === 'MATCH' && (this.jumpQueued || this.isLocalPlayerAirborne() || this.recentlyRequestedJump())) {
+    if (sceneSupportsLocalDash(this.sceneMode) && (this.jumpQueued || this.isLocalPlayerAirborne() || this.recentlyRequestedJump())) {
       this.dashQueued = true;
       this.dashQueuedAt = performance.now();
       return;
@@ -762,6 +971,7 @@ export class GameApp {
 
     this.jumpQueued = true;
     this.lastJumpActionAt = performance.now();
+    this.audio.play('movement.jump');
   }
 
   private recentlyRequestedJump(): boolean {
@@ -775,10 +985,9 @@ export class GameApp {
   }
 
   private isLocalPlayerAirborne(): boolean {
-    const local = this.getLocalSnapshot();
-    if (!local) return false;
     const floorY = this.getArenaDebugInfo()?.floorY ?? 0;
-    return local.y > floorY + 0.08;
+    const position = this.currentLocalAudioPosition();
+    return position ? position.y > floorY + 0.08 : false;
   }
 
   private clearQueuedActions(): void {
@@ -893,8 +1102,12 @@ export class GameApp {
       return;
     }
 
-    this.localPlayerBound = Boolean(this.getLocalSnapshot());
-    this.controlsEnabled = this.sceneMode === 'MATCH' && this.network.connected && this.localPlayerBound && this.phase === 'PLAYING';
+    const local = this.getLocalSnapshot();
+    this.localPlayerBound = Boolean(local);
+    this.controlsEnabled = this.sceneMode === 'MATCH'
+      && this.network.connected
+      && Boolean(local && local.hp > 0)
+      && this.phase === 'PLAYING';
 
     if (!this.controlsEnabled) {
       this.keys.clear();
@@ -906,6 +1119,8 @@ export class GameApp {
     this.queueToken++;
     this.sceneMode = 'LOBBY';
     this.characterSelectUi.hide();
+    this.customMatchUi.hide();
+    this.mapIntroUi.hide();
     this.vfxEditorUi?.hide();
     this.vfxEditorRuntime?.stopAll();
     this.vfxEditorRuntime = null;
@@ -916,14 +1131,24 @@ export class GameApp {
     this.selectedArenaPresetId = '';
     this.selectedArenaPresetUrl = '';
     this.selectedArenaDisplayName = '';
+    this.pendingQueueRequest = { kind: 'public' };
     this.phase = 'WAITING';
     this.phaseMessage = '';
+    this.winnerId = '';
+    this.winnerTeamId = '';
+    this.lastAudioPhase = 'WAITING';
+    this.localWasAirborne = false;
+    this.rematchAvailable = false;
+    this.rematchVotes = 0;
+    this.rematchRequired = 0;
+    this.rematchRequested = false;
     this.controlsEnabled = false;
     this.localPlayerBound = false;
     this.clearQueuedActions();
     this.touchControls.reset();
     this.clearMatchScene();
     this.network.leave();
+    void this.ensurePublishedMaps();
     this.lobby?.dispose();
     this.lobby = null;
 
@@ -931,9 +1156,7 @@ export class GameApp {
 
     let lobbyPreset: SplatArenaPreset | null = null;
     try {
-      const basePreset = await loadSplatArenaPreset('/arena-presets/lobby-high.json');
-      const savedPreset = loadSavedSplatPreset('lobby-high');
-      lobbyPreset = savedPreset ? mergeSplatArenaPresetForRuntime(basePreset, savedPreset) : basePreset;
+      lobbyPreset = (await loadConfiguredSplatArenaPreset('lobby-high', this.selectedSplatQuality)).preset;
     } catch (error) {
       console.warn('[GameApp] Failed to load lobby preset', error);
     }
@@ -963,9 +1186,75 @@ export class GameApp {
       console.warn('[GameApp] Lobby splat failed, using procedural fallback', error);
       this.ui.showToast('Lobby splat unavailable');
     }
+    this.startLobbyMusic();
+  }
+
+  private async enterCustomMatch(): Promise<void> {
+    this.stopLobbyMusic();
+    if (this.sceneMode !== 'LOBBY' && this.sceneMode !== 'CUSTOM') return;
+    const token = ++this.queueToken;
+    this.sceneMode = 'CUSTOM';
+    this.controlsEnabled = false;
+    this.keys.clear();
+    this.clearQueuedActions();
+    this.touchControls.reset();
+    try {
+      const maps = await this.ensurePublishedMaps();
+      if (token !== this.queueToken || this.sceneMode !== 'CUSTOM') return;
+      this.customMatchUi.setMaps(maps);
+      this.customMatchUi.show();
+      this.ui.showToast('Custom invite portal');
+    } catch (error) {
+      console.warn('[GameApp] Failed to load custom maps', error);
+      if (token === this.queueToken) {
+        this.customMatchUi.setMaps([]);
+        this.customMatchUi.show();
+        this.ui.showToast('Map previews unavailable');
+      }
+    }
+  }
+
+  private async createCustomMatch(request: CustomCreateRequest): Promise<void> {
+    this.pendingQueueRequest = {
+      kind: 'custom-create',
+      partyCode: request.partyCode,
+      arenaPresetId: request.arenaPresetId,
+      arenaName: request.arenaName,
+      ...(request.botSkill ? { botSkill: request.botSkill } : {})
+    };
+    this.customMatchUi.hide();
+    await this.enterCharacterSelect(request.mode, SPLAT_TEST_ARENA_ID, {
+      modeLabel: `CUSTOM ${request.mode}`,
+      arenaLabel: `${request.arenaName} · ${request.partyCode}`
+    });
+  }
+
+  private async joinCustomMatch(partyCode: string): Promise<void> {
+    this.pendingQueueRequest = { kind: 'custom-join', partyCode };
+    this.customMatchUi.hide();
+    await this.enterCharacterSelect('1v1', SPLAT_TEST_ARENA_ID, {
+      modeLabel: 'CUSTOM invite',
+      arenaLabel: `Code ${partyCode}`
+    });
+  }
+
+  private async ensurePublishedMaps(): Promise<PublishedMapChoice[]> {
+    if (this.publishedMaps.length > 0) return this.publishedMaps;
+    this.publishedMapsLoad ??= loadPublishedMapChoices()
+      .then((maps) => {
+        this.publishedMaps = maps;
+        this.customMatchUi.setMaps(maps);
+        this.mapIntroUi.setMaps(maps);
+        return maps;
+      })
+      .finally(() => {
+        this.publishedMapsLoad = null;
+      });
+    return this.publishedMapsLoad;
   }
 
   private async enterCalibration(): Promise<void> {
+    this.stopLobbyMusic();
     const token = ++this.queueToken;
     this.sceneMode = 'CALIBRATION';
     this.renderer.setClearColor(0x15120f, 1);
@@ -1069,6 +1358,7 @@ export class GameApp {
   }
 
   private async enterVfxEditor(): Promise<void> {
+    this.stopLobbyMusic();
     const token = ++this.queueToken;
     if (this.sceneMode !== 'LOBBY' || !this.lobby) return;
     this.sceneMode = 'VFX_EDITOR';
@@ -1125,7 +1415,12 @@ export class GameApp {
     this.ui.showToast('VFX Editor — press Esc to exit');
   }
 
-  private async enterCharacterSelect(mode: MatchMode, arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
+  private async enterCharacterSelect(
+    mode: MatchMode,
+    arenaId: ArenaId = DEFAULT_ARENA_ID,
+    context?: { modeLabel: string; arenaLabel: string }
+  ): Promise<void> {
+    this.stopLobbyMusic();
     const token = ++this.queueToken;
     this.sceneMode = 'CHARACTER_SELECT';
     this.qualityPicker?.dispose();
@@ -1140,6 +1435,7 @@ export class GameApp {
     this.selectedArenaDisplayName = '';
     this.phase = 'WAITING';
     this.phaseMessage = 'Choose your mage';
+    this.audio.play('announcer.choose_your_mage');
     this.controlsEnabled = false;
     this.localPlayerBound = false;
     this.clearQueuedActions();
@@ -1151,7 +1447,7 @@ export class GameApp {
     this.lobby?.dispose();
     this.lobby = null;
     this.network.leave();
-    this.characterSelectUi.show(makeCharacterSelectContext(mode, arenaId));
+    this.characterSelectUi.show(context ?? makeCharacterSelectContext(mode, arenaId));
     this.ui.showToast('Choose your mage');
     await this.loadPreviewModel(this.selectedCharacterClass);
     if (token !== this.queueToken || this.sceneMode !== 'CHARACTER_SELECT') {
@@ -1165,7 +1461,7 @@ export class GameApp {
     this.ui.setCharacterClass(characterClass);
     this.clearPreview();
     this.characterSelectUi.hide();
-    void this.enterQueue(this.selectedMode ?? '1v1', this.selectedArenaId);
+    void this.enterQueue(this.selectedMode ?? '1v1', this.selectedArenaId, this.pendingQueueRequest);
   }
 
   private switchPreviewClass(characterClass: CharacterClass): void {
@@ -1176,7 +1472,12 @@ export class GameApp {
     }
   }
 
-  private async enterQueue(mode: MatchMode, _arenaId: ArenaId = DEFAULT_ARENA_ID): Promise<void> {
+  private async enterQueue(
+    mode: MatchMode,
+    _arenaId: ArenaId = DEFAULT_ARENA_ID,
+    request: QueueRequest = { kind: 'public' }
+  ): Promise<void> {
+    this.stopLobbyMusic();
     const token = ++this.queueToken;
     this.sceneMode = 'QUEUE';
     this.renderer.setClearColor(0x15120f, 1);
@@ -1186,43 +1487,75 @@ export class GameApp {
     this.selectedArenaPresetUrl = '';
     this.selectedArenaDisplayName = '';
     this.phase = 'WAITING';
-    this.phaseMessage = `Finding ${mode}`;
+    this.phaseMessage = request.kind === 'public' ? `Finding ${mode}` : `Custom ${request.partyCode}`;
+    this.audio.play('ui.queue');
     this.characterSelectUi.hide();
+    this.customMatchUi.hide();
     this.clearPreview();
     this.clearQueuedActions();
     this.playerSnapshots.clear();
     this.projectileSnapshots = [];
     this.touchControls.reset();
     this.clearMatchScene();
-    this.ui.showToast(`Finding ${mode}`);
+    this.ui.showToast(request.kind === 'public' ? `Finding ${mode}` : `Joining custom ${request.partyCode}`);
     this.network.leave();
     const nextNetwork = new NetworkClient(resolveServerUrl());
     nextNetwork.onState = (state) => this.applyState(state);
     nextNetwork.onEvent = (type, payload) => this.handleNetEvent(type, payload);
     this.network = nextNetwork;
     try {
-      await nextNetwork.connect(this.localName, mode, this.selectedCharacterClass);
+      if (request.kind === 'custom-join') {
+        await nextNetwork.connectByPartyCode(this.localName, request.partyCode, this.selectedCharacterClass);
+      } else {
+        await nextNetwork.connect(this.localName, mode, this.selectedCharacterClass, request.kind === 'custom-create'
+          ? { partyCode: request.partyCode, arenaPresetId: request.arenaPresetId, botSkill: request.botSkill }
+          : {});
+      }
       if (token !== this.queueToken || this.network !== nextNetwork || this.sceneMode !== 'QUEUE') {
         nextNetwork.leave();
       }
     } catch (error) {
       if (token !== this.queueToken) return;
-      this.ui.showToast('Queue failed');
+      this.ui.showToast(request.kind === 'custom-join' ? 'Custom code not found' : 'Queue failed');
       console.error(error);
       void this.returnToLobby();
     }
   }
 
+  private handleMatchPhaseTransition(): void {
+    if (this.phase !== 'SELECTING' && this.phase !== 'COUNTDOWN' && this.phase !== 'PLAYING') {
+      return;
+    }
+    if (this.sceneMode === 'QUEUE' || this.sceneMode === 'LOBBY' || this.sceneMode === 'CUSTOM' || this.sceneMode === 'RESULTS') {
+      this.enterMatch();
+    }
+    if (this.sceneMode === 'MATCH') {
+      this.updateMapIntro();
+    }
+  }
+
   private enterMatch(): void {
-    if (this.sceneMode === 'MATCH') return;
+    this.stopLobbyMusic();
+    if (this.sceneMode === 'MATCH') {
+      return;
+    }
     this.sceneMode = 'MATCH';
     this.renderer.setClearColor(0x15120f, 1);
     this.characterSelectUi.hide();
+    this.customMatchUi.hide();
     this.clearPreview();
     this.lobby?.dispose();
     this.lobby = null;
-    const arenaOptions = this.selectedArenaId === SPLAT_TEST_ARENA_ID && this.selectedArenaPresetUrl
-      ? { presetUrl: this.selectedArenaPresetUrl }
+    const arenaOptions = this.selectedArenaId === SPLAT_TEST_ARENA_ID
+      ? this.selectedArenaPresetId
+        ? {
+            presetId: this.selectedArenaPresetId,
+            quality: this.selectedSplatQuality,
+            fallbackPresetUrl: this.selectedArenaPresetUrl || undefined
+          }
+        : this.selectedArenaPresetUrl
+          ? { presetUrl: this.selectedArenaPresetUrl }
+          : {}
       : {};
     this.arenaRuntime = createArenaProvider(this.selectedArenaId, arenaOptions).mount({
       scene: this.scene,
@@ -1233,14 +1566,34 @@ export class GameApp {
     });
     this.syncControlState();
     void this.vfx.preload();
+    this.updateMapIntro();
     this.ui.showToast(this.selectedArenaDisplayName
-      ? `${this.selectedMode ?? 'Match'}: ${this.selectedArenaDisplayName}`
+      ? `${this.selectedMode ?? 'Match'}: ${this.displayNameForSelectedMap()}`
       : `${this.selectedMode ?? 'Match'} started`);
   }
 
+  private updateMapIntro(): void {
+    const phase = this.phase as 'SELECTING' | 'COUNTDOWN' | 'PLAYING';
+    if (phase !== 'SELECTING' && phase !== 'COUNTDOWN' && phase !== 'PLAYING') return;
+    if (this.publishedMaps.length === 0) {
+      void this.ensurePublishedMaps().then(() => this.updateMapIntro()).catch(() => undefined);
+    }
+    this.mapIntroUi.setMaps(this.publishedMaps);
+    this.mapIntroUi.update(phase, stripQualitySuffix(this.selectedArenaPresetId), this.displayNameForSelectedMap());
+  }
+
+  private displayNameForSelectedMap(): string {
+    const name = findPublishedMapChoice(this.publishedMaps, stripQualitySuffix(this.selectedArenaPresetId), this.selectedArenaDisplayName)
+      ?.displayName
+      ?? stripQualityLabel(this.selectedArenaDisplayName);
+    return name || 'Selected Arena';
+  }
+
   private enterResults(): void {
+    const local = this.getLocalSnapshot();
     this.sceneMode = 'RESULTS';
     this.renderer.setClearColor(0x15120f, 1);
+    this.mapIntroUi.hide();
     this.controlsEnabled = false;
     this.keys.clear();
     this.clearQueuedActions();
@@ -1251,7 +1604,7 @@ export class GameApp {
     for (const [id, controller] of this.players) {
       const snapshot = this.playerSnapshots.get(id);
       if (!snapshot) continue;
-      const isWinner = id === this.winnerId;
+      const isWinner = Boolean(this.winnerTeamId && snapshot.teamId === this.winnerTeamId);
       snapshot.anim = isWinner ? 'victory' : 'defeat';
       if (!isWinner) {
         snapshot.y = floorY;
@@ -1259,11 +1612,31 @@ export class GameApp {
       controller.update(snapshot, 0, true);
     }
 
+    this.audio.playCues(audioCuesForMatchResult({
+      winnerId: this.winnerId,
+      localSessionId: this.network.localSessionId,
+      winnerTeamId: this.winnerTeamId,
+      localTeamId: local?.teamId
+    }));
     this.ui.showToast(this.phaseMessage || 'Match ended');
   }
 
   private async returnToLobby(): Promise<void> {
+    this.audio.play('ui.confirm');
     await this.enterLobby();
+  }
+
+  private requestRematch(): void {
+    if (this.sceneMode !== 'RESULTS' || !this.rematchAvailable || this.rematchRequested) return;
+    this.rematchRequested = true;
+    this.audio.play('ui.confirm');
+    this.network.sendRematchReady();
+  }
+
+  private async playDifferentMatch(): Promise<void> {
+    const intent = createDifferentMatchQueueIntent(this.selectedMode);
+    this.rematchRequested = false;
+    await this.enterQueue(intent.mode, DEFAULT_ARENA_ID, intent.request);
   }
 
   private bindCharacterPreviewEvents(): void {
@@ -2106,6 +2479,16 @@ export class GameApp {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
+
+  private startLobbyMusic(): void {
+    this.audio.playMusic('music.lobby');
+    this.audio.playAmbience('ambience.lobby');
+  }
+
+  private stopLobbyMusic(): void {
+    this.audio.stopMusic();
+    this.audio.stopAmbience();
+  }
 }
 
 function defaultSplatCalibrationPreset(): SplatArenaPreset {
@@ -2208,7 +2591,7 @@ function coerceArenaId(value: unknown): ArenaId {
 
 function makeCharacterSelectContext(mode: MatchMode, arenaId: ArenaId): { modeLabel: string; arenaLabel: string } {
   if (arenaId === SPLAT_TEST_ARENA_ID) {
-    return { modeLabel: 'Realistic Arena', arenaLabel: 'Realistic Arena Test' };
+    return { modeLabel: 'CUSTOM', arenaLabel: 'Private map invite' };
   }
   return {
     modeLabel: mode === '2v2' ? '2v2 Team Duel' : '1v1 Duel',
@@ -2222,6 +2605,14 @@ function resolveCharacterClass(value: unknown): CharacterClass {
 
 function stringValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+function stripQualitySuffix(value: string): string {
+  return value.replace(/-(low|mid|high)$/i, '');
+}
+
+function stripQualityLabel(value: string): string {
+  return value.replace(/\s*\((LOW|MID|HIGH)\)\s*$/i, '').trim();
 }
 
 function resolveDevApiBaseUrl(): string {
@@ -2467,14 +2858,16 @@ function updateWallGuides(wallsGroup: THREE.Group | undefined, settings: SplatCa
     const height = Math.max(0.1, wall.height);
     guide.name = `calibration-wall-${wall.id}`;
     guide.position.set(wall.x, settings.floorY + height / 2, wall.z);
-    guide.rotation.y = wall.rotY;
+    guide.rotation.set(0, wall.rotY, 0);
     guide.visible = true;
     updateWallGuideVisual(
       guide,
       Math.max(0.1, wall.width),
       Math.max(0.1, wall.depth),
       height,
-      Boolean(wall.climbable)
+      Boolean(wall.climbable),
+      undefined,
+      Boolean(wall.ramp)
     );
   });
 }
@@ -2495,7 +2888,7 @@ function updateEraserGuides(erasersGroup: THREE.Group | undefined, settings: Spl
     const height = Math.max(0.1, eraser.height);
     guide.name = `calibration-eraser-${eraser.id}`;
     guide.position.set(eraser.x, settings.floorY + height / 2, eraser.z);
-    guide.rotation.y = eraser.rotY;
+    guide.rotation.set(0, eraser.rotY, 0);
     guide.visible = true;
     updateWallGuideVisual(
       guide,
@@ -2503,7 +2896,8 @@ function updateEraserGuides(erasersGroup: THREE.Group | undefined, settings: Spl
       Math.max(0.1, eraser.depth),
       height,
       false,
-      0x22c55e
+      0x22c55e,
+      false
     );
   });
 }
@@ -2537,18 +2931,35 @@ function createEraserGuide(): THREE.Group {
   return group;
 }
 
-function updateWallGuideVisual(group: THREE.Group, width: number, depth: number, height: number, climbable: boolean, overrideColor?: number): void {
+function updateWallGuideVisual(
+  group: THREE.Group,
+  width: number,
+  depth: number,
+  height: number,
+  climbable: boolean,
+  overrideColor?: number,
+  ramp = false
+): void {
   const box = group.userData.box as THREE.Mesh | undefined;
   if (box) {
-    box.scale.set(width, height, depth);
+    if (ramp) {
+      const pitch = Math.atan2(height, depth);
+      box.scale.set(width, 0.08, Math.hypot(depth, height));
+      box.rotation.x = -pitch;
+      box.position.set(0, 0, 0);
+    } else {
+      box.scale.set(width, height, depth);
+      box.rotation.x = 0;
+      box.position.set(0, 0, 0);
+    }
     const material = box.material as THREE.MeshBasicMaterial;
-    material.color.setHex(overrideColor ?? (climbable ? 0x38bdf8 : 0xff4d6d));
-    material.opacity = overrideColor ? 0.34 : climbable ? 0.42 : 0.28;
+    material.color.setHex(overrideColor ?? (ramp ? 0xf5c45e : climbable ? 0x38bdf8 : 0xff4d6d));
+    material.opacity = overrideColor ? 0.34 : ramp ? 0.55 : climbable ? 0.42 : 0.28;
   }
 
   const rungs = group.userData.rungs as THREE.Group | undefined;
   if (!rungs) return;
-  rungs.visible = climbable;
+  rungs.visible = climbable && !ramp;
   const rungCount = climbable ? Math.max(2, Math.floor(height / 0.35)) : 0;
   while (rungs.children.length < rungCount) {
     rungs.add(createLadderRung());

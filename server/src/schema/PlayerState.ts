@@ -1,5 +1,5 @@
 import { Schema, type } from '@colyseus/schema';
-import { MAX_HP, MAX_MANA, SPAWNS, type TeamId } from '../../../shared/types.js';
+import { MAX_HP, MAX_MANA, SPAWNS, type BotSkill, type TeamId } from '../../../shared/types.js';
 import type { SpellId } from '../../../shared/spells.js';
 import type { CharacterClass } from '../../../shared/classes.js';
 import type { ServerPlayer } from '../systems/SpellSystem.js';
@@ -18,6 +18,8 @@ export class PlayerState extends Schema implements ServerPlayer {
   @type('boolean') casting = false;
   @type('string') selectedSpell = '';
   @type('string') characterClass: CharacterClass = 'arcanist';
+  @type('boolean') isBot = false;
+  @type('string') botSkill = '';
   @type('number') shadowDartReadyAt = 0;
   @type('number') voidTrapReadyAt = 0;
   @type('number') abyssalClawReadyAt = 0;
@@ -42,7 +44,9 @@ export class PlayerState extends Schema implements ServerPlayer {
     name?: string,
     teamId: TeamId = 'A',
     spawnIndex = 0,
-    characterClass: CharacterClass = 'arcanist'
+    characterClass: CharacterClass = 'arcanist',
+    isBot = false,
+    botSkill?: BotSkill
   ) {
     super();
     if (!id) return;
@@ -52,6 +56,8 @@ export class PlayerState extends Schema implements ServerPlayer {
     this.name = sanitizeName(name);
     this.teamId = teamId;
     this.characterClass = characterClass;
+    this.isBot = isBot;
+    this.botSkill = botSkill ?? '';
     this.x = spawn.x;
     this.y = spawn.y;
     this.z = spawn.z;

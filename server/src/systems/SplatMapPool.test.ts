@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compactSplatMapCatalog,
   enabledSplatMapsForMode,
+  findSplatMapEntry,
   resolveEnabledModes,
+  resolveSplatQualityEntry,
   resolveSpawnPointsForMode,
   selectRandomSplatMapForMode
 } from '../../../shared/splatMapPool';
@@ -50,5 +53,93 @@ describe('splat map pool helpers', () => {
     expect(enabledSplatMapsForMode(catalog, '2v2').map((entry) => entry.presetId)).toEqual(['moscow', 'both']);
     expect(selectRandomSplatMapForMode(catalog, '2v2', () => 0)?.presetId).toBe('moscow');
     expect(selectRandomSplatMapForMode({ defaultPresetId: 'none', maps: [] }, '1v1')).toBeNull();
+  });
+
+  it('groups quality variants under one playable map for lobby previews', () => {
+    const catalog = {
+      defaultPresetId: 'arcane-library',
+      maps: [
+        {
+          presetId: 'arcane-library',
+          calibrationGroupId: 'arcane-library',
+          displayName: 'Arcane Library',
+          presetUrl: '/arena-presets/arcane-library-high.json',
+          splatUrl: '/splats/arcane-library-high.sog',
+          enabledModes: [],
+          defaultQuality: 'high' as const,
+          qualities: {
+            low: {
+              presetId: 'arcane-library-low',
+              presetUrl: '/arena-presets/arcane-library-low.json',
+              splatUrl: '/splats/arcane-library-low.sog'
+            },
+            high: {
+              presetId: 'arcane-library-high',
+              presetUrl: '/arena-presets/arcane-library-high.json',
+              splatUrl: '/splats/arcane-library-high.sog'
+            }
+          }
+        },
+        {
+          presetId: 'arcane-library-low',
+          displayName: 'Arcane Library (LOW)',
+          presetUrl: '/arena-presets/arcane-library-low.json',
+          splatUrl: '/splats/arcane-library-low.sog',
+          enabledModes: ['1v1']
+        },
+        {
+          presetId: 'arcane-library-high',
+          displayName: 'Arcane Library (HIGH)',
+          presetUrl: '/arena-presets/arcane-library-high.json',
+          splatUrl: '/splats/arcane-library-high.sog',
+          enabledModes: ['1v1', '2v2']
+        }
+      ]
+    };
+
+    const maps = compactSplatMapCatalog(catalog, { includeUnassigned: true });
+
+    expect(maps).toHaveLength(1);
+    expect(maps[0]).toMatchObject({
+      presetId: 'arcane-library',
+      displayName: 'Arcane Library',
+      enabledModes: ['1v1', '2v2']
+    });
+    expect(maps[0]?.qualities?.high?.presetId).toBe('arcane-library-high');
+  });
+
+  it('resolves quality variant ids to their canonical map group', () => {
+    const catalog = {
+      defaultPresetId: 'lobby-high',
+      maps: [
+        {
+          presetId: 'lobby-high',
+          calibrationGroupId: 'lobby-high',
+          displayName: 'Lobby',
+          presetUrl: '/arena-presets/lobby-high.json',
+          splatUrl: '/splats/lobby-high.sog',
+          enabledModes: ['1v1'],
+          defaultQuality: 'high' as const,
+          qualities: {
+            low: { presetId: 'lobby-low', presetUrl: '/arena-presets/lobby-low.json', splatUrl: '/splats/lobby-low.sog' },
+            mid: { presetId: 'lobby-mid', presetUrl: '/arena-presets/lobby-mid.json', splatUrl: '/splats/lobby-mid.sog' },
+            high: { presetId: 'lobby-high', presetUrl: '/arena-presets/lobby-high.json', splatUrl: '/splats/lobby-high.sog' }
+          }
+        },
+        {
+          presetId: 'lobby-low',
+          displayName: 'Lobby (LOW)',
+          presetUrl: '/arena-presets/lobby-low.json',
+          splatUrl: '/splats/lobby-low.sog',
+          enabledModes: ['1v1']
+        }
+      ]
+    };
+
+    const entry = findSplatMapEntry(catalog, 'lobby-low');
+
+    expect(entry?.presetId).toBe('lobby-high');
+    expect(resolveSplatQualityEntry(entry!, 'low').presetId).toBe('lobby-low');
+    expect(resolveSplatQualityEntry(entry!, 'high').presetId).toBe('lobby-high');
   });
 });

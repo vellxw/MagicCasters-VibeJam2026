@@ -178,6 +178,7 @@ export class SplatCalibrationOverlay {
         <div class="calibration-panel__wall-actions">
           <button type="button" data-calibration-wall-add>Add Wall</button>
           <button type="button" data-calibration-wall-here>Wall Here</button>
+          <button type="button" data-calibration-wall-ramp>Ramp Here</button>
           <button type="button" data-calibration-wall-ladder>Toggle Ladder</button>
           <button type="button" data-calibration-wall-delete>Delete Wall</button>
           <button type="button" data-calibration-auto-generate>Generate Auto Collision</button>
@@ -326,6 +327,7 @@ export class SplatCalibrationOverlay {
     this.collisionDebugInput.addEventListener('change', () => this.toggleCollisionDebug());
     this.element.querySelector('[data-calibration-wall-add]')?.addEventListener('click', () => this.addWall());
     this.element.querySelector('[data-calibration-wall-here]')?.addEventListener('click', () => this.moveWallToPlayer());
+    this.element.querySelector('[data-calibration-wall-ramp]')?.addEventListener('click', () => this.addRampWall());
     this.element.querySelector('[data-calibration-wall-ladder]')?.addEventListener('click', () => this.toggleWallLadder());
     this.element.querySelector('[data-calibration-wall-delete]')?.addEventListener('click', () => this.deleteWall());
     this.element.querySelector('[data-calibration-eraser-add]')?.addEventListener('click', () => this.addEraser());
@@ -549,13 +551,35 @@ export class SplatCalibrationOverlay {
       depth: 0.35,
       height: 2,
       rotY: player?.rotY ?? 0,
-      climbable: false
+      climbable: false,
+      ramp: false
     };
     this.state.collisionWalls.push(wall);
     this.selectedWallIndex = this.state.collisionWalls.length - 1;
     this.syncWallSelect();
     this.onChange?.(cloneSettings(this.state));
     this.feedbackEl.textContent = 'Invisible wall added. It is visible only while calibrating.';
+  }
+
+  private addRampWall(): void {
+    if (!this.state) return;
+    const player = this.latestPlayer;
+    const wall: ArenaCollisionWall = {
+      id: `ramp-${Date.now().toString(36)}`,
+      x: player?.x ?? 0,
+      z: player?.z ?? 0,
+      width: 5.5,
+      depth: 4,
+      height: 1.2,
+      rotY: player?.rotY ?? 0,
+      climbable: false,
+      ramp: true
+    };
+    this.state.collisionWalls.push(wall);
+    this.selectedWallIndex = this.state.collisionWalls.length - 1;
+    this.syncWallSelect();
+    this.onChange?.(cloneSettings(this.state));
+    this.feedbackEl.textContent = 'Ramp wall added. Rotate it with Wall Rot; turn it 180 degrees to flip the slope.';
   }
 
   private moveWallToPlayer(): void {
@@ -579,6 +603,7 @@ export class SplatCalibrationOverlay {
     const wall = this.selectedWall();
     if (!wall) return;
     wall.climbable = !wall.climbable;
+    if (wall.climbable) wall.ramp = false;
     this.syncWallSelect();
     this.wallSelect.value = String(this.selectedWallIndex);
     this.syncWallInputs();
@@ -738,7 +763,7 @@ export class SplatCalibrationOverlay {
       this.state.collisionWalls.forEach((wall, index) => {
         const option = document.createElement('option');
         option.value = String(index);
-        const kind = wall.climbable ? 'Ladder' : isAutoCollisionWall(wall) ? 'Auto' : 'Wall';
+        const kind = wall.ramp ? 'Ramp' : wall.climbable ? 'Ladder' : isAutoCollisionWall(wall) ? 'Auto' : 'Wall';
         option.textContent = `${index + 1}: ${kind} ${wall.id}`;
         this.wallSelect.appendChild(option);
       });

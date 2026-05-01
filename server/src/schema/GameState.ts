@@ -16,6 +16,10 @@ export class GameState extends Schema {
   @type('number') tick = 0;
   @type('string') message = 'Waiting for rival';
   @type('string') winnerId = '';
+  @type('string') winnerTeamId = '';
+  @type('boolean') rematchAvailable = false;
+  @type('number') rematchVotes = 0;
+  @type('number') rematchRequired = 0;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type({ map: ProjectileState }) projectiles = new MapSchema<ProjectileState>();
 }

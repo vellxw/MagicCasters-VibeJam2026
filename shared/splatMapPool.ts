@@ -29,6 +29,11 @@ export interface SplatMapPoolCatalog {
   maps: SplatMapPoolEntry[];
 }
 
+export interface CompactSplatMapOptions {
+  includeUnassigned?: boolean;
+  excludePresetIds?: string[];
+}
+
 export interface SplatSpawnSource {
   enabledModes?: unknown;
   spawnPoints?: unknown;
@@ -95,6 +100,64 @@ export function selectRandomSplatMapForMode(
   return maps[index] ?? maps[0] ?? null;
 }
 
+export function findSplatMapEntry(catalog: SplatMapPoolCatalog, presetId: string | undefined): SplatMapPoolEntry | null {
+  const maps = compactSplatMapCatalog(catalog, { includeUnassigned: true });
+  if (!presetId) {
+    return maps.find((entry) => entry.presetId === catalog.defaultPresetId)
+      ?? maps[0]
+      ?? null;
+  }
+  return maps.find((entry) => (
+    entry.presetId === presetId ||
+    entry.calibrationGroupId === presetId ||
+    Object.values(entry.qualities ?? {}).some((quality) => quality?.presetId === presetId)
+  ))
+    ?? maps.find((entry) => entry.presetId === catalog.defaultPresetId)
+    ?? maps[0]
+    ?? null;
+}
+
+export function compactSplatMapCatalog(
+  catalog: SplatMapPoolCatalog,
+  options: CompactSplatMapOptions = {}
+): SplatMapPoolEntry[] {
+  const excluded = new Set(options.excludePresetIds ?? []);
+  const groups = new Map<string, SplatMapPoolEntry>();
+  const modeSets = new Map<string, Set<MatchMode>>();
+  const order: string[] = [];
+
+  for (const entry of Array.isArray(catalog.maps) ? catalog.maps : []) {
+    const groupId = mapGroupId(entry);
+    if (excluded.has(groupId) || excluded.has(entry.presetId)) continue;
+
+    if (!groups.has(groupId)) {
+      order.push(groupId);
+      groups.set(groupId, baseEntryForGroup(entry, groupId));
+      modeSets.set(groupId, new Set(resolveEnabledModes(entry)));
+    } else {
+      const current = groups.get(groupId)!;
+      groups.set(groupId, mergeSplatMapEntries(current, entry, groupId));
+      const modes = modeSets.get(groupId)!;
+      for (const mode of resolveEnabledModes(entry)) {
+        modes.add(mode);
+      }
+    }
+  }
+
+  return order.map((groupId) => {
+    const entry = groups.get(groupId)!;
+    const modes = Array.from(modeSets.get(groupId) ?? []);
+    return {
+      ...entry,
+      enabledModes: modes.length > 0
+        ? modes
+        : options.includeUnassigned
+          ? [...MATCH_MODE_VALUES]
+          : []
+    };
+  });
+}
+
 export function resolveSpawnPointsForMode(source: SplatSpawnSource, mode: MatchMode): ArenaSpawnPoint[] {
   const required = requiredSpawnCountForMode(mode);
   const modeSpawns = normalizeSpawnArray(readModeSpawns(source.spawnPointsByMode, mode));
@@ -143,4 +206,82 @@ function normalizeSpawnPoint(value: unknown): ArenaSpawnPoint | null {
 
 function finiteNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function mapGroupId(entry: SplatMapPoolEntry): string {
+  return entry.calibrationGroupId?.trim()
+    || stripQualitySuffix(entry.presetId)
+    || entry.presetId;
+}
+
+function baseEntryForGroup(entry: SplatMapPoolEntry, groupId: string): SplatMapPoolEntry {
+  const quality = entry.quality ?? qualityFromPresetId(entry.presetId);
+  const qualities = { ...(entry.qualities ?? {}) };
+  if (quality && !qualities[quality]) {
+    qualities[quality] = {
+      presetId: entry.presetId,
+      presetUrl: entry.presetUrl,
+      splatUrl: entry.splatUrl,
+      splatFileSizeBytes: entry.splatFileSizeBytes
+    };
+  }
+
+  return {
+    ...entry,
+    presetId: entry.calibrationGroupId ? entry.presetId : groupId,
+    calibrationGroupId: entry.calibrationGroupId ?? groupId,
+    displayName: stripQualityLabel(entry.displayName),
+    enabledModes: [...resolveEnabledModes(entry)],
+    qualities
+  };
+}
+
+function mergeSplatMapEntries(current: SplatMapPoolEntry, entry: SplatMapPoolEntry, groupId: string): SplatMapPoolEntry {
+  const incomingIsBase = Boolean(entry.qualities) || entry.presetId === groupId || entry.calibrationGroupId === entry.presetId;
+  const base = incomingIsBase
+    ? {
+        ...entry,
+        presetId: entry.presetId,
+        calibrationGroupId: entry.calibrationGroupId ?? groupId,
+        displayName: stripQualityLabel(entry.displayName),
+        enabledModes: [...resolveEnabledModes(entry)]
+      }
+    : current;
+
+  const qualities = {
+    ...(current.qualities ?? {}),
+    ...(entry.qualities ?? {})
+  };
+  const quality = entry.quality ?? qualityFromPresetId(entry.presetId);
+  if (quality && !qualities[quality]) {
+    qualities[quality] = {
+      presetId: entry.presetId,
+      presetUrl: entry.presetUrl,
+      splatUrl: entry.splatUrl,
+      splatFileSizeBytes: entry.splatFileSizeBytes
+    };
+  }
+
+  return {
+    ...base,
+    presetId: base.calibrationGroupId === base.presetId ? base.presetId : current.presetId,
+    calibrationGroupId: base.calibrationGroupId ?? groupId,
+    displayName: stripQualityLabel(base.displayName),
+    enabledModes: [...new Set([...resolveEnabledModes(current), ...resolveEnabledModes(entry)])],
+    defaultQuality: base.defaultQuality ?? current.defaultQuality ?? entry.defaultQuality,
+    qualities
+  };
+}
+
+function qualityFromPresetId(presetId: string): SplatQuality | null {
+  const match = presetId.match(/-(low|mid|high)$/);
+  return match ? match[1] as SplatQuality : null;
+}
+
+function stripQualitySuffix(value: string): string {
+  return value.replace(/-(low|mid|high)$/i, '');
+}
+
+function stripQualityLabel(value: string): string {
+  return value.replace(/\s*\((LOW|MID|HIGH)\)\s*$/i, '').trim();
 }

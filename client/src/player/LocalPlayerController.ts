@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CharacterClass } from '../../../shared/classes';
+import type { BotSkill } from '../../../shared/types';
 
 export interface PlayerSnapshot {
   id: string;
@@ -15,6 +16,8 @@ export interface PlayerSnapshot {
   selectedSpell: string;
   teamId?: string;
   characterClass?: CharacterClass;
+  isBot?: boolean;
+  botSkill?: BotSkill | string;
   shieldActive?: boolean;
   silencedUntil?: number;
   slowedUntil?: number;

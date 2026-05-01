@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DEFAULT_ARENA_ID, SPLAT_TEST_ARENA_ID, type ArenaId } from '../../../shared/types';
 import type { ArenaCollisionWall } from '../../../shared/types';
+import type { SplatQuality } from '../../../shared/splatMapPool';
 import { buildArena } from './Arena';
 import {
   applyCalibrationToPreset,
@@ -64,6 +65,9 @@ export interface ArenaRuntime {
 export interface SplatArenaProviderOptions {
   preset?: SplatArenaPreset;
   presetUrl?: string;
+  presetId?: string;
+  quality?: SplatQuality;
+  fallbackPresetUrl?: string;
 }
 
 export interface ArenaProvider {
@@ -325,6 +329,17 @@ class SplatArenaRuntime implements ArenaRuntime {
   private async loadPreset(): Promise<SplatArenaPreset> {
     if (this.options.preset) {
       return this.options.preset;
+    }
+    if (this.options.presetId) {
+      try {
+        return (await loadConfiguredSplatArenaPreset(this.options.presetId, this.options.quality)).preset;
+      } catch (error) {
+        if (this.options.fallbackPresetUrl) {
+          console.warn('[ArenaProvider] Local quality preset failed; using server preset URL', error);
+          return loadSplatArenaPreset(this.options.fallbackPresetUrl);
+        }
+        throw error;
+      }
     }
     if (this.options.presetUrl) {
       return loadSplatArenaPreset(this.options.presetUrl);

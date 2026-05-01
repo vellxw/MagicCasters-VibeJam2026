@@ -226,7 +226,7 @@ export function findStandingSurfaceY(
   }
   for (const wall of walls) {
     if (wall.climbable) continue;
-    const topY = wallTopY(wall, floorY);
+    const topY = rampSurfaceYAt(x, z, wall, floorY) ?? wallTopY(wall, floorY);
     if (topY < groundY) continue;
     if (Math.abs(playerY - topY) > snapTolerance) continue;
     if (!circleIntersectsWall(x, z, radius, wall)) continue;
@@ -242,6 +242,17 @@ export function findClimbableWall(
   radius = PLAYER_RADIUS
 ): ArenaCollisionWall | null {
   return walls.find((wall) => wall.climbable && circleIntersectsWall(x, z, radius, wall)) ?? null;
+}
+
+export function rampSurfaceYAt(x: number, z: number, wall: ArenaCollisionWall, floorY: number): number | null {
+  if (!wall.ramp) return null;
+  const local = worldToWallLocal(x, z, wall);
+  const halfW = Math.max(0.01, wall.width / 2);
+  const halfD = Math.max(0.01, wall.depth / 2);
+  if (local.x < -halfW - PLAYER_RADIUS || local.x > halfW + PLAYER_RADIUS) return null;
+  if (local.z < -halfD - PLAYER_RADIUS || local.z > halfD + PLAYER_RADIUS) return null;
+  const progress = clamp((local.z + halfD) / Math.max(0.01, wall.depth), 0, 1);
+  return floorY + Math.max(0.1, wall.height) * progress;
 }
 
 export function normalizeBounds(value: unknown): ArenaBounds {
@@ -359,7 +370,7 @@ function findLandingSurface(
   let surface: { y: number; wallId: string } | null = null;
   for (const wall of walls) {
     if (wall.climbable) continue;
-    const topY = wallTopY(wall, floorY);
+    const topY = rampSurfaceYAt(x, z, wall, floorY) ?? wallTopY(wall, floorY);
     if (previousY < topY - PLAYER_SURFACE_SNAP_TOLERANCE) continue;
     if (nextY > topY + PLAYER_SURFACE_SNAP_TOLERANCE) continue;
     if (!circleIntersectsWall(x, z, radius, wall)) continue;
@@ -371,6 +382,7 @@ function findLandingSurface(
 }
 
 function wallBlocksAtPlayerHeight(wall: ArenaCollisionWall, options: Required<ArenaMovementCollisionOptions>): boolean {
+  if (wall.ramp) return false;
   if (!Number.isFinite(options.playerY) || !Number.isFinite(options.floorY)) {
     return true;
   }
@@ -413,7 +425,8 @@ function normalizeCollisionWall(value: unknown, index: number): ArenaCollisionWa
     depth: clamp(Math.abs(finiteNumber(data.depth, 0.35)), 0.1, 40),
     height: clamp(Math.abs(finiteNumber(data.height, 2)), 0.1, 20),
     rotY: finiteNumber(data.rotY, 0),
-    climbable: Boolean(data.climbable) || Boolean(data.isLadder) || data.kind === 'ladder' || data.type === 'ladder'
+    climbable: Boolean(data.climbable) || Boolean(data.isLadder) || data.kind === 'ladder' || data.type === 'ladder',
+    ramp: Boolean(data.ramp) || data.kind === 'ramp' || data.type === 'ramp'
   };
 }
 
