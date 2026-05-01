@@ -7,7 +7,10 @@
   "type": "splat",
   "splatUrl": "/splats/grand-medieval-castle-courtyard-low.sog",
   "splatFileSizeBytes": 6452858,
-  "enabledModes": [],
+  "enabledModes": [
+    "1v1",
+    "2v2"
+  ],
   "collisionMeshUrl": null,
   "voxelCollisionUrl": null,
   "spawnPoints": [
@@ -69,8 +72,8 @@
   "bounds": {
     "minX": -8,
     "maxX": 8,
-    "minZ": -6,
-    "maxZ": 6
+    "minZ": -6.8,
+    "maxZ": 11.3
   },
   "scale": 1,
   "rotation": {
@@ -83,7 +86,52 @@
     "y": 0,
     "z": 0
   },
-  "floorY": 0,
+  "floorY": -1.18,
   "collisionErasers": [],
-  "collisionWalls": []
+  "collisionWalls": [
+    {
+      "id": "wall-momrbph2",
+      "x": -8,
+      "z": 1.979871501839921,
+      "width": 30,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 1.544203673205107,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-momrc691",
+      "x": 8,
+      "z": 2.0823988938403,
+      "width": 30,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 4.767703673205101,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-momrcf1s",
+      "x": -0.007207650341091856,
+      "z": 11.3,
+      "width": 20,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 3.1472036732051003,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-momrd72r",
+      "x": -1.1844283750267988,
+      "z": -6.8,
+      "width": 20,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 0.08120367320510355,
+      "climbable": false,
+      "ramp": false
+    }
+  ]
 }

@@ -32,6 +32,39 @@
       }
     },
     {
+      "presetId": "celestial-marble-crystal-palace-high",
+      "displayName": "Celestial Marble Crystal Palace (HIGH)",
+      "presetUrl": "/arena-presets/celestial-marble-crystal-palace-high.json",
+      "splatUrl": "/splats/celestial-marble-crystal-palace-high.sog",
+      "splatFileSizeBytes": 24817657,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "celestial-marble-crystal-palace-low",
+      "displayName": "Celestial Marble Crystal Palace (LOW)",
+      "presetUrl": "/arena-presets/celestial-marble-crystal-palace-low.json",
+      "splatUrl": "/splats/celestial-marble-crystal-palace-low.sog",
+      "splatFileSizeBytes": 6752400,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "celestial-marble-crystal-palace-mid",
+      "displayName": "Celestial Marble Crystal Palace (MID)",
+      "presetUrl": "/arena-presets/celestial-marble-crystal-palace-mid.json",
+      "splatUrl": "/splats/celestial-marble-crystal-palace-mid.sog",
+      "splatFileSizeBytes": 13532663,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
       "presetId": "grand-medieval-castle-courtyard",
       "calibrationGroupId": "grand-medieval-castle-courtyard",
       "displayName": "Grand Medieval Castle Courtyard",
@@ -60,6 +93,39 @@
           "splatFileSizeBytes": 23949683
         }
       }
+    },
+    {
+      "presetId": "grand-medieval-castle-courtyard-high",
+      "displayName": "Grand Medieval Castle Courtyard (HIGH)",
+      "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-high.json",
+      "splatUrl": "/splats/grand-medieval-castle-courtyard-high.sog",
+      "splatFileSizeBytes": 23949683,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "grand-medieval-castle-courtyard-low",
+      "displayName": "Grand Medieval Castle Courtyard (LOW)",
+      "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-low.json",
+      "splatUrl": "/splats/grand-medieval-castle-courtyard-low.sog",
+      "splatFileSizeBytes": 6452858,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "grand-medieval-castle-courtyard-mid",
+      "displayName": "Grand Medieval Castle Courtyard (MID)",
+      "presetUrl": "/arena-presets/grand-medieval-castle-courtyard-mid.json",
+      "splatUrl": "/splats/grand-medieval-castle-courtyard-mid.sog",
+      "splatFileSizeBytes": 12930384,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
     },
     {
       "presetId": "ruined-palace-of-purple-crystals",
