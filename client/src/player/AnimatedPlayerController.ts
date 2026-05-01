@@ -84,6 +84,13 @@ export class AnimatedPlayerController {
     this.modelRoot.rotation.y = Math.PI;
     this.group.add(this.modelRoot);
 
+    this.modelRoot.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+      }
+    });
+
     this.mixer = new THREE.AnimationMixer(this.modelRoot);
     for (const clip of gltf.animations) {
       const action = this.mixer.clipAction(clip);

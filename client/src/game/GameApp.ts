@@ -166,7 +166,7 @@ export class GameApp {
     this.renderer.domElement.className = 'game-canvas';
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 'low' ? 0.75 : tier === 'medium' ? 1.0 : 1.75));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = tier !== 'low';
+    this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.BasicShadowMap;
     this.renderer.setClearColor(0x15120f);
     this.shell.appendChild(this.renderer.domElement);
@@ -206,10 +206,10 @@ export class GameApp {
 
     const key = new THREE.DirectionalLight(0xffd391, 2.4);
     key.position.set(-4, 8, 5);
-    key.castShadow = tier !== 'low';
+    key.castShadow = true;
     key.shadow.mapSize.set(tier === 'medium' ? 256 : 512, tier === 'medium' ? 256 : 512);
     key.shadow.camera.near = 1;
-    key.shadow.camera.far = tier === 'low' ? 20 : 30;
+    key.shadow.camera.far = 30;
     key.shadow.camera.left = -18;
     key.shadow.camera.right = 18;
     key.shadow.camera.top = 18;

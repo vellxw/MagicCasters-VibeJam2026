@@ -67,7 +67,7 @@ export class LocalPlayerController {
       })
     );
     this.body.position.y = 0.85;
-    this.body.castShadow = false;
+    this.body.castShadow = true;
     this.group.add(this.body);
 
     this.hat = new THREE.Mesh(
@@ -75,7 +75,7 @@ export class LocalPlayerController {
       new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.46, emissive: trimColor, emissiveIntensity: 0.22 })
     );
     this.hat.position.y = 1.62;
-    this.hat.castShadow = false;
+    this.hat.castShadow = true;
     this.group.add(this.hat);
 
     this.ring = new THREE.Mesh(
