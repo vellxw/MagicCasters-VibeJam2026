@@ -199,6 +199,16 @@
           "splatFileSizeBytes": 24616928
         }
       }
+    },
+    {
+      "presetId": "the-dragon-gate-bridge-high",
+      "displayName": "The Dragon Gate Bridge (HIGH)",
+      "presetUrl": "/arena-presets/the-dragon-gate-bridge-high.json",
+      "splatUrl": "/splats/the-dragon-gate-bridge-high.sog",
+      "splatFileSizeBytes": 24616928,
+      "enabledModes": [
+        "1v1"
+      ]
     }
   ]
 }
