@@ -19,7 +19,9 @@ describe('NetworkClient join options', () => {
     expect(createJoinOptions('Mage 202', '1v1', 'arcanist', {
       partyCode: 'AB12CD',
       arenaPresetId: 'the-dragon-gate-bridge',
-      botSkill: 'novice'
+      botSkill: 'novice',
+      minHumanPlayers: 2,
+      botCount: 2
     })).toEqual({
       roomName: ROOM_NAME,
       options: {
@@ -29,6 +31,8 @@ describe('NetworkClient join options', () => {
         partyCode: 'AB12CD',
         arenaPresetId: 'the-dragon-gate-bridge',
         botSkill: 'novice',
+        minHumanPlayers: 2,
+        botCount: 2,
         custom: true
       }
     });

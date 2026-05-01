@@ -12,11 +12,20 @@ import {
 } from './GameApp';
 
 describe('GameApp keyboard spell slots', () => {
-  it('resolves number keys through the active character class slots', () => {
+  it('resolves number keys as legacy fallback spell slots', () => {
     expect(resolveKeyboardSpellForClass('arcanist', '1')).toBe('shadow_dart');
     expect(resolveKeyboardSpellForClass('arcanist', '4')).toBe('eclipse');
     expect(resolveKeyboardSpellForClass('divine', '1')).toBe('judgment_ray');
     expect(resolveKeyboardSpellForClass('divine', '4')).toBe('firmament_shield');
+  });
+
+  it('resolves the default mouse and Q/E attack set through active class slots', () => {
+    expect(resolveKeyboardSpellForClass('arcanist', { button: 0 })).toBe('shadow_dart');
+    expect(resolveKeyboardSpellForClass('arcanist', { button: 2 })).toBe('void_trap');
+    expect(resolveKeyboardSpellForClass('arcanist', { code: 'KeyQ', key: 'q' })).toBe('abyssal_claw');
+    expect(resolveKeyboardSpellForClass('arcanist', { code: 'KeyE', key: 'e' })).toBe('eclipse');
+    expect(resolveKeyboardSpellForClass('divine', { code: 'KeyQ', key: 'q' })).toBe('glacial_spikes');
+    expect(resolveKeyboardSpellForClass('divine', { code: 'KeyE', key: 'e' })).toBe('firmament_shield');
   });
 
   it('resolves custom combat key bindings through the active character class slots', () => {
@@ -34,7 +43,7 @@ describe('GameApp keyboard spell slots', () => {
 
   it('ignores keys outside the four class slots', () => {
     expect(resolveKeyboardSpellForClass('divine', '5')).toBeNull();
-    expect(resolveKeyboardSpellForClass('divine', 'q')).toBeNull();
+    expect(resolveKeyboardSpellForClass('divine', 'f')).toBeNull();
   });
 
   it('normalizes canonical and legacy damage payloads for combat toasts', () => {

@@ -9,6 +9,9 @@ import {
   normalizeMatchMode,
   phaseAfterPlayerLeave,
   missingPlayersToStart,
+  normalizeCustomBotCount,
+  normalizeCustomHumanGate,
+  requestedBotsToAdd,
   shouldDamagePlayer,
   shouldScheduleAutoBotFill,
   shouldLockRoom,
@@ -54,6 +57,21 @@ describe('MatchSystem', () => {
     expect(missingPlayersToStart(1, getMatchConfig('2v2'))).toBe(3);
     expect(missingPlayersToStart(3, getMatchConfig('2v2'))).toBe(1);
     expect(missingPlayersToStart(4, getMatchConfig('2v2'))).toBe(0);
+  });
+
+  it('waits for the configured custom human gate before adding requested bots', () => {
+    const config = getMatchConfig('2v2');
+
+    expect(normalizeCustomHumanGate(2, config)).toBe(2);
+    expect(normalizeCustomHumanGate(3, config)).toBe(3);
+    expect(normalizeCustomHumanGate(9, config)).toBe(4);
+    expect(normalizeCustomBotCount(3, config)).toBe(3);
+    expect(normalizeCustomBotCount(9, config)).toBe(3);
+
+    expect(requestedBotsToAdd('WAITING', 1, 1, config, 2, 3)).toBe(0);
+    expect(requestedBotsToAdd('WAITING', 2, 2, config, 2, 3)).toBe(2);
+    expect(requestedBotsToAdd('WAITING', 3, 3, config, 3, 2)).toBe(1);
+    expect(requestedBotsToAdd('PLAYING', 2, 2, config, 2, 2)).toBe(0);
   });
 
   it('schedules automatic bot fill only for human players waiting on a non-full room', () => {

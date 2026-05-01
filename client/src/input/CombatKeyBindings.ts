@@ -21,9 +21,17 @@ export interface CombatKeyBindingsStorage {
 export interface CombatKeyInput {
   code?: string;
   key?: string;
+  button?: number;
 }
 
 export const DEFAULT_COMBAT_KEY_BINDINGS: CombatKeyBindings = {
+  spell1: { code: 'MouseLeft', key: 'Mouse Left' },
+  spell2: { code: 'MouseRight', key: 'Mouse Right' },
+  spell3: { code: 'KeyQ', key: 'q' },
+  spell4: { code: 'KeyE', key: 'e' }
+};
+
+const LEGACY_NUMBER_KEY_BINDINGS: CombatKeyBindings = {
   spell1: { code: 'Digit1', key: '1' },
   spell2: { code: 'Digit2', key: '2' },
   spell3: { code: 'Digit3', key: '3' },
@@ -123,7 +131,8 @@ export function resolveCombatAction(
   const normalized = normalizeCombatKeyInput(input, { allowReserved: true });
   if (!normalized) return null;
   const match = COMBAT_ACTIONS.find((action) => bindings[action].code === normalized.code);
-  return match ?? null;
+  if (match) return match;
+  return COMBAT_ACTIONS.find((action) => LEGACY_NUMBER_KEY_BINDINGS[action].code === normalized.code) ?? null;
 }
 
 export function normalizeCombatKeyInput(
@@ -137,6 +146,11 @@ export function normalizeCombatKeyInput(
 }
 
 export function formatCombatKeyBinding(binding: CombatKeyBinding): string {
+  if (binding.code === 'MouseLeft') return 'LMB';
+  if (binding.code === 'MouseRight') return 'RMB';
+  if (binding.code === 'MouseMiddle') return 'MMB';
+  if (binding.code === 'MouseBack') return 'Mouse Back';
+  if (binding.code === 'MouseForward') return 'Mouse Forward';
   if (binding.key && binding.key.length === 1) {
     return /[a-z]/i.test(binding.key) ? binding.key.toUpperCase() : binding.key;
   }
@@ -162,12 +176,16 @@ function parseCombatKeyInput(input: unknown): CombatKeyBinding | null {
   if (code) {
     return { code, key: key || keyFromCode(code) };
   }
+  if (typeof candidate.button === 'number' && Number.isInteger(candidate.button)) {
+    return fromMouseButton(candidate.button);
+  }
   return key ? fromStringInput(key) : null;
 }
 
 function fromStringInput(value: string): CombatKeyBinding | null {
   const key = value.trim();
   if (!key) return null;
+  if (isMouseCode(key)) return { code: key, key: keyFromCode(key) };
   if (/^Digit[0-9]$/.test(key) || /^Key[A-Z]$/.test(key) || key.startsWith('Arrow') || key.startsWith('Numpad')) {
     return { code: key, key: keyFromCode(key) };
   }
@@ -177,10 +195,41 @@ function fromStringInput(value: string): CombatKeyBinding | null {
 }
 
 function keyFromCode(code: string): string {
+  if (code === 'MouseLeft') return 'Mouse Left';
+  if (code === 'MouseRight') return 'Mouse Right';
+  if (code === 'MouseMiddle') return 'Mouse Middle';
+  if (code === 'MouseBack') return 'Mouse Back';
+  if (code === 'MouseForward') return 'Mouse Forward';
   if (code.startsWith('Digit')) return code.slice(5);
   if (code.startsWith('Key')) return code.slice(3).toLowerCase();
   if (code === 'Space') return 'Space';
   return code;
+}
+
+function fromMouseButton(button: number): CombatKeyBinding | null {
+  switch (button) {
+    case 0:
+      return { code: 'MouseLeft', key: 'Mouse Left' };
+    case 1:
+      return { code: 'MouseMiddle', key: 'Mouse Middle' };
+    case 2:
+      return { code: 'MouseRight', key: 'Mouse Right' };
+    case 3:
+      return { code: 'MouseBack', key: 'Mouse Back' };
+    case 4:
+      return { code: 'MouseForward', key: 'Mouse Forward' };
+    default:
+      return button >= 0 ? { code: `Mouse${button}`, key: `Mouse ${button}` } : null;
+  }
+}
+
+function isMouseCode(code: string): boolean {
+  return code === 'MouseLeft'
+    || code === 'MouseMiddle'
+    || code === 'MouseRight'
+    || code === 'MouseBack'
+    || code === 'MouseForward'
+    || /^Mouse[0-9]+$/.test(code);
 }
 
 function cloneCombatKeyBindings(bindings: CombatKeyBindings): CombatKeyBindings {

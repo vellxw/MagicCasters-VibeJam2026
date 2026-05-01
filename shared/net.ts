@@ -8,6 +8,8 @@ export interface JoinOptions {
   custom?: boolean;
   arenaPresetId?: string;
   botSkill?: BotSkill;
+  minHumanPlayers?: number;
+  botCount?: number;
 }
 
 export interface GlobalChatJoinOptions {

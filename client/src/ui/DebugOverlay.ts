@@ -37,8 +37,10 @@ export class DebugOverlay {
   private promptTextEl: HTMLElement;
   private promptButtonEl: HTMLButtonElement;
   private queueEl: HTMLElement;
+  private queueTitleEl: HTMLElement;
   private queueModeEl: HTMLElement;
   private queueCountEl: HTMLElement;
+  private queueRosterEl: HTMLElement;
   private resultsEl: HTMLElement;
   private resultsImageEl: HTMLImageElement;
   private resultsMessageEl: HTMLElement;
@@ -97,9 +99,10 @@ export class DebugOverlay {
         <button type="button" data-portal-action></button>
       </div>
       <div class="queue-panel" data-queue>
-        <strong>Finding match...</strong>
+        <strong data-queue-title>Finding match...</strong>
         <span data-queue-mode>Mode</span>
         <span data-queue-count>0 / 2 players</span>
+        <div class="queue-panel__roster" data-queue-roster></div>
         <button type="button" data-cancel-queue>Cancel</button>
       </div>
       <div class="results-panel" data-results>
@@ -133,8 +136,10 @@ export class DebugOverlay {
     this.promptTextEl = this.element.querySelector('[data-prompt-text]')!;
     this.promptButtonEl = this.element.querySelector('[data-portal-action]')!;
     this.queueEl = this.element.querySelector('[data-queue]')!;
+    this.queueTitleEl = this.element.querySelector('[data-queue-title]')!;
     this.queueModeEl = this.element.querySelector('[data-queue-mode]')!;
     this.queueCountEl = this.element.querySelector('[data-queue-count]')!;
+    this.queueRosterEl = this.element.querySelector('[data-queue-roster]')!;
     this.resultsEl = this.element.querySelector('[data-results]')!;
     this.resultsImageEl = this.element.querySelector('[data-results-image]')!;
     this.resultsMessageEl = this.element.querySelector('[data-results-message]')!;
@@ -199,11 +204,13 @@ export class DebugOverlay {
     selectedMode: MatchMode | null;
     selectedArenaId: ArenaId;
     phase: string;
+    phaseMessage: string;
     status: string;
     roomId: string;
     local?: PlayerSnapshot;
     playerCount: number;
     requiredPlayers: number;
+    queuePlayers: Array<{ name: string; teamId: string; isBot?: boolean }>;
     teamId: string | null;
     projectileCount: number;
     voiceActive: boolean;
@@ -243,8 +250,10 @@ export class DebugOverlay {
     this.promptButtonEl.textContent = args.portalActionLabel ? `Enter: ${args.portalActionLabel}` : 'Enter';
     this.promptEl.dataset.visible = String(Boolean(args.portalPrompt));
     this.queueEl.dataset.visible = String(args.queueActive);
+    this.queueTitleEl.textContent = args.phaseMessage || 'Waiting room';
     this.queueModeEl.textContent = `Mode: ${labelForSelection(args.selectedMode, args.selectedArenaId)}`;
     this.queueCountEl.textContent = `${args.playerCount} / ${args.requiredPlayers} players`;
+    this.renderQueueRoster(args.queuePlayers);
     this.resultsEl.dataset.visible = String(args.resultsActive);
     this.resultsEl.dataset.result = args.resultKind;
     this.resultsImageEl.src = args.resultKind === 'victory' ? '/results/victory.png' : '/results/defeat.png';
@@ -280,6 +289,25 @@ export class DebugOverlay {
       if (labelEl) labelEl.textContent = availability.label;
     }
 
+  }
+
+  private renderQueueRoster(players: Array<{ name: string; teamId: string; isBot?: boolean }>): void {
+    this.queueRosterEl.innerHTML = '';
+    if (players.length === 0) {
+      const empty = document.createElement('span');
+      empty.className = 'queue-panel__empty';
+      empty.textContent = 'Waiting for invited players';
+      this.queueRosterEl.appendChild(empty);
+      return;
+    }
+
+    for (const player of players) {
+      const chip = document.createElement('span');
+      chip.className = 'queue-panel__player';
+      chip.dataset.bot = String(Boolean(player.isBot));
+      chip.textContent = `${player.name} - Team ${player.teamId}${player.isBot ? ' - Bot' : ''}`;
+      this.queueRosterEl.appendChild(chip);
+    }
   }
 
   private renderStatusEffects(effects: ReturnType<typeof getActiveStatusEffects>): void {

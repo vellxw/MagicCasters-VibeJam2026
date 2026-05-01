@@ -12,6 +12,8 @@ export interface CustomRoomOptions {
   partyCode?: string;
   arenaPresetId?: string;
   botSkill?: BotSkill;
+  minHumanPlayers?: number;
+  botCount?: number;
 }
 
 export type NetRoom = Room;
@@ -26,6 +28,8 @@ export interface JoinRequest {
     custom?: boolean;
     arenaPresetId?: string;
     botSkill?: BotSkill;
+    minHumanPlayers?: number;
+    botCount?: number;
   };
 }
 
@@ -45,7 +49,9 @@ export function createJoinOptions(
       partyCode,
       ...(partyCode ? { custom: true } : {}),
       ...(customOptions.arenaPresetId ? { arenaPresetId: customOptions.arenaPresetId } : {}),
-      ...(partyCode && customOptions.botSkill ? { botSkill: customOptions.botSkill } : {})
+      ...(partyCode && customOptions.botSkill ? { botSkill: customOptions.botSkill } : {}),
+      ...(partyCode && isPositiveInteger(customOptions.minHumanPlayers) ? { minHumanPlayers: customOptions.minHumanPlayers } : {}),
+      ...(partyCode && isPositiveInteger(customOptions.botCount) ? { botCount: customOptions.botCount } : {})
     }
   };
 }
@@ -161,4 +167,8 @@ function normalizePartyCode(value: unknown): string {
   return typeof value === 'string'
     ? value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
     : '';
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }

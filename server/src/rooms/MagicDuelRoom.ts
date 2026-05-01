@@ -35,8 +35,11 @@ import {
   getMatchConfig,
   getSpawnForSlot,
   missingPlayersToStart,
+  normalizeCustomBotCount,
+  normalizeCustomHumanGate,
   normalizeMatchMode,
   phaseAfterPlayerLeave,
+  requestedBotsToAdd,
   shouldDamagePlayer,
   shouldLockRoom,
   shouldScheduleAutoBotFill,
@@ -71,6 +74,8 @@ interface JoinOptions {
   custom?: boolean;
   arenaPresetId?: string;
   botSkill?: BotSkill;
+  minHumanPlayers?: number;
+  botCount?: number;
 }
 
 export class MagicDuelRoom extends Room<GameState> {
@@ -93,12 +98,21 @@ export class MagicDuelRoom extends Room<GameState> {
   private rematchVotes = new Set<string>();
   private botControllers = new Map<string, BotControllerState>();
   private requestedBotSkill: BotSkill | null = null;
+  private requestedBotCount = 0;
+  private minHumanPlayersBeforeBots = 1;
   private botSerial = 0;
 
   onCreate(options?: JoinOptions): void {
     this.mode = normalizeMatchMode(options?.mode);
     this.partyCode = normalizePartyCode(options?.partyCode);
+    this.config = getMatchConfig(this.mode);
     this.requestedBotSkill = this.partyCode ? normalizeBotSkill(options?.botSkill) : null;
+    this.requestedBotCount = this.requestedBotSkill
+      ? normalizeCustomBotCount(options?.botCount ?? (this.mode === '2v2' ? 2 : 1), this.config)
+      : 0;
+    this.minHumanPlayersBeforeBots = this.requestedBotSkill && this.mode === '2v2'
+      ? normalizeCustomHumanGate(options?.minHumanPlayers ?? 2, this.config)
+      : 1;
     const projectRoot = resolveProjectRoot();
     const selectedArena = options?.arenaPresetId
       ? selectPublishedSplatArenaByPresetId(options.arenaPresetId, this.mode, projectRoot)
@@ -122,7 +136,6 @@ export class MagicDuelRoom extends Room<GameState> {
     } else if (this.arenaCollision.voxelCollisionUrl) {
       console.warn(`[server] Voxel collision unavailable: ${this.arenaCollision.voxelCollisionUrl}`);
     }
-    this.config = getMatchConfig(this.mode);
     this.maxClients = this.config.maxPlayers;
     this.setState(new GameState());
     this.state.mode = this.mode;
@@ -141,7 +154,9 @@ export class MagicDuelRoom extends Room<GameState> {
       custom: Boolean(this.partyCode),
       arenaPresetId: this.arenaPresetId,
       arenaDisplayName: this.arenaDisplayName,
-      botSkill: this.requestedBotSkill ?? ''
+      botSkill: this.requestedBotSkill ?? '',
+      minHumanPlayers: this.minHumanPlayersBeforeBots,
+      botCount: this.requestedBotCount
     });
     this.setSimulationInterval(() => this.tick(), TICK_MS);
 
@@ -173,7 +188,7 @@ export class MagicDuelRoom extends Room<GameState> {
       this.startDuel(`${this.mode} match started`);
     } else {
       this.state.phase = 'WAITING';
-      this.state.message = `Finding ${this.mode} match`;
+      this.state.message = this.waitingMessage();
       this.broadcastPhase();
     }
 
@@ -796,7 +811,25 @@ export class MagicDuelRoom extends Room<GameState> {
     }
 
     if (this.requestedBotSkill && missingPlayersToStart(this.state.playerCount, this.config) > 0) {
-      this.fillMissingSlotsWithBots(this.requestedBotSkill, `${capitalize(this.requestedBotSkill)} bot duel started`);
+      const botsToAdd = requestedBotsToAdd(
+        this.state.phase,
+        this.humanPlayerCount(),
+        this.state.playerCount,
+        this.config,
+        this.minHumanPlayersBeforeBots,
+        this.requestedBotCount
+      );
+      if (botsToAdd > 0) {
+        this.fillMissingSlotsWithBots(
+          this.requestedBotSkill,
+          `${capitalize(this.requestedBotSkill)} bot duel started`,
+          botsToAdd
+        );
+      } else {
+        this.state.message = this.waitingMessage();
+        this.broadcastPhase();
+        this.syncLockState();
+      }
       return;
     }
 
@@ -825,15 +858,16 @@ export class MagicDuelRoom extends Room<GameState> {
     this.autoBotFillTimer = null;
   }
 
-  private fillMissingSlotsWithBots(skill: BotSkill, message: string): void {
+  private fillMissingSlotsWithBots(skill: BotSkill, message: string, requestedCount = Number.POSITIVE_INFINITY): void {
     const missing = missingPlayersToStart(this.state.playerCount, this.config);
-    if (missing <= 0) return;
+    const count = Math.min(missing, requestedCount);
+    if (count <= 0) return;
 
-    for (let i = 0; i < missing; i++) {
+    for (let i = 0; i < count; i++) {
       this.addBot(skill);
     }
     this.updatePlayerCount();
-    this.broadcast('bot_added', { count: missing, skill });
+    this.broadcast('bot_added', { count, skill });
 
     if (shouldStartMatch(this.state.playerCount, this.config)) {
       this.startDuel(message);
@@ -864,6 +898,17 @@ export class MagicDuelRoom extends Room<GameState> {
 
   private humanPlayerCount(): number {
     return Array.from(this.state.players.values()).filter((player) => !player.isBot).length;
+  }
+
+  private waitingMessage(): string {
+    if (this.partyCode && this.requestedBotSkill) {
+      const humanCount = this.humanPlayerCount();
+      if (humanCount < this.minHumanPlayersBeforeBots) {
+        return `Waiting for invitees ${humanCount}/${this.minHumanPlayersBeforeBots} before bots`;
+      }
+      return `Custom ${this.mode}: filling remaining slots`;
+    }
+    return this.partyCode ? `Custom ${this.mode} waiting` : `Finding ${this.mode} match`;
   }
 
   private removeAllBots(): void {

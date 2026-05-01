@@ -5,6 +5,7 @@ import {
   assignCombatKeyBinding,
   formatCombatKeyBinding,
   loadCombatKeyBindings,
+  resolveCombatAction,
   resolveCombatSpellForClass,
   saveCombatKeyBindings,
   type CombatKeyBindingsStorage
@@ -30,6 +31,25 @@ describe('CombatKeyBindings', () => {
     expect(loadCombatKeyBindings(memoryStorage('{bad json'))).toEqual(DEFAULT_COMBAT_KEY_BINDINGS);
   });
 
+  it('defaults to mouse attacks and Q/E while keeping number slots as fallback inputs', () => {
+    expect(DEFAULT_COMBAT_KEY_BINDINGS).toEqual({
+      spell1: { code: 'MouseLeft', key: 'Mouse Left' },
+      spell2: { code: 'MouseRight', key: 'Mouse Right' },
+      spell3: { code: 'KeyQ', key: 'q' },
+      spell4: { code: 'KeyE', key: 'e' }
+    });
+
+    expect(resolveCombatSpellForClass('arcanist', { button: 0 })).toBe('shadow_dart');
+    expect(resolveCombatSpellForClass('arcanist', { button: 2 })).toBe('void_trap');
+    expect(resolveCombatSpellForClass('arcanist', { code: 'KeyQ', key: 'q' })).toBe('abyssal_claw');
+    expect(resolveCombatSpellForClass('arcanist', { code: 'KeyE', key: 'e' })).toBe('eclipse');
+
+    expect(resolveCombatAction('1')).toBe('spell1');
+    expect(resolveCombatAction('4')).toBe('spell4');
+    expect(resolveCombatSpellForClass('divine', '1')).toBe('judgment_ray');
+    expect(resolveCombatSpellForClass('divine', '4')).toBe('firmament_shield');
+  });
+
   it('persists custom bindings and resolves spells through the active class slots', () => {
     const storage = memoryStorage();
     const custom = assignCombatKeyBinding(DEFAULT_COMBAT_KEY_BINDINGS, 'spell1', { code: 'KeyQ', key: 'q' });
@@ -42,10 +62,10 @@ describe('CombatKeyBindings', () => {
   });
 
   it('keeps combat bindings distinct by swapping duplicate assignments', () => {
-    const bindings = assignCombatKeyBinding(DEFAULT_COMBAT_KEY_BINDINGS, 'spell1', { code: 'Digit2', key: '2' });
+    const bindings = assignCombatKeyBinding(DEFAULT_COMBAT_KEY_BINDINGS, 'spell1', { button: 2 });
 
-    expect(bindings.spell1.code).toBe('Digit2');
-    expect(bindings.spell2.code).toBe('Digit1');
+    expect(bindings.spell1.code).toBe('MouseRight');
+    expect(bindings.spell2.code).toBe('MouseLeft');
   });
 
   it('rejects reserved movement and system keys for spell assignment', () => {
@@ -54,8 +74,10 @@ describe('CombatKeyBindings', () => {
   });
 
   it('formats binding labels for HUD and settings display', () => {
-    expect(formatCombatKeyBinding({ code: 'Digit1', key: '1' })).toBe('1');
+    expect(formatCombatKeyBinding({ code: 'MouseLeft', key: 'Mouse Left' })).toBe('LMB');
+    expect(formatCombatKeyBinding({ code: 'MouseRight', key: 'Mouse Right' })).toBe('RMB');
     expect(formatCombatKeyBinding({ code: 'KeyQ', key: 'q' })).toBe('Q');
+    expect(formatCombatKeyBinding({ code: 'Digit1', key: '1' })).toBe('1');
     expect(formatCombatKeyBinding({ code: 'BracketLeft', key: '[' })).toBe('[');
   });
 });

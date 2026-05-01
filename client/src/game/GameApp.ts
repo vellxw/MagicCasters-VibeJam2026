@@ -58,6 +58,7 @@ import { MapIntroOverlay } from '../ui/MapIntroOverlay';
 import { QualityPicker } from '../ui/QualityPicker';
 import { QualitySettingsModal } from '../ui/QualitySettingsModal';
 import { SplatCalibrationOverlay } from '../ui/SplatCalibrationOverlay';
+import { TutorialOverlay, shouldShowTutorial } from '../ui/TutorialOverlay';
 import { VfxEditorOverlay } from '../ui/VfxEditorOverlay';
 import { VfxRuntime } from '../vfx/VfxRuntime';
 import { VfxLibrary } from '../vfx/VfxLibrary';
@@ -111,7 +112,15 @@ type PlayerController = LocalPlayerController | RemotePlayerController | Animate
 const CHARACTER_SELECT_PREVIEW_PLAYER_ID = '__character_select_preview';
 type QueueRequest =
   | { kind: 'public' }
-  | { kind: 'custom-create'; partyCode: string; arenaPresetId: string; arenaName: string; botSkill?: CustomCreateRequest['botSkill'] }
+  | {
+      kind: 'custom-create';
+      partyCode: string;
+      arenaPresetId: string;
+      arenaName: string;
+      botSkill?: CustomCreateRequest['botSkill'];
+      minHumanPlayers?: number;
+      botCount?: number;
+    }
   | { kind: 'custom-join'; partyCode: string };
 
 export function resolveKeyboardSpellForClass(
@@ -202,6 +211,7 @@ export class GameApp {
   private vfxEditorUi: VfxEditorOverlay | null = null;
   private customMatchUi: CustomMatchOverlay;
   private mapIntroUi: MapIntroOverlay;
+  private tutorialUi: TutorialOverlay;
   private vfxEditorRuntime: VfxRuntime | null = null;
   private vfxEditorEffects: MapVfxEntry[] = [];
   private vfxEditorInstanceIds: string[] = [];
@@ -302,6 +312,7 @@ export class GameApp {
     this.vfxEditorUi = new VfxEditorOverlay(this.root);
     this.customMatchUi = new CustomMatchOverlay(this.root);
     this.mapIntroUi = new MapIntroOverlay(this.root);
+    this.tutorialUi = new TutorialOverlay(this.root);
     this.characterSelectUi = new CharacterSelectOverlay(this.root);
     this.chatOverlay = new GlobalChatOverlay(this.root);
     this.mobileStartEl = this.createMobileStartOverlay();
@@ -394,6 +405,10 @@ export class GameApp {
     this.renderer.domElement.addEventListener('click', () => {
       this.audio.unlock();
       this.renderer.domElement.requestPointerLock().catch(() => undefined);
+    });
+    this.renderer.domElement.addEventListener('mousedown', (event) => this.onMouseDown(event));
+    this.renderer.domElement.addEventListener('contextmenu', (event) => {
+      if (this.sceneMode === 'MATCH') event.preventDefault();
     });
     window.addEventListener('mousemove', (event) => {
       if (document.pointerLockElement === this.renderer.domElement) {
@@ -622,6 +637,16 @@ export class GameApp {
     }
   }
 
+  private onMouseDown(event: MouseEvent): void {
+    this.audio.unlock();
+    if (this.sceneMode !== 'MATCH') return;
+
+    const spell = resolveKeyboardSpellForClass(this.getLocalCharacterClass(), event, this.combatKeyBindings);
+    if (!spell) return;
+    event.preventDefault();
+    this.cast(spell);
+  }
+
   private getLocalCharacterClass(): CharacterClass {
     const localId = this.network.localSessionId;
     const snapshot = localId ? this.playerSnapshots.get(localId) : null;
@@ -835,11 +860,17 @@ export class GameApp {
       selectedMode: this.selectedMode,
       selectedArenaId: this.selectedArenaId,
       phase: this.phase,
+      phaseMessage: this.phaseMessage,
       status: this.network.status,
       roomId: (this.network.room as any)?.id ?? (this.network.room as any)?.roomId ?? '',
       local,
       playerCount: this.sceneMode === 'CALIBRATION' ? 1 : this.playerSnapshots.size,
       requiredPlayers: this.getRequiredPlayers(),
+      queuePlayers: Array.from(this.playerSnapshots.values(), (player) => ({
+        name: player.name,
+        teamId: player.teamId ?? '?',
+        isBot: player.isBot
+      })),
       teamId: local?.teamId ?? null,
       projectileCount: this.projectileSnapshots.length,
       voiceActive: this.voice.active,
@@ -1142,13 +1173,13 @@ export class GameApp {
 
   private promptInitialQualityIfNeeded(): void {
     if (this.initialQualitySelected) {
-      void this.enterLobby();
+      void this.enterTutorialOrLobby();
       return;
     }
     const saved = localStorage.getItem('mc_graphics_tier');
     if (saved) {
       this.initialQualitySelected = true;
-      void this.enterLobby();
+      void this.enterTutorialOrLobby();
       return;
     }
     this.qualityPicker = new QualityPicker(this.root);
@@ -1160,9 +1191,17 @@ export class GameApp {
       this.selectedSplatQuality = tierToSplatQuality(tier === 'auto' ? resolveEffectiveTier() : tier);
       this.qualityPicker?.dispose();
       this.qualityPicker = null;
-      void this.enterLobby();
+      void this.enterTutorialOrLobby();
     };
     this.qualityPicker.show();
+  }
+
+  private async enterTutorialOrLobby(): Promise<void> {
+    if (shouldShowTutorial()) {
+      this.tutorialUi.show(() => void this.enterLobby());
+      return;
+    }
+    await this.enterLobby();
   }
 
   private openQualityModal(): void {
@@ -1205,6 +1244,7 @@ export class GameApp {
   private async enterLobby(): Promise<void> {
     this.queueToken++;
     this.sceneMode = 'LOBBY';
+    this.tutorialUi.hide();
     this.characterSelectUi.hide();
     this.customMatchUi.hide();
     this.mapIntroUi.hide();
@@ -1307,7 +1347,9 @@ export class GameApp {
       partyCode: request.partyCode,
       arenaPresetId: request.arenaPresetId,
       arenaName: request.arenaName,
-      ...(request.botSkill ? { botSkill: request.botSkill } : {})
+      ...(request.botSkill ? { botSkill: request.botSkill } : {}),
+      ...(request.minHumanPlayers ? { minHumanPlayers: request.minHumanPlayers } : {}),
+      ...(request.botCount ? { botCount: request.botCount } : {})
     };
     this.customMatchUi.hide();
     await this.enterCharacterSelect(request.mode, SPLAT_TEST_ARENA_ID, {
@@ -1615,7 +1657,13 @@ export class GameApp {
         await nextNetwork.connectByPartyCode(this.localName, request.partyCode, this.selectedCharacterClass);
       } else {
         await nextNetwork.connect(this.localName, mode, this.selectedCharacterClass, request.kind === 'custom-create'
-          ? { partyCode: request.partyCode, arenaPresetId: request.arenaPresetId, botSkill: request.botSkill }
+          ? {
+              partyCode: request.partyCode,
+              arenaPresetId: request.arenaPresetId,
+              botSkill: request.botSkill,
+              minHumanPlayers: request.minHumanPlayers,
+              botCount: request.botCount
+            }
           : {});
       }
       if (token !== this.queueToken || this.network !== nextNetwork || this.sceneMode !== 'QUEUE') {

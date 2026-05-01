@@ -7,6 +7,8 @@ export interface CustomCreateRequest {
   arenaPresetId: string;
   arenaName: string;
   botSkill?: BotSkill;
+  minHumanPlayers?: number;
+  botCount?: number;
 }
 
 export class CustomMatchOverlay {
@@ -16,6 +18,8 @@ export class CustomMatchOverlay {
   private joinInput: HTMLInputElement;
   private modeButtons: HTMLButtonElement[] = [];
   private botButtons: HTMLButtonElement[] = [];
+  private humanGateButtons: HTMLButtonElement[] = [];
+  private botCountButtons: HTMLButtonElement[] = [];
   private mapRail: HTMLDivElement;
   private selectedNameEl: HTMLElement;
   private selectedMetaEl: HTMLElement;
@@ -23,6 +27,8 @@ export class CustomMatchOverlay {
   private maps: PublishedMapChoice[] = [];
   private mode: MatchMode = '1v1';
   private botSkill: BotSkill | '' = '';
+  private minHumanPlayers = 2;
+  private botCount = 2;
   private partyCode = generatePartyCode();
   private selectedPresetId = '';
 
@@ -67,6 +73,20 @@ export class CustomMatchOverlay {
                 <button type="button" data-bot-skill="master">Master</button>
               </div>
             </div>
+            <div class="custom-match__invite-plan" data-2v2-plan>
+              <span>Invite gate</span>
+              <div role="tablist" aria-label="Humans before bots">
+                <button type="button" data-human-gate="2">2 players</button>
+                <button type="button" data-human-gate="3">3 players</button>
+              </div>
+            </div>
+            <div class="custom-match__bot-count" data-2v2-plan>
+              <span>Bot count</span>
+              <div role="tablist" aria-label="Bots to fill">
+                <button type="button" data-bot-count="2">Up to 2</button>
+                <button type="button" data-bot-count="3">Up to 3</button>
+              </div>
+            </div>
             <button type="button" class="custom-match__create">Create invite room</button>
             <div class="custom-match__join">
               <label>
@@ -92,6 +112,8 @@ export class CustomMatchOverlay {
     this.createButton = this.element.querySelector('.custom-match__create')!;
     this.modeButtons = Array.from(this.element.querySelectorAll<HTMLButtonElement>('[data-mode]'));
     this.botButtons = Array.from(this.element.querySelectorAll<HTMLButtonElement>('[data-bot-skill]'));
+    this.humanGateButtons = Array.from(this.element.querySelectorAll<HTMLButtonElement>('[data-human-gate]'));
+    this.botCountButtons = Array.from(this.element.querySelectorAll<HTMLButtonElement>('[data-bot-count]'));
 
     this.element.querySelector('.custom-match__back')?.addEventListener('click', () => this.onBack?.());
     this.createButton.addEventListener('click', () => this.create());
@@ -107,6 +129,12 @@ export class CustomMatchOverlay {
     }
     for (const button of this.botButtons) {
       button.addEventListener('click', () => this.setBotSkill(toBotSkill(button.dataset.botSkill)));
+    }
+    for (const button of this.humanGateButtons) {
+      button.addEventListener('click', () => this.setMinHumanPlayers(Number(button.dataset.humanGate)));
+    }
+    for (const button of this.botCountButtons) {
+      button.addEventListener('click', () => this.setBotCount(Number(button.dataset.botCount)));
     }
     this.render();
   }
@@ -142,6 +170,16 @@ export class CustomMatchOverlay {
     this.render();
   }
 
+  private setMinHumanPlayers(value: number): void {
+    this.minHumanPlayers = value === 3 ? 3 : 2;
+    this.render();
+  }
+
+  private setBotCount(value: number): void {
+    this.botCount = value === 3 ? 3 : 2;
+    this.render();
+  }
+
   private create(): void {
     const selected = this.selectedMap();
     if (!selected) return;
@@ -150,7 +188,11 @@ export class CustomMatchOverlay {
       partyCode: this.partyCode,
       arenaPresetId: selected.presetId,
       arenaName: selected.displayName,
-      ...(this.botSkill ? { botSkill: this.botSkill } : {})
+      ...(this.botSkill ? { botSkill: this.botSkill } : {}),
+      ...(this.mode === '2v2' && this.botSkill ? {
+        minHumanPlayers: this.minHumanPlayers,
+        botCount: this.botCount
+      } : {})
     });
   }
 
@@ -175,6 +217,18 @@ export class CustomMatchOverlay {
       button.dataset.active = String(active);
       button.setAttribute('aria-selected', String(active));
     }
+    for (const button of this.humanGateButtons) {
+      const active = Number(button.dataset.humanGate) === this.minHumanPlayers;
+      button.dataset.active = String(active);
+      button.setAttribute('aria-selected', String(active));
+    }
+    for (const button of this.botCountButtons) {
+      const active = Number(button.dataset.botCount) === this.botCount;
+      button.dataset.active = String(active);
+      button.setAttribute('aria-selected', String(active));
+    }
+    this.element.dataset.mode = this.mode;
+    this.element.dataset.botFill = String(Boolean(this.botSkill));
 
     this.mapRail.innerHTML = '';
     for (const map of this.maps) {
@@ -194,7 +248,9 @@ export class CustomMatchOverlay {
     }
 
     const selected = this.selectedMap();
-    const botLabel = this.botSkill ? `${capitalize(this.botSkill)} bot` : 'bot after 60s';
+    const botLabel = this.mode === '2v2' && this.botSkill
+      ? `${capitalize(this.botSkill)} bots after ${this.minHumanPlayers} humans`
+      : this.botSkill ? `${capitalize(this.botSkill)} bot` : 'bot after 60s';
     this.selectedNameEl.textContent = selected?.displayName ?? 'Loading maps';
     this.selectedMetaEl.textContent = selected
       ? `${this.mode} invite room · ${this.partyCode} · ${botLabel}`

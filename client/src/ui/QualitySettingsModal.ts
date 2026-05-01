@@ -26,6 +26,12 @@ export class QualitySettingsModal {
   private pendingKeyAction: CombatAction | null = null;
   private keyFeedback: HTMLElement | null = null;
   private keyCaptureHandler = (event: KeyboardEvent) => this.captureCombatKey(event);
+  private mouseCaptureHandler = (event: MouseEvent) => this.captureCombatMouse(event);
+  private contextMenuCaptureHandler = (event: MouseEvent) => {
+    if (!this.pendingKeyAction) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   constructor(
     root: HTMLElement,
@@ -127,10 +133,14 @@ export class QualitySettingsModal {
       this.setKeyFeedback('');
     });
     window.addEventListener('keydown', this.keyCaptureHandler, true);
+    window.addEventListener('mousedown', this.mouseCaptureHandler, true);
+    window.addEventListener('contextmenu', this.contextMenuCaptureHandler, true);
   }
 
   dispose(): void {
     window.removeEventListener('keydown', this.keyCaptureHandler, true);
+    window.removeEventListener('mousedown', this.mouseCaptureHandler, true);
+    window.removeEventListener('contextmenu', this.contextMenuCaptureHandler, true);
     this.element.remove();
   }
 
@@ -174,9 +184,27 @@ export class QualitySettingsModal {
       button.dataset.capturing = String(capturing);
       const keyEl = button.querySelector('kbd');
       if (keyEl) {
-        keyEl.textContent = capturing ? 'Press key' : formatCombatKeyBinding(this.combatKeyBindings[action]);
+        keyEl.textContent = capturing ? 'Press key/click' : formatCombatKeyBinding(this.combatKeyBindings[action]);
       }
     }
+  }
+
+  private captureCombatMouse(event: MouseEvent): void {
+    if (!this.pendingKeyAction) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const next = assignCombatKeyBinding(this.combatKeyBindings, this.pendingKeyAction, event);
+    if (sameCombatKeyBindings(next, this.combatKeyBindings)) {
+      this.setKeyFeedback('Reserved input');
+      return;
+    }
+
+    this.combatKeyBindings = next;
+    this.pendingKeyAction = null;
+    this.onCombatKeyBindingsChange?.(next);
+    this.renderKeyBindingButtons();
+    this.setKeyFeedback('');
   }
 
   private setKeyFeedback(message: string): void {

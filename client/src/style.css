@@ -538,6 +538,34 @@ button {
   font-size: 13px;
 }
 
+.queue-panel__roster {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 2px;
+}
+
+.queue-panel__player,
+.queue-panel__empty {
+  display: block;
+  min-height: 26px;
+  padding: 6px 8px;
+  border: 1px solid rgba(247, 231, 198, 0.14);
+  background: rgba(247, 231, 198, 0.08);
+  color: rgba(247, 231, 198, 0.84);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.queue-panel__player[data-bot="true"] {
+  border-color: rgba(125, 211, 252, 0.32);
+  color: #dff5ff;
+  background: rgba(12, 74, 110, 0.28);
+}
+
+.queue-panel__empty {
+  color: rgba(247, 231, 198, 0.52);
+}
+
 .results-panel span {
   color: rgba(247, 231, 198, 0.82);
   font-size: 13px;
@@ -1126,6 +1154,85 @@ button {
   opacity: 1;
 }
 
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  display: none;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background:
+    linear-gradient(90deg, rgba(8, 7, 6, 0.96), rgba(21, 18, 15, 0.76) 45%, rgba(8, 7, 6, 0.96)),
+    radial-gradient(circle at 50% 45%, rgba(245, 196, 94, 0.12), transparent 42%);
+  pointer-events: auto;
+}
+
+.tutorial-overlay[data-visible="true"] {
+  display: grid;
+}
+
+.tutorial-overlay__panel {
+  display: grid;
+  gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 18px;
+  border: 1px solid rgba(245, 196, 94, 0.36);
+  border-radius: 8px;
+  background: rgba(21, 18, 15, 0.86);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.46);
+}
+
+.tutorial-overlay__progress {
+  justify-self: start;
+  padding: 4px 8px;
+  border: 1px solid rgba(247, 231, 198, 0.16);
+  color: rgba(247, 231, 198, 0.66);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tutorial-overlay h2 {
+  margin: 0;
+  color: var(--gold);
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.tutorial-overlay p {
+  margin: 0;
+  color: var(--paper);
+  font-size: 17px;
+  line-height: 1.42;
+}
+
+.tutorial-overlay small {
+  color: rgba(247, 231, 198, 0.62);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.tutorial-overlay__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.tutorial-overlay__actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(247, 231, 198, 0.2);
+  color: var(--paper);
+  background: rgba(247, 231, 198, 0.1);
+  cursor: pointer;
+}
+
+.tutorial-overlay__actions button:last-child {
+  border-color: rgba(245, 196, 94, 0.58);
+  color: var(--ink);
+  background: var(--gold);
+}
+
 .character-select {
   position: fixed;
   inset: 0;
@@ -1574,6 +1681,8 @@ button {
 .custom-match__code-card span,
 .custom-match__selected span,
 .custom-match__bots span,
+.custom-match__invite-plan span,
+.custom-match__bot-count span,
 .custom-match__join span {
   display: block;
   color: rgba(247, 231, 198, 0.6);
@@ -1601,7 +1710,6 @@ button {
 .custom-match__setup {
   align-self: stretch;
   display: grid;
-  grid-template-rows: auto auto auto auto auto 1fr;
   align-content: start;
   gap: 14px;
   padding: 16px;
@@ -1626,7 +1734,24 @@ button {
   background: rgba(8, 7, 6, 0.22);
 }
 
-.custom-match__bots > div {
+.custom-match__invite-plan,
+.custom-match__bot-count {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 8px;
+  background: rgba(12, 74, 110, 0.18);
+}
+
+.custom-match[data-mode="1v1"] [data-2v2-plan],
+.custom-match[data-bot-fill="false"] [data-2v2-plan] {
+  display: none;
+}
+
+.custom-match__bots > div,
+.custom-match__invite-plan > div,
+.custom-match__bot-count > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
@@ -1634,6 +1759,8 @@ button {
 
 .custom-match__mode button,
 .custom-match__bots button,
+.custom-match__invite-plan button,
+.custom-match__bot-count button,
 .custom-match__create,
 .custom-match__join button {
   min-height: 42px;
@@ -1647,13 +1774,17 @@ button {
 
 .custom-match__mode button:hover,
 .custom-match__bots button:hover,
+.custom-match__invite-plan button:hover,
+.custom-match__bot-count button:hover,
 .custom-match__join button:hover {
   background: rgba(247, 231, 198, 0.1);
   transform: translateY(-1px);
 }
 
 .custom-match__mode button[data-active="true"],
-.custom-match__bots button[data-active="true"] {
+.custom-match__bots button[data-active="true"],
+.custom-match__invite-plan button[data-active="true"],
+.custom-match__bot-count button[data-active="true"] {
   border-color: rgba(125, 211, 252, 0.68);
   color: var(--ink);
   background: var(--frost);

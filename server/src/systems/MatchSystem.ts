@@ -40,6 +40,30 @@ export function missingPlayersToStart(playerCount: number, config: MatchConfig):
   return Math.max(0, config.requiredPlayers - playerCount);
 }
 
+export function normalizeCustomHumanGate(value: unknown, config: MatchConfig): number {
+  const parsed = parseWholeNumber(value);
+  if (parsed === null) return 1;
+  return clamp(parsed, 1, config.maxPlayers);
+}
+
+export function normalizeCustomBotCount(value: unknown, config: MatchConfig): number {
+  const parsed = parseWholeNumber(value);
+  if (parsed === null) return 0;
+  return clamp(parsed, 0, Math.max(0, config.maxPlayers - 1));
+}
+
+export function requestedBotsToAdd(
+  phase: RoomPhase,
+  humanPlayerCount: number,
+  playerCount: number,
+  config: MatchConfig,
+  minHumanPlayers: number,
+  botCount: number
+): number {
+  if (phase !== 'WAITING' || botCount <= 0 || humanPlayerCount < minHumanPlayers) return 0;
+  return Math.min(botCount, missingPlayersToStart(playerCount, config));
+}
+
 export function shouldScheduleAutoBotFill(
   phase: RoomPhase,
   humanPlayerCount: number,
@@ -107,4 +131,13 @@ export function buildRematchStatus(
 
 export function shouldDamagePlayer(attacker: ServerPlayer, target: ServerPlayer): boolean {
   return attacker.hp > 0 && attacker.id !== target.id && attacker.teamId !== target.teamId && target.hp > 0;
+}
+
+function parseWholeNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
