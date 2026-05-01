@@ -104,6 +104,8 @@ export class GameApp {
   private lobby: LobbyScene | null = null;
   private arenaRuntime: ArenaRuntime | null = null;
   private calibrationController: LocalPlayerController | null = null;
+  private referenceCharacter: LocalPlayerController | null = null;
+  private referenceCharacterSnapshot: PlayerSnapshot | null = null;
   private splatCatalog: SplatMapCatalog | null = null;
   private calibrationBasePreset: SplatArenaPreset | null = null;
   private calibrationPreset: SplatArenaPreset | null = null;
@@ -998,6 +1000,14 @@ export class GameApp {
     this.calibrationController.setFirstPersonHidden(true);
     this.calibrationController.setName('Calibrator');
     this.calibrationController.update(this.calibrationSnapshot, 1, true);
+
+    // Reference character for scale visualization
+    const refSpawn = settings.spawnPoints[1] ?? settings.spawnPoints[0];
+    this.referenceCharacterSnapshot = makeCalibrationSnapshot('Reference', refSpawn, settings.floorY);
+    this.referenceCharacter = new LocalPlayerController(this.scene, false, 'B');
+    this.referenceCharacter.setName('Reference');
+    this.referenceCharacter.update(this.referenceCharacterSnapshot, 1, true);
+
     this.calibrationGuide = createCalibrationGuide(settings);
     this.scene.add(this.calibrationGuide);
     this.localPlayerBound = true;
@@ -1422,9 +1432,38 @@ export class GameApp {
     snapshot.casting = false;
     snapshot.selectedSpell = '';
     this.calibrationController.update(snapshot, dt, true);
+
+    // Update reference character with arrow keys
+    this.updateReferenceCharacter(dt, settings, bounds, voxelCollision);
+
     updateCalibrationGuide(this.calibrationGuide, settings);
     this.arenaRuntime?.update(dt);
     this.cameraRig.update(this.camera, new THREE.Vector3(snapshot.x, snapshot.y, snapshot.z), yaw, this.aimPitch, dt, true);
+  }
+
+  private updateReferenceCharacter(dt: number, settings: SplatCalibrationSettings, bounds: ReturnType<typeof normalizeBounds>, voxelCollision: any): void {
+    if (!this.referenceCharacter || !this.referenceCharacterSnapshot) return;
+
+    const ref = this.referenceCharacterSnapshot;
+    const speed = 4.0;
+    let mx = 0;
+    let mz = 0;
+    if (this.keys.has('arrowup')) { mz -= 1; }
+    if (this.keys.has('arrowdown')) { mz += 1; }
+    if (this.keys.has('arrowleft')) { mx -= 1; }
+    if (this.keys.has('arrowright')) { mx += 1; }
+    const length = Math.hypot(mx, mz);
+    if (length > 0) {
+      mx /= length;
+      mz /= length;
+    }
+
+    ref.x = clamp(ref.x + mx * speed * dt, bounds.minX, bounds.maxX);
+    ref.z = clamp(ref.z + mz * speed * dt, bounds.minZ, bounds.maxZ);
+    ref.y = settings.floorY;
+    ref.anim = length > 0 ? 'run' : 'idle';
+    ref.rotY = mz < 0 ? Math.PI : mz > 0 ? 0 : mx < 0 ? -Math.PI / 2 : mx > 0 ? Math.PI / 2 : ref.rotY;
+    this.referenceCharacter.update(ref, dt, true);
   }
 
   private applyCalibrationSettings(settings: SplatCalibrationSettings, options: { autosave?: boolean } = {}): void {
@@ -1887,6 +1926,9 @@ export class GameApp {
     this.projectileSnapshots = [];
     this.calibrationController?.dispose(this.scene);
     this.calibrationController = null;
+    this.referenceCharacter?.dispose(this.scene);
+    this.referenceCharacter = null;
+    this.referenceCharacterSnapshot = null;
     disposeCalibrationGuide(this.scene, this.calibrationGuide);
     this.calibrationGuide = null;
     this.calibrationSnapshot = null;
