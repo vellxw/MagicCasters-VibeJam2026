@@ -1,43 +1,92 @@
 {
-  "id": "ice_bolt_impact",
-  "name": "Ice Bolt Impact",
-  "duration": 0.6,
+  "id": "abyssal_claw_impact",
+  "name": "Abyssal Claw Cut Impact",
+  "duration": 0.38,
   "loop": false,
-  "attachTo": "world",
+  "attachTo": "impact_point",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "ring", "params": [0.1, 0.3, 32] },
+      "geometry": {
+        "type": "torus",
+        "params": [
+          0.5,
+          0.025,
+          8,
+          42
+        ]
+      },
       "material": {
         "type": "basic",
-        "color": "#38bdf8",
+        "color": "#c084fc",
         "transparent": true,
-        "opacity": { "value": 0.7, "curve": "easeOut", "duration": 0.6 },
-        "side": "double"
+        "opacity": 0.9,
+        "wireframe": false
       },
-      "scale": { "value": 3.5, "curve": "easeOut", "duration": 0.6 }
+      "scale": [
+        1.8,
+        0.2,
+        0.5
+      ],
+      "rotation": [
+        0.2,
+        0,
+        0.7
+      ],
+      "animation": {
+        "opacity": {
+          "value": 0.9,
+          "curve": "easeOut",
+          "duration": 0.38
+        },
+        "scale": {
+          "value": 1.6,
+          "curve": "easeOut",
+          "duration": 0.38
+        }
+      }
     },
     {
       "type": "particles",
-      "count": 50,
-      "emissionRate": 50,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.1],
-      "lifetime": { "min": 0.2, "max": 0.6 },
-      "color": { "start": "#e0f2fe", "end": "#0284c7" },
-      "size": { "start": 0.12, "end": 0.03 },
-      "opacity": { "start": 1, "end": 0 },
-      "velocity": { "initial": [0, 3, 0], "spread": 5, "radial": true },
-      "gravity": [0, -6, 0],
+      "count": 24,
+      "emissionRate": 48,
+      "emissionShape": "cone",
+      "emissionShapeParams": [
+        0.35,
+        0.8
+      ],
+      "lifetime": {
+        "min": 0.18,
+        "max": 0.55
+      },
+      "color": {
+        "start": "#c084fc",
+        "end": "#111827"
+      },
+      "size": {
+        "start": 0.08,
+        "end": 0.01
+      },
+      "opacity": {
+        "start": 0.78,
+        "end": 0
+      },
+      "velocity": {
+        "initial": [
+          0,
+          1.4,
+          0
+        ],
+        "spread": 1.2,
+        "radial": true
+      },
+      "gravity": [
+        0,
+        -1.4,
+        0
+      ],
+      "drag": 0.12,
       "burst": true
-    },
-    {
-      "type": "light",
-      "lightType": "point",
-      "color": "#bae6fd",
-      "intensity": { "value": 6, "curve": "easeOut", "duration": 0.4 },
-      "distance": 6,
-      "decay": 2
     }
   ]
 }

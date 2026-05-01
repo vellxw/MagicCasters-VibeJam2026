@@ -1,26 +1,25 @@
 {
-  "id": "penitent_seal_impact",
-  "name": "Penitent Seal Silence Field",
-  "duration": 0.58,
+  "id": "glacial_spikes_telegraph",
+  "name": "Glacial Spike Warning Seal",
+  "duration": 0.85,
   "loop": false,
-  "attachTo": "impact_point",
+  "attachTo": "world",
   "layers": [
     {
       "type": "mesh",
       "geometry": {
         "type": "ring",
         "params": [
-          1,
-          1.22,
+          0.9,
+          1.15,
           64
         ]
       },
       "material": {
         "type": "basic",
-        "color": "#fef08a",
+        "color": "#7dd3fc",
         "transparent": true,
-        "opacity": 0.82,
-        "wireframe": false,
+        "opacity": 0.72,
         "side": "double"
       },
       "rotation": [
@@ -29,106 +28,99 @@
         0
       ],
       "animation": {
-        "scale": {
-          "value": 2.35,
-          "curve": "easeOut",
-          "duration": 0.58
+        "rotation": {
+          "speed": [
+            0,
+            0,
+            2.8
+          ]
         },
         "opacity": {
-          "value": 0.82,
-          "curve": "easeOut",
-          "duration": 0.58
+          "value": 0.72,
+          "curve": "pulse",
+          "duration": 0.85
         }
       }
     },
     {
       "type": "mesh",
       "geometry": {
-        "type": "cylinder",
+        "type": "box",
         "params": [
-          0.02,
-          0.02,
-          1.1,
-          8
+          1.75,
+          0.018,
+          0.055
         ]
       },
       "material": {
         "type": "basic",
-        "color": "#f59e0b",
+        "color": "#bae6fd",
         "transparent": true,
-        "opacity": 0.86,
-        "wireframe": false
+        "opacity": 0.58
       },
       "position": [
         0,
-        0.55,
-        -0.95
+        0.015,
+        0
       ]
     },
     {
       "type": "mesh",
       "geometry": {
-        "type": "cylinder",
+        "type": "box",
         "params": [
-          0.02,
-          0.02,
-          1.1,
-          8
+          0.055,
+          0.018,
+          1.75
         ]
       },
       "material": {
         "type": "basic",
-        "color": "#f59e0b",
+        "color": "#38bdf8",
         "transparent": true,
-        "opacity": 0.86,
-        "wireframe": false
+        "opacity": 0.5
       },
       "position": [
         0,
-        0.55,
-        0.95
+        0.02,
+        0
       ]
     },
     {
       "type": "particles",
-      "count": 36,
-      "emissionRate": 72,
+      "count": 26,
+      "emissionRate": 40,
       "emissionShape": "disc",
       "emissionShapeParams": [
-        1.6
+        1.05
       ],
       "lifetime": {
-        "min": 0.18,
+        "min": 0.25,
         "max": 0.55
       },
       "color": {
-        "start": "#fef08a",
-        "end": "#f59e0b"
+        "start": "#e0f2fe",
+        "end": "#38bdf8"
       },
       "size": {
-        "start": 0.08,
+        "start": 0.045,
         "end": 0.01
       },
       "opacity": {
-        "start": 0.78,
+        "start": 0.7,
         "end": 0
       },
       "velocity": {
         "initial": [
           0,
-          1.4,
+          0.15,
           0
         ],
-        "spread": 1.2,
+        "spread": 0.8,
         "radial": true
       },
-      "gravity": [
-        0,
-        -1.4,
-        0
-      ],
-      "drag": 0.12,
-      "burst": true
+      "drag": 0.7,
+      "burst": false
     }
   ]
 }

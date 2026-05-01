@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ROOM_NAME } from '../../../shared/types';
-import { createJoinOptions } from './NetworkClient';
+import { createJoinOptions, SERVER_MESSAGE_TYPES } from './NetworkClient';
 
 describe('NetworkClient join options', () => {
   it('includes the selected character class when joining the match room', () => {
@@ -12,5 +12,20 @@ describe('NetworkClient join options', () => {
         characterClass: 'divine'
       }
     });
+  });
+
+  it('subscribes to explicit spell resolution events', () => {
+    expect(SERVER_MESSAGE_TYPES).toEqual(expect.arrayContaining([
+      'spell_confirmed',
+      'projectile_impact',
+      'trap_placed',
+      'trap_triggered',
+      'mark_applied',
+      'mark_consumed',
+      'ground_line_hit',
+      'glacial_spike_telegraph',
+      'glacial_spike_erupted',
+      'shield_exploded'
+    ]));
   });
 });

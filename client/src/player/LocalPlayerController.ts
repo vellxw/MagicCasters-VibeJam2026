@@ -15,6 +15,12 @@ export interface PlayerSnapshot {
   selectedSpell: string;
   teamId?: string;
   characterClass?: CharacterClass;
+  shieldActive?: boolean;
+  silencedUntil?: number;
+  slowedUntil?: number;
+  speedBoostUntil?: number;
+  markedUntil?: number;
+  rootedUntil?: number;
   shadowDartReadyAt?: number;
   voidTrapReadyAt?: number;
   abyssalClawReadyAt?: number;

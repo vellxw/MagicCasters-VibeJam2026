@@ -29,6 +29,22 @@ export function createJoinOptions(name: string, mode: MatchMode, characterClass:
   };
 }
 
+export const SERVER_MESSAGE_TYPES = [
+  'phase',
+  'spell_confirmed',
+  'cast_denied',
+  'damage',
+  'projectile_impact',
+  'trap_placed',
+  'trap_triggered',
+  'mark_applied',
+  'mark_consumed',
+  'ground_line_hit',
+  'glacial_spike_telegraph',
+  'glacial_spike_erupted',
+  'shield_exploded'
+] as const;
+
 export class NetworkClient {
   room: NetRoom | null = null;
   status = 'offline';
@@ -51,7 +67,7 @@ export class NetworkClient {
       this.onState?.(state);
     });
 
-    for (const type of ['phase', 'spell_confirmed', 'cast_denied', 'damage']) {
+    for (const type of SERVER_MESSAGE_TYPES) {
       this.room.onMessage(type, (payload: any) => this.onEvent?.(type, payload));
     }
 

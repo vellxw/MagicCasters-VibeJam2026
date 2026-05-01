@@ -1,62 +1,27 @@
 {
-  "id": "judgment_ray_impact",
-  "name": "Judgment Ray Strike",
-  "duration": 0.4,
+  "id": "trap_triggered",
+  "name": "Void Trap Trigger Burst",
+  "duration": 0.5,
   "loop": false,
-  "attachTo": "impact_point",
+  "attachTo": "world",
   "layers": [
     {
       "type": "mesh",
       "geometry": {
-        "type": "cylinder",
+        "type": "torus",
         "params": [
-          0.05,
-          0.38,
-          1.7,
-          8
-        ]
-      },
-      "material": {
-        "type": "standard",
-        "color": "#f59e0b",
-        "emissive": "#f59e0b",
-        "emissiveIntensity": 3.5,
-        "transparent": true,
-        "opacity": 0.9,
-        "wireframe": false,
-        "roughness": 0.28,
-        "metalness": 0.05
-      },
-      "position": [
-        0,
-        0.85,
-        0
-      ],
-      "animation": {
-        "opacity": {
-          "value": 0.9,
-          "curve": "easeOut",
-          "duration": 0.4
-        }
-      }
-    },
-    {
-      "type": "mesh",
-      "geometry": {
-        "type": "ring",
-        "params": [
-          0.34,
-          0.72,
+          0.55,
+          0.08,
+          10,
           48
         ]
       },
       "material": {
         "type": "basic",
-        "color": "#fef08a",
+        "color": "#c084fc",
         "transparent": true,
-        "opacity": 0.8,
-        "wireframe": false,
-        "side": "double"
+        "opacity": 0.92,
+        "wireframe": false
       },
       "rotation": [
         -1.5707963267948966,
@@ -65,33 +30,63 @@
       ],
       "animation": {
         "scale": {
-          "value": 1.55,
+          "value": 2.4,
           "curve": "easeOut",
-          "duration": 0.4
+          "duration": 0.5
         },
         "opacity": {
-          "value": 0.8,
+          "value": 0.92,
           "curve": "easeOut",
-          "duration": 0.4
+          "duration": 0.5
+        }
+      }
+    },
+    {
+      "type": "mesh",
+      "geometry": {
+        "type": "cylinder",
+        "params": [
+          0.32,
+          0.76,
+          0.9,
+          7
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#2e1065",
+        "transparent": true,
+        "opacity": 0.42,
+        "wireframe": true
+      },
+      "position": [
+        0,
+        0.45,
+        0
+      ],
+      "animation": {
+        "opacity": {
+          "value": 0.42,
+          "curve": "easeOut",
+          "duration": 0.5
         }
       }
     },
     {
       "type": "particles",
-      "count": 28,
-      "emissionRate": 56,
-      "emissionShape": "cone",
+      "count": 36,
+      "emissionRate": 72,
+      "emissionShape": "disc",
       "emissionShapeParams": [
-        0.28,
-        1.4
+        1.2
       ],
       "lifetime": {
         "min": 0.18,
         "max": 0.55
       },
       "color": {
-        "start": "#fef08a",
-        "end": "#f59e0b"
+        "start": "#c084fc",
+        "end": "#111827"
       },
       "size": {
         "start": 0.08,

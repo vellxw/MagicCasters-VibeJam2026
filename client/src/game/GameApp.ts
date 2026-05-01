@@ -3,7 +3,7 @@ import {
   clearAutoCollisionWalls,
   countAutoCollisionWalls
 } from '../../../shared/autoCollisionWalls';
-import { SPELL_IDS, type SpellId } from '../../../shared/spells';
+import { spellIdFromClassSlot, type SpellId } from '../../../shared/spells';
 import {
   findClimbableWall,
   findStandingSurfaceY,
@@ -81,6 +81,19 @@ interface ProjectileSnapshot {
 type SceneMode = 'LOBBY' | 'CHARACTER_SELECT' | 'QUEUE' | 'MATCH' | 'RESULTS' | 'CALIBRATION' | 'VFX_EDITOR';
 type CharacterGltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
 type PlayerController = LocalPlayerController | RemotePlayerController | AnimatedPlayerController;
+
+export function resolveKeyboardSpellForClass(characterClass: CharacterClass, key: string): SpellId | null {
+  return spellIdFromClassSlot(characterClass, key);
+}
+
+export function normalizeDamageAmount(payload: { amount?: unknown; damage?: unknown }): number | null {
+  const amount = typeof payload.amount === 'number' && Number.isFinite(payload.amount)
+    ? payload.amount
+    : typeof payload.damage === 'number' && Number.isFinite(payload.damage)
+      ? payload.damage
+      : null;
+  return amount;
+}
 
 export class GameApp {
   private shell: HTMLDivElement;
@@ -179,6 +192,7 @@ export class GameApp {
     this.mobileStartEl = this.createMobileStartOverlay();
     this.createPortraitBlocker();
     this.network = new NetworkClient(resolveServerUrl());
+    this.voice.setCharacterClass(this.selectedCharacterClass);
 
     this.characterSelectUi.onBack = () => void this.returnToLobby();
     this.characterSelectUi.onClassSelect = (characterClass) => this.switchPreviewClass(characterClass);
@@ -422,11 +436,17 @@ export class GameApp {
 
     if (this.sceneMode !== 'MATCH') return;
 
-    const spell = SPELL_IDS.find((id) => event.key === String(SPELL_IDS.indexOf(id) + 1));
+    const spell = resolveKeyboardSpellForClass(this.getLocalCharacterClass(), event.key);
     if (spell) {
       event.preventDefault();
       this.cast(spell);
     }
+  }
+
+  private getLocalCharacterClass(): CharacterClass {
+    const localId = this.network.localSessionId;
+    const snapshot = localId ? this.playerSnapshots.get(localId) : null;
+    return resolveCharacterClass(snapshot?.characterClass ?? this.selectedCharacterClass);
   }
 
   private cast(spellId: SpellId): void {
@@ -469,7 +489,22 @@ export class GameApp {
             casting: player.casting,
             selectedSpell: player.selectedSpell,
             rotY: player.rotY,
-            teamId: player.teamId
+            teamId: player.teamId,
+            characterClass: player.characterClass,
+            shieldActive: player.shieldActive,
+            silencedUntil: player.silencedUntil,
+            slowedUntil: player.slowedUntil,
+            speedBoostUntil: player.speedBoostUntil,
+            markedUntil: player.markedUntil,
+            rootedUntil: player.rootedUntil,
+            shadowDartReadyAt: player.shadowDartReadyAt,
+            voidTrapReadyAt: player.voidTrapReadyAt,
+            abyssalClawReadyAt: player.abyssalClawReadyAt,
+            eclipseReadyAt: player.eclipseReadyAt,
+            judgmentRayReadyAt: player.judgmentRayReadyAt,
+            penitentSealReadyAt: player.penitentSealReadyAt,
+            glacialSpikesReadyAt: player.glacialSpikesReadyAt,
+            firmamentShieldReadyAt: player.firmamentShieldReadyAt
           });
         } else {
           this.playerSnapshots.set(player.id, player);
@@ -492,6 +527,7 @@ export class GameApp {
 
     this.projectileSnapshots = Array.from(state.projectiles?.values?.() ?? []) as ProjectileSnapshot[];
     this.vfx.syncProjectiles(this.projectileSnapshots);
+    this.vfx.syncPlayerStatusVfx(Array.from(this.playerSnapshots.values()));
     this.syncControlState();
 
     if (this.sceneMode === 'MATCH' && this.phase === 'ENDED') {
@@ -518,46 +554,46 @@ export class GameApp {
       if (payload.message) this.ui.showToast(payload.message);
     }
     if (type === 'spell_confirmed') {
-      this.vfx.confirmSpell(payload.spellId, payload.x, payload.y, payload.z);
-      this.playCastVfx(payload.spellId, payload.playerId ?? this.network.localSessionId ?? '');
+      this.vfx.playCast(payload.spellId, payload.playerId ?? this.network.localSessionId ?? '', payload.x, payload.y, payload.z);
     }
     if (type === 'cast_denied') {
       this.ui.showToast(payload.reason ?? 'Cast denied');
     }
     if (type === 'damage') {
-      this.ui.showToast(`-${payload.amount}`);
+      const amount = normalizeDamageAmount(payload);
+      if (amount !== null) this.ui.showToast(`-${amount}`);
+    }
+    if (type === 'projectile_impact') {
+      this.vfx.playImpact(payload.spellId, new THREE.Vector3(payload.x, payload.y, payload.z));
+    }
+    if (type === 'trap_placed') {
+      this.vfx.playTrapPlaced(payload.x, payload.z, payload.radius);
     }
     if (type === 'trap_triggered') {
-      this.vfx.triggeredTrap(payload.x, payload.z);
+      this.vfx.playTrapTriggered(payload.x, payload.z);
     }
-    if (type === 'mark_consumed') {
-      const target = this.players.get(payload.targetId);
-      if (target) this.vfx.consumedMark(target.group.position);
-    }
-    if (type === 'ground_line_hit') {
-      const origin = new THREE.Vector3(payload.x, 0, payload.z);
-      const dir = new THREE.Vector3(payload.dirX, 0, payload.dirZ);
-      this.vfx.groundLineHit(origin, dir);
-    }
-    if (type === 'shield_exploded') {
-      const caster = this.players.get(payload.casterId);
-      if (caster) this.vfx.explodedShield(caster.group.position);
-    }
-    if (type === 'trap_triggered') {
-      this.vfx.triggeredTrap(payload.x, payload.z);
+    if (type === 'mark_applied') {
+      const snap = this.playerSnapshots.get(payload.targetId);
+      this.vfx.playMarkApplied(payload.targetId, new THREE.Vector3(snap?.x ?? payload.x, snap?.y ?? 0, snap?.z ?? payload.z));
     }
     if (type === 'mark_consumed') {
       const snap = this.playerSnapshots.get(payload.targetId);
-      if (snap) this.vfx.consumedMark(new THREE.Vector3(snap.x, snap.y, snap.z));
+      this.vfx.playMarkConsumed(new THREE.Vector3(snap?.x ?? payload.x, snap?.y ?? 0, snap?.z ?? payload.z));
     }
     if (type === 'ground_line_hit') {
       const origin = new THREE.Vector3(payload.x, 0, payload.z);
       const dir = new THREE.Vector3(payload.dirX, 0, payload.dirZ);
-      this.vfx.groundLineHit(origin, dir);
+      this.vfx.playGroundLine(origin, dir);
+    }
+    if (type === 'glacial_spike_telegraph') {
+      this.vfx.playGlacialTelegraph(payload.hazards ?? []);
+    }
+    if (type === 'glacial_spike_erupted') {
+      this.vfx.playGlacialEruption(payload.hazards ?? []);
     }
     if (type === 'shield_exploded') {
       const snap = this.playerSnapshots.get(payload.casterId);
-      if (snap) this.vfx.explodedShield(new THREE.Vector3(snap.x, snap.y, snap.z));
+      this.vfx.playShieldExplosion(new THREE.Vector3(snap?.x ?? payload.x, snap?.y ?? 0, snap?.z ?? payload.z));
     }
   }
 
@@ -1121,6 +1157,7 @@ export class GameApp {
 
   private confirmCharacterSelection(characterClass: CharacterClass): void {
     this.selectedCharacterClass = characterClass;
+    this.voice.setCharacterClass(characterClass);
     this.ui.setCharacterClass(characterClass);
     this.clearPreview();
     this.characterSelectUi.hide();
@@ -1129,6 +1166,7 @@ export class GameApp {
 
   private switchPreviewClass(characterClass: CharacterClass): void {
     this.selectedCharacterClass = characterClass;
+    this.voice.setCharacterClass(characterClass);
     if (this.sceneMode === 'CHARACTER_SELECT') {
       void this.loadPreviewModel(characterClass);
     }

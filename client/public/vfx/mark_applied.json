@@ -1,31 +1,31 @@
 {
-  "id": "shadow_dart_cast",
-  "name": "Shadow Dart Cast Sigil",
-  "duration": 0.32,
+  "id": "mark_applied",
+  "name": "Umbral Mark Applied Aura",
+  "duration": 0.42,
   "loop": false,
-  "attachTo": "caster_hand_right",
+  "attachTo": "impact_point",
   "layers": [
     {
       "type": "mesh",
       "geometry": {
         "type": "ring",
         "params": [
-          0.18,
-          0.38,
-          48
+          0.28,
+          0.48,
+          5
         ]
       },
       "material": {
         "type": "basic",
         "color": "#c084fc",
         "transparent": true,
-        "opacity": 0.9,
+        "opacity": 0.88,
         "wireframe": false,
         "side": "double"
       },
-      "rotation": [
+      "position": [
         0,
-        0,
+        1.55,
         0
       ],
       "animation": {
@@ -33,18 +33,18 @@
           "speed": [
             0,
             0,
-            11
+            8
           ]
         },
         "opacity": {
-          "value": 0.9,
+          "value": 0.88,
           "curve": "easeOut",
-          "duration": 0.32
+          "duration": 0.42
         },
         "scale": {
-          "value": 1.25,
+          "value": 1.3,
           "curve": "easeOut",
-          "duration": 0.32
+          "duration": 0.42
         }
       }
     },
@@ -53,7 +53,7 @@
       "geometry": {
         "type": "icosahedron",
         "params": [
-          0.13,
+          0.11,
           0
         ]
       },
@@ -61,29 +61,12 @@
         "type": "basic",
         "color": "#8b5cf6",
         "transparent": true,
-        "opacity": 0.95,
+        "opacity": 0.85,
         "wireframe": true
       },
-      "animation": {
-        "rotation": {
-          "speed": [
-            8,
-            5,
-            0
-          ]
-        }
-      }
-    },
-    {
-      "type": "light",
-      "lightType": "point",
-      "color": "#8b5cf6",
-      "intensity": 2.6,
-      "distance": 3,
-      "decay": 2,
       "position": [
         0,
-        0,
+        1.55,
         0
       ]
     }

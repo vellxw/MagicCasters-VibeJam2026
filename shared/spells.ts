@@ -18,7 +18,7 @@ export interface SpellDefinition {
   key: string;
   manaCost: number;
   cooldownMs: number;
-  kind: 'projectile' | 'instant' | 'dash' | 'trap' | 'ground_line';
+  kind: 'projectile' | 'instant' | 'dash' | 'trap' | 'ground_line' | 'delayed_area';
   damage: number;
   range: number;
   radius: number;
@@ -125,12 +125,12 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
     key: '3',
     manaCost: 24,
     cooldownMs: 3000,
-    kind: 'ground_line',
+    kind: 'delayed_area',
     damage: 18,
     range: 7,
-    radius: 0.6,
+    radius: 1.15,
     speed: 0,
-    ttl: 0.3,
+    ttl: 0.85,
     color: 0x7dd3fc
   },
   firmament_shield: {
@@ -150,6 +150,8 @@ export const SPELLS: Record<SpellId, SpellDefinition> = {
   }
 };
 
+import { CLASSES, type CharacterClass } from './classes.js';
+
 export interface ClassSpellVariant {
   id: SpellId;
   label: string;
@@ -157,8 +159,6 @@ export interface ClassSpellVariant {
   description: string;
   color: number;
 }
-
-import type { CharacterClass } from './classes.js';
 
 export const CLASS_SPELL_VARIANTS: Record<
   CharacterClass,
@@ -276,7 +276,7 @@ export const CLASS_SPELL_VARIANTS: Record<
       label: 'Picos Glaciales',
       incantation: 'glacius',
       description:
-        'Picos de hielo emergen del suelo en línea recta. Si el enemigo está silenciado o ralentizado, lo congelan en el sitio.',
+        'Sella el suelo bajo cada enemigo. Si no se apartan, un pico glaciar emerge, daña, empuja y congela a enemigos debilitados.',
       color: 0x7dd3fc
     },
     firmament_shield: {
@@ -304,6 +304,35 @@ export function isSpellId(value: string): value is SpellId {
 export function spellIdFromKey(key: string): SpellId | null {
   const found = SPELL_IDS.find((id) => SPELLS[id].key === key);
   return found ?? null;
+}
+
+export function getSpellIdsForClass(characterClass: CharacterClass): SpellId[] {
+  return CLASSES[characterClass].spellIds.filter(isSpellId);
+}
+
+export function isSpellAvailableToClass(spellId: SpellId, characterClass: CharacterClass): boolean {
+  return getSpellIdsForClass(characterClass).includes(spellId);
+}
+
+export function spellIdFromClassSlot(characterClass: CharacterClass, key: string): SpellId | null {
+  if (!/^[1-4]$/.test(key)) return null;
+  const slot = Number.parseInt(key, 10);
+  return getSpellIdsForClass(characterClass)[slot - 1] ?? null;
+}
+
+export function spellIdFromClassIncantation(characterClass: CharacterClass, text: string): SpellId | null {
+  const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  const words = normalized.split(' ');
+
+  for (const id of getSpellIdsForClass(characterClass)) {
+    const incantation = SPELLS[id].incantation;
+    if (words.includes(incantation) || normalized.includes(incantation)) {
+      return id;
+    }
+  }
+
+  return null;
 }
 
 export function spellIdFromIncantation(text: string): SpellId | null {

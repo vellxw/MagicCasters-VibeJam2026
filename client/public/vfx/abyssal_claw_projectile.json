@@ -1,45 +1,123 @@
 {
-  "id": "ice_bolt_projectile",
-  "name": "Ice Bolt Projectile",
-  "duration": 2.0,
+  "id": "abyssal_claw_projectile",
+  "name": "Abyssal Claw Flying Slash",
+  "duration": 0.8,
   "loop": true,
   "attachTo": "projectile",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "sphere", "params": [0.18, 16, 16] },
+      "geometry": {
+        "type": "torus",
+        "params": [
+          0.34,
+          0.028,
+          8,
+          36
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#c084fc",
+        "transparent": true,
+        "opacity": 0.86,
+        "wireframe": false
+      },
+      "scale": [
+        1.4,
+        0.28,
+        0.35
+      ],
+      "rotation": [
+        0.4,
+        0,
+        0
+      ],
+      "animation": {
+        "rotation": {
+          "speed": [
+            8,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "type": "mesh",
+      "geometry": {
+        "type": "box",
+        "params": [
+          0.06,
+          0.5,
+          0.26
+        ]
+      },
       "material": {
         "type": "standard",
-        "color": "#7dd3fc",
-        "emissive": "#a5f3fc",
-        "emissiveIntensity": 3.0,
+        "color": "#111827",
+        "emissive": "#c084fc",
+        "emissiveIntensity": 1.8,
         "transparent": true,
-        "opacity": 0.85,
-        "roughness": 0.1,
-        "metalness": 0.3
+        "opacity": 0.92,
+        "wireframe": false,
+        "roughness": 0.28,
+        "metalness": 0.05
       },
-      "scale": { "value": 1.0, "curve": "pulse", "duration": 0.5 }
+      "position": [
+        -0.22,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0.2,
+        0.4
+      ]
     },
     {
-      "type": "light",
-      "lightType": "point",
-      "color": "#7dd3fc",
-      "intensity": { "value": 2.5, "curve": "pulse", "duration": 0.6 },
-      "distance": 4,
-      "decay": 2
+      "type": "mesh",
+      "geometry": {
+        "type": "box",
+        "params": [
+          0.06,
+          0.5,
+          0.26
+        ]
+      },
+      "material": {
+        "type": "standard",
+        "color": "#111827",
+        "emissive": "#c084fc",
+        "emissiveIntensity": 1.8,
+        "transparent": true,
+        "opacity": 0.92,
+        "wireframe": false,
+        "roughness": 0.28,
+        "metalness": 0.05
+      },
+      "position": [
+        0.22,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        -0.2,
+        -0.4
+      ]
     },
     {
-      "type": "particles",
-      "count": 50,
-      "emissionRate": 50,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.15],
-      "lifetime": { "min": 0.3, "max": 0.8 },
-      "color": { "start": "#e0f2fe", "end": "#0ea5e9" },
-      "size": { "start": 0.06, "end": 0.01 },
-      "opacity": { "start": 0.9, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 0.8, "radial": true },
-      "drag": 0.3
+      "type": "trail",
+      "width": 0.28,
+      "color": {
+        "start": "#8b5cf6",
+        "end": "#111827",
+        "curve": "easeOut"
+      },
+      "length": 1.5,
+      "fadeTime": 0.28,
+      "taper": true
     }
   ]
 }

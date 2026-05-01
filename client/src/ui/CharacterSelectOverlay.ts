@@ -1,4 +1,4 @@
-import { SPELL_IDS, SPELLS, getClassSpellVariant } from '../../../shared/spells';
+import { SPELLS, getClassSpellVariant, getSpellIdsForClass } from '../../../shared/spells';
 import { CLASSES, type CharacterClass } from '../../../shared/classes';
 import type { SpellId } from '../../../shared/spells';
 
@@ -105,7 +105,7 @@ export class CharacterSelectOverlay {
   private renderSpells(characterClass: CharacterClass): void {
     this.spellList.innerHTML = '';
 
-    for (const spellId of SPELL_IDS) {
+    for (const spellId of getSpellIdsForClass(characterClass)) {
       const base = SPELLS[spellId];
       const variant = getClassSpellVariant(spellId, characterClass);
 

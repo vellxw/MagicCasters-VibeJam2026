@@ -1,43 +1,95 @@
 {
-  "id": "light_burst_cast",
-  "name": "Light Burst Cast",
+  "id": "firmament_shield_cast",
+  "name": "Firmament Shield Cast Dome",
   "duration": 0.45,
   "loop": false,
   "attachTo": "caster_root",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "ring", "params": [0.2, 0.5, 32] },
+      "geometry": {
+        "type": "sphere",
+        "params": [
+          0.9,
+          24,
+          12
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#93c5fd",
+        "transparent": true,
+        "opacity": 0.22,
+        "wireframe": true
+      },
+      "position": [
+        0,
+        0.95,
+        0
+      ],
+      "animation": {
+        "scale": {
+          "value": 1.2,
+          "curve": "easeOut",
+          "duration": 0.45
+        },
+        "opacity": {
+          "value": 0.22,
+          "curve": "easeOut",
+          "duration": 0.45
+        }
+      }
+    },
+    {
+      "type": "mesh",
+      "geometry": {
+        "type": "torus",
+        "params": [
+          0.86,
+          0.018,
+          8,
+          54
+        ]
+      },
       "material": {
         "type": "basic",
         "color": "#fef08a",
         "transparent": true,
-        "opacity": { "value": 0.6, "curve": "easeOut", "duration": 0.45 },
-        "side": "double"
+        "opacity": 0.78,
+        "wireframe": false
       },
-      "rotation": [1.5708, 0, 0],
-      "scale": { "value": 5, "curve": "easeOut", "duration": 0.45 }
-    },
-    {
-      "type": "particles",
-      "count": 80,
-      "emissionRate": 80,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.2],
-      "lifetime": { "min": 0.1, "max": 0.35 },
-      "color": { "start": "#ffffff", "end": "#fde047" },
-      "size": { "start": 0.2, "end": 0.05 },
-      "opacity": { "start": 1, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 6, "radial": true },
-      "burst": true
+      "position": [
+        0,
+        0.95,
+        0
+      ],
+      "rotation": [
+        1.5707963267948966,
+        0,
+        0
+      ],
+      "animation": {
+        "rotation": {
+          "speed": [
+            0,
+            6,
+            0
+          ]
+        }
+      }
     },
     {
       "type": "light",
       "lightType": "point",
-      "color": "#fef9c3",
-      "intensity": { "value": 10, "curve": "easeOut", "duration": 0.3 },
-      "distance": 10,
-      "decay": 2
+      "color": "#93c5fd",
+      "intensity": 3.2,
+      "distance": 4,
+      "decay": 2,
+      "position": [
+        0,
+        1,
+        0
+      ]
     }
   ]
 }

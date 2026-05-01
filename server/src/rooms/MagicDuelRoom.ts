@@ -34,7 +34,14 @@ import {
   shouldLockRoom,
   shouldStartMatch
 } from '../systems/MatchSystem.js';
-import { applyDamage, applyProjectileDamage, directionAwayFrom, executeSpellCast } from '../systems/SpellSystem.js';
+import {
+  applyDamage,
+  applyProjectileHitEffects,
+  directionAwayFrom,
+  executeSpellCast,
+  resolveGlacialSpikeHazards,
+  type GlacialSpikeHazard
+} from '../systems/SpellSystem.js';
 
 interface JoinOptions {
   name?: string;
@@ -55,6 +62,7 @@ export class MagicDuelRoom extends Room<GameState> {
   private arenaCollision: ArenaCollisionConfig = defaultArenaCollisionConfig();
   private voxelCollision: SparseVoxelCollision | null = null;
   private traps = new Map<string, { x: number; z: number; radius: number; ownerId: string; spellId: SpellId; expiresAt: number }>();
+  private glacialSpikes = new Map<string, GlacialSpikeHazard>();
 
   onCreate(options?: JoinOptions): void {
     this.mode = normalizeMatchMode(options?.mode);
@@ -155,6 +163,7 @@ export class MagicDuelRoom extends Room<GameState> {
     }
     this.clearProjectiles();
     this.traps.clear();
+    this.glacialSpikes.clear();
     this.updatePlayerCount();
     this.state.phase = 'PLAYING';
     this.state.winnerId = '';
@@ -217,11 +226,18 @@ export class MagicDuelRoom extends Room<GameState> {
         }
       }
       this.traps.set(`trap_${Math.random().toString(36).slice(2, 10)}`, result.trap);
+      this.broadcast('trap_placed', {
+        trapOwnerId: caster.id,
+        spellId: result.spellId,
+        x: result.trap.x,
+        z: result.trap.z,
+        radius: result.trap.radius
+      });
     }
 
     if (result.kind === 'instant') {
       for (const hit of result.hits) {
-        this.broadcast('damage', hit);
+        this.broadcast('damage', { targetId: hit.targetId, amount: hit.damage, hp: hit.hp });
       }
       // Apply class-specific instant spell effects
       this.applyClassSpellEffects(caster, rawSpellId as SpellId, result.hits.map((h) => h.targetId));
@@ -230,7 +246,7 @@ export class MagicDuelRoom extends Room<GameState> {
 
     if (result.kind === 'ground_line') {
       for (const hit of result.hits) {
-        this.broadcast('damage', hit);
+        this.broadcast('damage', { targetId: hit.targetId, amount: hit.damage, hp: hit.hp });
       }
       this.broadcast('ground_line_hit', {
         casterId: caster.id,
@@ -244,9 +260,21 @@ export class MagicDuelRoom extends Room<GameState> {
       this.checkForWinner();
     }
 
-    // Apply class-specific projectile spell effects
-    if (result.kind === 'projectile') {
-      this.applyClassSpellEffects(caster, rawSpellId as SpellId, []);
+    if (result.kind === 'delayed_area') {
+      for (const hazard of result.hazards) {
+        this.glacialSpikes.set(hazard.id, hazard);
+      }
+      this.broadcast('glacial_spike_telegraph', {
+        casterId: caster.id,
+        spellId: 'glacial_spikes',
+        hazards: result.hazards.map((hazard) => ({
+          id: hazard.id,
+          x: hazard.x,
+          z: hazard.z,
+          radius: hazard.radius,
+          delayMs: Math.max(0, hazard.resolvesAt - now)
+        }))
+      });
     }
   }
 
@@ -263,7 +291,10 @@ export class MagicDuelRoom extends Room<GameState> {
       if (spellId === 'shadow_dart') {
         for (const targetId of hitTargetIds) {
           const target = this.state.players.get(targetId);
-          if (target) target.markedUntil = now + 3000;
+          if (target) {
+            target.markedUntil = now + 3000;
+            this.broadcast('mark_applied', { targetId: target.id, spellId, x: target.x, z: target.z });
+          }
         }
       }
 
@@ -272,8 +303,9 @@ export class MagicDuelRoom extends Room<GameState> {
           const target = this.state.players.get(targetId);
           if (target && target.markedUntil > now) {
             target.markedUntil = 0;
-            applyDamage(target, 8);
+            const result = applyDamage(target, 8);
             target.silencedUntil = now + 800;
+            this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
             this.broadcast('mark_consumed', { targetId: target.id, spellId, x: target.x, z: target.z });
           }
         }
@@ -285,8 +317,9 @@ export class MagicDuelRoom extends Room<GameState> {
           const distance = Math.hypot(target.x - caster.x, target.z - caster.z);
           if (distance <= SPELLS.eclipse.range && target.markedUntil > now) {
             target.markedUntil = 0;
-            applyDamage(target, 10);
+            const result = applyDamage(target, 10);
             caster.hp = Math.min(100, caster.hp + 5);
+            this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
             this.broadcast('mark_consumed', { targetId: target.id, spellId, x: target.x, z: target.z });
           }
         }
@@ -299,7 +332,8 @@ export class MagicDuelRoom extends Room<GameState> {
         for (const targetId of hitTargetIds) {
           const target = this.state.players.get(targetId);
           if (target && (target.silencedUntil > now || target.slowedUntil > now)) {
-            applyDamage(target, 7); // extra damage on top of base 14
+            const result = applyDamage(target, 7); // extra damage on top of base 14
+            this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
           }
         }
       }
@@ -310,15 +344,6 @@ export class MagicDuelRoom extends Room<GameState> {
           if (target) {
             target.silencedUntil = now + 1000;
             target.slowedUntil = now + 1500;
-          }
-        }
-      }
-
-      if (spellId === 'glacial_spikes') {
-        for (const targetId of hitTargetIds) {
-          const target = this.state.players.get(targetId);
-          if (target && (target.silencedUntil > now || target.slowedUntil > now)) {
-            target.rootedUntil = now + 500;
           }
         }
       }
@@ -365,7 +390,50 @@ export class MagicDuelRoom extends Room<GameState> {
 
     this.updateProjectiles();
     this.updateTraps();
+    this.updateGlacialSpikes(now);
     this.checkForWinner();
+  }
+
+  private updateGlacialSpikes(now: number): void {
+    const readyByCaster = new Map<string, GlacialSpikeHazard[]>();
+    for (const hazard of this.glacialSpikes.values()) {
+      if (hazard.resolvesAt > now) continue;
+      const hazards = readyByCaster.get(hazard.casterId) ?? [];
+      hazards.push(hazard);
+      readyByCaster.set(hazard.casterId, hazards);
+    }
+
+    for (const [casterId, hazards] of readyByCaster) {
+      const caster = this.state.players.get(casterId);
+      if (!caster) {
+        for (const hazard of hazards) this.glacialSpikes.delete(hazard.id);
+        continue;
+      }
+
+      const targets = Array.from(this.state.players.values()).filter((player) => shouldDamagePlayer(caster, player));
+      const result = resolveGlacialSpikeHazards({
+        caster,
+        targets,
+        hazards,
+        now,
+        arenaCollision: this.arenaCollision,
+        voxelCollision: this.voxelCollision
+      });
+
+      for (const hit of result.hits) {
+        this.broadcast('damage', hit);
+      }
+      this.broadcast('glacial_spike_erupted', {
+        casterId,
+        hazards: result.eruptedHazards
+      });
+      this.applyClassSpellEffects(caster, 'glacial_spikes', result.hits.map((hit) => hit.targetId));
+
+      for (const hazard of hazards) {
+        this.glacialSpikes.delete(hazard.id);
+      }
+      this.checkForWinner();
+    }
   }
 
   private updateTraps(): void {
@@ -379,13 +447,23 @@ export class MagicDuelRoom extends Room<GameState> {
         if (player.id === trap.ownerId || player.hp <= 0) continue;
         const dist = Math.hypot(player.x - trap.x, player.z - trap.z);
         if (dist <= trap.radius) {
-          applyDamage(player, SPELLS[trap.spellId].damage);
-          this.broadcast('damage', { targetId: player.id, amount: SPELLS[trap.spellId].damage, hp: player.hp });
+          const damage = applyDamage(player, SPELLS[trap.spellId].damage);
+          this.broadcast('damage', { targetId: player.id, amount: damage.damage, hp: player.hp });
           this.broadcast('trap_triggered', { trapOwnerId: trap.ownerId, targetId: player.id, x: trap.x, z: trap.z });
+          if (damage.shieldBroken && player.explosiveShield) {
+            player.explosiveShield = false;
+            this.explodeShield(player);
+          }
 
           const owner = this.state.players.get(trap.ownerId);
           if (owner && owner.characterClass === 'arcanist') {
             player.markedUntil = now + 3000;
+            this.broadcast('mark_applied', {
+              targetId: player.id,
+              spellId: trap.spellId,
+              x: player.x,
+              z: player.z
+            });
           }
 
           this.traps.delete(trapId);
@@ -414,6 +492,13 @@ export class MagicDuelRoom extends Room<GameState> {
         this.projectileHitsCollisionWall(projectile)
       ) {
         removeIds.push(projectile.id);
+        this.broadcast('projectile_impact', {
+          ownerId: projectile.ownerId,
+          spellId: projectile.spellId,
+          x: projectile.x,
+          y: projectile.y,
+          z: projectile.z
+        });
         continue;
       }
 
@@ -423,13 +508,25 @@ export class MagicDuelRoom extends Room<GameState> {
         const distance = Math.hypot(projectile.x - player.x, projectile.z - player.z);
         const verticalOk = projectile.y >= player.y && projectile.y <= player.y + 2.2;
         if (verticalOk && distance <= PLAYER_RADIUS + projectile.radius) {
-          const hit = applyProjectileDamage(player, projectile.spellId as SpellId);
+          const hit = applyProjectileHitEffects(owner, player, projectile.spellId as SpellId, Date.now());
           removeIds.push(projectile.id);
           this.broadcast('damage', { targetId: player.id, amount: hit.damage, hp: player.hp });
+          this.broadcast('projectile_impact', {
+            ownerId: projectile.ownerId,
+            spellId: projectile.spellId,
+            targetId: player.id,
+            x: projectile.x,
+            y: projectile.y,
+            z: projectile.z
+          });
+          for (const event of hit.events) {
+            this.broadcast(event.type, event);
+          }
           if (hit.shieldBroken && player.explosiveShield) {
             player.explosiveShield = false;
             this.explodeShield(player);
           }
+          this.checkForWinner();
           break;
         }
       }
@@ -451,6 +548,7 @@ export class MagicDuelRoom extends Room<GameState> {
     this.state.message = winner ? `Team ${winner.teamId} wins` : 'Duel ended';
     this.clearProjectiles();
     this.traps.clear();
+    this.glacialSpikes.clear();
     this.lock();
     this.broadcastPhase();
   }
@@ -464,8 +562,8 @@ export class MagicDuelRoom extends Room<GameState> {
         const dir = directionAwayFrom(player, target);
         target.x = clamp(target.x + dir.x * 2, this.arenaCollision.bounds.minX, this.arenaCollision.bounds.maxX);
         target.z = clamp(target.z + dir.z * 2, this.arenaCollision.bounds.minZ, this.arenaCollision.bounds.maxZ);
-        applyDamage(target, 10);
-        this.broadcast('damage', { targetId: target.id, amount: 10, hp: target.hp });
+        const result = applyDamage(target, 10);
+        this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
       }
     }
     this.broadcast('shield_exploded', { casterId: player.id, x: player.x, z: player.z });

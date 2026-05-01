@@ -1,43 +1,55 @@
 {
-  "id": "fireball_cast",
-  "name": "Fireball Cast",
-  "duration": 0.3,
+  "id": "judgment_ray_cast",
+  "name": "Judgment Ray Cast Spark",
+  "duration": 0.28,
   "loop": false,
   "attachTo": "caster_hand_right",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "sphere", "params": [0.12, 16, 16] },
-      "material": {
-        "type": "standard",
-        "color": "#ff6b35",
-        "emissive": "#ff4500",
-        "emissiveIntensity": 2.5,
-        "transparent": true,
-        "opacity": 0.9
+      "geometry": {
+        "type": "ring",
+        "params": [
+          0.16,
+          0.32,
+          4
+        ]
       },
-      "scale": { "value": 1.5, "curve": "easeIn", "duration": 0.3 }
-    },
-    {
-      "type": "particles",
-      "count": 30,
-      "emissionRate": 30,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.1],
-      "lifetime": { "min": 0.1, "max": 0.25 },
-      "color": { "start": "#ffaa00", "end": "#ff2200" },
-      "size": { "start": 0.06, "end": 0.02 },
-      "opacity": { "start": 1, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 2, "radial": true },
-      "burst": true
+      "material": {
+        "type": "basic",
+        "color": "#f59e0b",
+        "transparent": true,
+        "opacity": 0.95,
+        "wireframe": false,
+        "side": "double"
+      },
+      "animation": {
+        "rotation": {
+          "speed": [
+            0,
+            0,
+            16
+          ]
+        },
+        "opacity": {
+          "value": 0.95,
+          "curve": "easeOut",
+          "duration": 0.28
+        }
+      }
     },
     {
       "type": "light",
       "lightType": "point",
-      "color": "#ff6b35",
-      "intensity": { "value": 4, "curve": "easeOut", "duration": 0.3 },
-      "distance": 3,
-      "decay": 2
+      "color": "#f59e0b",
+      "intensity": 3.8,
+      "distance": 4,
+      "decay": 2,
+      "position": [
+        0,
+        0,
+        0
+      ]
     }
   ]
 }

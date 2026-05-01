@@ -1,50 +1,71 @@
 {
-  "id": "fireball_projectile",
-  "name": "Fireball Projectile",
-  "duration": 2.0,
+  "id": "judgment_ray_projectile",
+  "name": "Judgment Ray Bolt",
+  "duration": 0.7,
   "loop": true,
   "attachTo": "projectile",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "sphere", "params": [0.25, 16, 16] },
+      "geometry": {
+        "type": "cylinder",
+        "params": [
+          0.055,
+          0.14,
+          0.95,
+          10
+        ]
+      },
       "material": {
         "type": "standard",
-        "color": "#ff6b35",
-        "emissive": "#ff4500",
-        "emissiveIntensity": 2.0,
+        "color": "#f59e0b",
+        "emissive": "#f59e0b",
+        "emissiveIntensity": 3.2,
         "transparent": true,
-        "opacity": 0.9
+        "opacity": 0.96,
+        "wireframe": false,
+        "roughness": 0.28,
+        "metalness": 0.05
       },
-      "scale": { "value": 1.2, "curve": "pulse", "duration": 0.3 }
+      "rotation": [
+        1.5707963267948966,
+        0,
+        0
+      ],
+      "animation": {
+        "rotation": {
+          "speed": [
+            0,
+            0,
+            10
+          ]
+        }
+      }
+    },
+    {
+      "type": "trail",
+      "width": 0.12,
+      "color": {
+        "start": "#fef08a",
+        "end": "#f59e0b",
+        "curve": "easeOut"
+      },
+      "length": 2.4,
+      "fadeTime": 0.28,
+      "taper": true
     },
     {
       "type": "light",
       "lightType": "point",
-      "color": "#ff6b35",
-      "intensity": { "value": 3, "curve": "pulse", "duration": 0.4 },
+      "color": "#f59e0b",
+      "intensity": 4.5,
       "distance": 5,
-      "decay": 2
-    },
-    {
-      "type": "particles",
-      "count": 40,
-      "emissionRate": 60,
-      "emissionShape": "point",
-      "lifetime": { "min": 0.2, "max": 0.5 },
-      "color": { "start": "#ffaa00", "end": "#ff2200" },
-      "size": { "start": 0.08, "end": 0.02 },
-      "opacity": { "start": 1, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 1.5, "radial": true },
-      "drag": 0.5
-    },
-    {
-      "type": "trail",
-      "width": 0.15,
-      "color": "#ff5500",
-      "length": 12,
-      "fadeTime": 0.3,
-      "taper": true
+      "decay": 2,
+      "position": [
+        0,
+        0,
+        0
+      ]
     }
   ]
 }

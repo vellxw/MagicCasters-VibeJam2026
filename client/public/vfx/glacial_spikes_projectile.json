@@ -1,45 +1,58 @@
 {
-  "id": "ice_bolt_projectile",
-  "name": "Ice Bolt Projectile",
-  "duration": 2.0,
+  "id": "glacial_spikes_projectile",
+  "name": "Glacial Seed Shard",
+  "duration": 0.7,
   "loop": true,
   "attachTo": "projectile",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "sphere", "params": [0.18, 16, 16] },
+      "geometry": {
+        "type": "cylinder",
+        "params": [
+          0.08,
+          0.18,
+          0.72,
+          5
+        ]
+      },
       "material": {
         "type": "standard",
         "color": "#7dd3fc",
-        "emissive": "#a5f3fc",
-        "emissiveIntensity": 3.0,
+        "emissive": "#7dd3fc",
+        "emissiveIntensity": 2.4,
         "transparent": true,
-        "opacity": 0.85,
-        "roughness": 0.1,
-        "metalness": 0.3
+        "opacity": 0.86,
+        "wireframe": false,
+        "roughness": 0.28,
+        "metalness": 0.05
       },
-      "scale": { "value": 1.0, "curve": "pulse", "duration": 0.5 }
+      "rotation": [
+        1.5707963267948966,
+        0,
+        0
+      ],
+      "animation": {
+        "rotation": {
+          "speed": [
+            0,
+            0,
+            8
+          ]
+        }
+      }
     },
     {
-      "type": "light",
-      "lightType": "point",
-      "color": "#7dd3fc",
-      "intensity": { "value": 2.5, "curve": "pulse", "duration": 0.6 },
-      "distance": 4,
-      "decay": 2
-    },
-    {
-      "type": "particles",
-      "count": 50,
-      "emissionRate": 50,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.15],
-      "lifetime": { "min": 0.3, "max": 0.8 },
-      "color": { "start": "#e0f2fe", "end": "#0ea5e9" },
-      "size": { "start": 0.06, "end": 0.01 },
-      "opacity": { "start": 0.9, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 0.8, "radial": true },
-      "drag": 0.3
+      "type": "trail",
+      "width": 0.14,
+      "color": {
+        "start": "#7dd3fc",
+        "end": "#38bdf8",
+        "curve": "easeOut"
+      },
+      "length": 1.5,
+      "fadeTime": 0.28,
+      "taper": true
     }
   ]
 }

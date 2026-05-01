@@ -1,43 +1,93 @@
 {
-  "id": "fireball_cast",
-  "name": "Fireball Cast",
-  "duration": 0.3,
+  "id": "glacial_spikes_cast",
+  "name": "Glacial Spikes Cast Chill",
+  "duration": 0.34,
   "loop": false,
-  "attachTo": "caster_hand_right",
+  "attachTo": "caster_root",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "sphere", "params": [0.12, 16, 16] },
-      "material": {
-        "type": "standard",
-        "color": "#ff6b35",
-        "emissive": "#ff4500",
-        "emissiveIntensity": 2.5,
-        "transparent": true,
-        "opacity": 0.9
+      "geometry": {
+        "type": "ring",
+        "params": [
+          0.45,
+          0.62,
+          6
+        ]
       },
-      "scale": { "value": 1.5, "curve": "easeIn", "duration": 0.3 }
+      "material": {
+        "type": "basic",
+        "color": "#7dd3fc",
+        "transparent": true,
+        "opacity": 0.82,
+        "wireframe": false,
+        "side": "double"
+      },
+      "position": [
+        0,
+        0.05,
+        0
+      ],
+      "rotation": [
+        -1.5707963267948966,
+        0,
+        0
+      ],
+      "animation": {
+        "rotation": {
+          "speed": [
+            0,
+            0,
+            -7
+          ]
+        },
+        "opacity": {
+          "value": 0.82,
+          "curve": "easeOut",
+          "duration": 0.34
+        }
+      }
     },
     {
       "type": "particles",
-      "count": 30,
-      "emissionRate": 30,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.1],
-      "lifetime": { "min": 0.1, "max": 0.25 },
-      "color": { "start": "#ffaa00", "end": "#ff2200" },
-      "size": { "start": 0.06, "end": 0.02 },
-      "opacity": { "start": 1, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 2, "radial": true },
+      "count": 22,
+      "emissionRate": 44,
+      "emissionShape": "disc",
+      "emissionShapeParams": [
+        0.8
+      ],
+      "lifetime": {
+        "min": 0.18,
+        "max": 0.55
+      },
+      "color": {
+        "start": "#7dd3fc",
+        "end": "#38bdf8"
+      },
+      "size": {
+        "start": 0.08,
+        "end": 0.01
+      },
+      "opacity": {
+        "start": 0.78,
+        "end": 0
+      },
+      "velocity": {
+        "initial": [
+          0,
+          1.4,
+          0
+        ],
+        "spread": 1.2,
+        "radial": true
+      },
+      "gravity": [
+        0,
+        -1.4,
+        0
+      ],
+      "drag": 0.12,
       "burst": true
-    },
-    {
-      "type": "light",
-      "lightType": "point",
-      "color": "#ff6b35",
-      "intensity": { "value": 4, "curve": "easeOut", "duration": 0.3 },
-      "distance": 3,
-      "decay": 2
     }
   ]
 }

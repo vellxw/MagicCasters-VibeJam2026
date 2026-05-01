@@ -1,95 +1,58 @@
 {
-  "id": "eclipse_impact",
-  "name": "Eclipse Circular Collapse",
-  "duration": 0.65,
+  "id": "mark_consumed",
+  "name": "Umbral Mark Consumed Snap",
+  "duration": 0.34,
   "loop": false,
   "attachTo": "impact_point",
   "layers": [
     {
       "type": "mesh",
       "geometry": {
-        "type": "ring",
+        "type": "icosahedron",
         "params": [
-          0.9,
-          1.08,
-          72
+          0.28,
+          0
         ]
       },
       "material": {
         "type": "basic",
-        "color": "#2e1065",
+        "color": "#8b5cf6",
         "transparent": true,
-        "opacity": 0.86,
-        "wireframe": false,
-        "side": "double"
-      },
-      "rotation": [
-        -1.5707963267948966,
-        0,
-        0
-      ],
-      "animation": {
-        "scale": {
-          "value": 4,
-          "curve": "easeOut",
-          "duration": 0.65
-        },
-        "opacity": {
-          "value": 0.86,
-          "curve": "easeOut",
-          "duration": 0.65
-        }
-      }
-    },
-    {
-      "type": "mesh",
-      "geometry": {
-        "type": "sphere",
-        "params": [
-          0.5,
-          24,
-          12
-        ]
-      },
-      "material": {
-        "type": "basic",
-        "color": "#111827",
-        "transparent": true,
-        "opacity": 0.46,
+        "opacity": 0.9,
         "wireframe": true
       },
       "position": [
         0,
-        1.1,
+        1.05,
         0
       ],
       "animation": {
         "scale": {
-          "value": 2.2,
+          "value": 1.9,
           "curve": "easeOut",
-          "duration": 0.65
+          "duration": 0.34
         },
         "opacity": {
-          "value": 0.46,
+          "value": 0.9,
           "curve": "easeOut",
-          "duration": 0.65
+          "duration": 0.34
         }
       }
     },
     {
       "type": "particles",
-      "count": 48,
-      "emissionRate": 96,
+      "count": 22,
+      "emissionRate": 44,
       "emissionShape": "sphere",
       "emissionShapeParams": [
-        1
+        0.35
       ],
       "lifetime": {
         "min": 0.18,
         "max": 0.55
       },
       "color": {
-        "start": "#8b5cf6",
+        "start": "#c084fc",
         "end": "#111827"
       },
       "size": {

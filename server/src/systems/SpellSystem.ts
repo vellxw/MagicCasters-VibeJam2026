@@ -1,9 +1,10 @@
 import { ARENA_BOUNDS, MAX_HP, MAX_MANA, type ArenaCollisionConfig, type PublicProjectileState, type RoomPhase, type TeamId } from '../../../shared/types.js';
 import { moveWithArenaCollision } from '../../../shared/arenaCollision.js';
-import { isSpellId, SPELLS, type SpellId } from '../../../shared/spells.js';
+import { isSpellAvailableToClass, isSpellId, SPELLS, type SpellId } from '../../../shared/spells.js';
+import type { CharacterClass } from '../../../shared/classes.js';
 import type { SparseVoxelCollision } from '../../../shared/voxelCollision.js';
 
-export type CastFailureReason = 'unknown_spell' | 'wrong_phase' | 'defeated' | 'no_mana' | 'cooldown' | 'silenced';
+export type CastFailureReason = 'unknown_spell' | 'wrong_class' | 'wrong_phase' | 'defeated' | 'no_mana' | 'cooldown' | 'silenced';
 
 export interface ServerPlayer {
   id: string;
@@ -19,6 +20,7 @@ export interface ServerPlayer {
   cooldowns: Partial<Record<SpellId, number>>;
   casting: boolean;
   selectedSpell: string;
+  characterClass: CharacterClass;
   shieldActive?: boolean;
   silencedUntil?: number;
   slowedUntil?: number;
@@ -38,7 +40,23 @@ export type CastResult =
   | { ok: true; kind: 'projectile'; spellId: SpellId; projectile: PublicProjectileState }
   | { ok: true; kind: 'instant'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> }
   | { ok: true; kind: 'trap'; spellId: SpellId; trap: { x: number; z: number; radius: number; ownerId: string; spellId: SpellId; expiresAt: number } }
-  | { ok: true; kind: 'ground_line'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> };
+  | { ok: true; kind: 'ground_line'; spellId: SpellId; hits: Array<{ targetId: string; damage: number; hp: number }> }
+  | { ok: true; kind: 'delayed_area'; spellId: SpellId; hazards: GlacialSpikeHazard[] };
+
+export interface GlacialSpikeHazard {
+  id: string;
+  casterId: string;
+  targetId: string;
+  x: number;
+  z: number;
+  radius: number;
+  resolvesAt: number;
+}
+
+export interface GlacialSpikeResolveResult {
+  hits: Array<{ targetId: string; amount: number; hp: number }>;
+  eruptedHazards: Array<{ id: string; x: number; z: number; radius: number; hitTargetIds: string[] }>;
+}
 
 export interface ExecuteCastArgs {
   caster: ServerPlayer;
@@ -51,7 +69,18 @@ export interface ExecuteCastArgs {
   voxelCollision?: SparseVoxelCollision | null;
 }
 
-export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer {
+export type SpellSideEffectEvent =
+  | { type: 'mark_applied'; targetId: string; spellId: SpellId; x: number; z: number }
+  | { type: 'mark_consumed'; targetId: string; spellId: SpellId; x: number; z: number };
+
+export interface ProjectileHitResult {
+  damage: number;
+  defeated: boolean;
+  shieldBroken: boolean;
+  events: SpellSideEffectEvent[];
+}
+
+export function createTestPlayer(id: string, teamId: TeamId = 'A', characterClass: CharacterClass = 'arcanist'): ServerPlayer {
   return {
     id,
     name: id,
@@ -65,13 +94,18 @@ export function createTestPlayer(id: string, teamId: TeamId = 'A'): ServerPlayer
     mana: MAX_MANA,
     cooldowns: {},
     casting: false,
-    selectedSpell: ''
+    selectedSpell: '',
+    characterClass
   };
 }
 
 export function validateCast(player: ServerPlayer, spellId: SpellId | string, now: number, phase: RoomPhase): CastValidation {
   if (!isSpellId(spellId)) {
     return { ok: false, reason: 'unknown_spell' };
+  }
+
+  if (!isSpellAvailableToClass(spellId, player.characterClass)) {
+    return { ok: false, reason: 'wrong_class' };
   }
 
   if (phase !== 'PLAYING') {
@@ -164,6 +198,11 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
     return { ok: true, kind: 'ground_line', spellId: validation.spellId, hits };
   }
 
+  if (spell.kind === 'delayed_area') {
+    const hazards = createGlacialSpikeHazards(args.caster, args.targets, args.now);
+    return { ok: true, kind: 'delayed_area', spellId: validation.spellId, hazards };
+  }
+
   const direction = directionFromRotation(args.caster.rotY);
   const projectile: PublicProjectileState = {
     id: args.nextProjectileId(),
@@ -223,6 +262,154 @@ export function applyProjectileDamage(target: ServerPlayer, spellId: SpellId): {
     damage: result.damage,
     defeated: target.hp <= 0,
     shieldBroken: result.shieldBroken
+  };
+}
+
+export function createGlacialSpikeHazards(
+  caster: ServerPlayer,
+  targets: ServerPlayer[],
+  now: number
+): GlacialSpikeHazard[] {
+  const spell = SPELLS.glacial_spikes;
+  return targets
+    .filter((target) => target.id !== caster.id && target.hp > 0)
+    .map((target) => ({
+      id: `glacial_${caster.id}_${target.id}_${now}`,
+      casterId: caster.id,
+      targetId: target.id,
+      x: round(target.x),
+      z: round(target.z),
+      radius: spell.radius,
+      resolvesAt: now + spell.ttl * 1000
+    }));
+}
+
+export function resolveGlacialSpikeHazards(args: {
+  caster: ServerPlayer;
+  targets: ServerPlayer[];
+  hazards: GlacialSpikeHazard[];
+  now: number;
+  arenaCollision?: ArenaCollisionConfig;
+  voxelCollision?: SparseVoxelCollision | null;
+}): GlacialSpikeResolveResult {
+  const hits: GlacialSpikeResolveResult['hits'] = [];
+  const eruptedHazards: GlacialSpikeResolveResult['eruptedHazards'] = [];
+  const hitTargetIds = new Set<string>();
+  const targetsById = new Map(args.targets.map((target) => [target.id, target]));
+  const bounds = args.arenaCollision?.bounds ?? ARENA_BOUNDS;
+  const walls = args.arenaCollision?.collisionWalls ?? [];
+  const floorY = args.arenaCollision?.floorY ?? 0;
+  const collisionErasers = args.arenaCollision?.collisionErasers ?? [];
+
+  for (const hazard of args.hazards) {
+    if (hazard.resolvesAt > args.now) continue;
+    const target = targetsById.get(hazard.targetId);
+    const hazardHits: string[] = [];
+
+    if (target && target.hp > 0 && !hitTargetIds.has(target.id)) {
+      const distance = Math.hypot(target.x - hazard.x, target.z - hazard.z);
+      if (distance <= hazard.radius) {
+        const damage = applyDamage(target, SPELLS.glacial_spikes.damage);
+        if ((target.silencedUntil ?? 0) > args.now || (target.slowedUntil ?? 0) > args.now) {
+          target.rootedUntil = args.now + 500;
+        }
+        const knockDir = directionAwayFrom({ x: hazard.x, z: hazard.z }, target);
+        const fallbackDir = directionAwayFrom(args.caster, target);
+        const dir = knockDir.x !== 0 || knockDir.z !== 0 ? knockDir : fallbackDir;
+        const resolved = moveWithArenaCollision(
+          target.x,
+          target.z,
+          target.x + dir.x * 1.8,
+          target.z + dir.z * 1.8,
+          bounds,
+          walls,
+          {
+            playerY: target.y,
+            floorY,
+            voxelCollision: args.voxelCollision ?? null,
+            collisionErasers
+          }
+        );
+        target.x = round(clamp(resolved.x, bounds.minX, bounds.maxX));
+        target.z = round(clamp(resolved.z, bounds.minZ, bounds.maxZ));
+        hits.push({ targetId: target.id, amount: damage.damage, hp: target.hp });
+        hazardHits.push(target.id);
+        hitTargetIds.add(target.id);
+      }
+    }
+
+    eruptedHazards.push({
+      id: hazard.id,
+      x: hazard.x,
+      z: hazard.z,
+      radius: hazard.radius,
+      hitTargetIds: hazardHits
+    });
+  }
+
+  return { hits, eruptedHazards };
+}
+
+export function applyProjectileHitEffects(
+  caster: ServerPlayer,
+  target: ServerPlayer,
+  spellId: SpellId,
+  now: number
+): ProjectileHitResult {
+  const base = applyProjectileDamage(target, spellId);
+  const events: SpellSideEffectEvent[] = [];
+  let damage = base.damage;
+
+  if (base.shieldBroken) {
+    return {
+      damage,
+      defeated: target.hp <= 0,
+      shieldBroken: true,
+      events
+    };
+  }
+
+  if (caster.characterClass === 'arcanist') {
+    if (spellId === 'shadow_dart') {
+      target.markedUntil = now + 3000;
+      events.push({
+        type: 'mark_applied',
+        targetId: target.id,
+        spellId,
+        x: round(target.x),
+        z: round(target.z)
+      });
+    }
+
+    if (spellId === 'abyssal_claw' && (target.markedUntil ?? 0) > now) {
+      target.markedUntil = 0;
+      const bonus = applyDamage(target, 8);
+      damage += bonus.damage;
+      target.silencedUntil = now + 800;
+      events.push({
+        type: 'mark_consumed',
+        targetId: target.id,
+        spellId,
+        x: round(target.x),
+        z: round(target.z)
+      });
+    }
+  }
+
+  if (
+    caster.characterClass === 'divine' &&
+    spellId === 'judgment_ray' &&
+    ((target.silencedUntil ?? 0) > now || (target.slowedUntil ?? 0) > now)
+  ) {
+    const bonus = applyDamage(target, 7);
+    damage += bonus.damage;
+  }
+
+  return {
+    damage,
+    defeated: target.hp <= 0,
+    shieldBroken: base.shieldBroken,
+    events
   };
 }
 

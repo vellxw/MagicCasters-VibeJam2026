@@ -1,4 +1,5 @@
-import { spellIdFromIncantation, type SpellId } from '../../../shared/spells';
+import { spellIdFromClassIncantation, type SpellId } from '../../../shared/spells';
+import type { CharacterClass } from '../../../shared/classes';
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -19,6 +20,7 @@ export class VoiceCommandManager {
   onStatus?: (message: string) => void;
 
   private recognition: SpeechRecognitionLike | null = null;
+  private characterClass: CharacterClass = 'arcanist';
 
   constructor() {
     this.supported = Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -27,6 +29,10 @@ export class VoiceCommandManager {
   toggle(): void {
     if (this.active) this.stop();
     else this.start();
+  }
+
+  setCharacterClass(characterClass: CharacterClass): void {
+    this.characterClass = characterClass;
   }
 
   start(): void {
@@ -45,7 +51,7 @@ export class VoiceCommandManager {
       const raw = result?.[0]?.transcript ?? '';
       this.transcript = raw;
       if (!result?.isFinal) return;
-      const spell = spellIdFromIncantation(raw);
+      const spell = spellIdFromClassIncantation(this.characterClass, raw);
       if (spell) this.onSpell?.(spell, raw);
     };
     recognition.onerror = (event: any) => {

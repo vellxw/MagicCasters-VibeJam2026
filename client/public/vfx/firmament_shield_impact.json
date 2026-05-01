@@ -1,0 +1,80 @@
+{
+  "id": "firmament_shield_impact",
+  "name": "Firmament Shield Break Impact",
+  "duration": 0.48,
+  "loop": false,
+  "attachTo": "impact_point",
+  "layers": [
+    {
+      "type": "mesh",
+      "geometry": {
+        "type": "sphere",
+        "params": [
+          0.65,
+          24,
+          12
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#93c5fd",
+        "transparent": true,
+        "opacity": 0.18,
+        "wireframe": true
+      },
+      "position": [
+        0,
+        0.8,
+        0
+      ],
+      "animation": {
+        "scale": {
+          "value": 2.1,
+          "curve": "easeOut",
+          "duration": 0.48
+        },
+        "opacity": {
+          "value": 0.18,
+          "curve": "easeOut",
+          "duration": 0.48
+        }
+      }
+    },
+    {
+      "type": "mesh",
+      "geometry": {
+        "type": "ring",
+        "params": [
+          0.5,
+          1.05,
+          64
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#f59e0b",
+        "transparent": true,
+        "opacity": 0.74,
+        "wireframe": false,
+        "side": "double"
+      },
+      "rotation": [
+        -1.5707963267948966,
+        0,
+        0
+      ],
+      "animation": {
+        "scale": {
+          "value": 1.7,
+          "curve": "easeOut",
+          "duration": 0.48
+        },
+        "opacity": {
+          "value": 0.74,
+          "curve": "easeOut",
+          "duration": 0.48
+        }
+      }
+    }
+  ]
+}

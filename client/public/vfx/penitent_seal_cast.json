@@ -1,43 +1,93 @@
 {
-  "id": "light_burst_cast",
-  "name": "Light Burst Cast",
-  "duration": 0.45,
+  "id": "penitent_seal_cast",
+  "name": "Penitent Seal Front Glyph",
+  "duration": 0.42,
   "loop": false,
   "attachTo": "caster_root",
   "layers": [
     {
       "type": "mesh",
-      "geometry": { "type": "ring", "params": [0.2, 0.5, 32] },
+      "geometry": {
+        "type": "ring",
+        "params": [
+          0.46,
+          0.62,
+          48
+        ]
+      },
       "material": {
         "type": "basic",
         "color": "#fef08a",
         "transparent": true,
-        "opacity": { "value": 0.6, "curve": "easeOut", "duration": 0.45 },
+        "opacity": 0.86,
+        "wireframe": false,
         "side": "double"
       },
-      "rotation": [1.5708, 0, 0],
-      "scale": { "value": 5, "curve": "easeOut", "duration": 0.45 }
+      "position": [
+        0,
+        1.1,
+        -0.85
+      ],
+      "animation": {
+        "rotation": {
+          "speed": [
+            0,
+            0,
+            5
+          ]
+        },
+        "opacity": {
+          "value": 0.86,
+          "curve": "easeOut",
+          "duration": 0.42
+        }
+      }
     },
     {
-      "type": "particles",
-      "count": 80,
-      "emissionRate": 80,
-      "emissionShape": "sphere",
-      "emissionShapeParams": [0.2],
-      "lifetime": { "min": 0.1, "max": 0.35 },
-      "color": { "start": "#ffffff", "end": "#fde047" },
-      "size": { "start": 0.2, "end": 0.05 },
-      "opacity": { "start": 1, "end": 0 },
-      "velocity": { "initial": [0, 0, 0], "spread": 6, "radial": true },
-      "burst": true
+      "type": "mesh",
+      "geometry": {
+        "type": "box",
+        "params": [
+          0.08,
+          0.78,
+          0.04
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#f59e0b",
+        "transparent": true,
+        "opacity": 0.84,
+        "wireframe": false
+      },
+      "position": [
+        0,
+        1.1,
+        -0.84
+      ]
     },
     {
-      "type": "light",
-      "lightType": "point",
-      "color": "#fef9c3",
-      "intensity": { "value": 10, "curve": "easeOut", "duration": 0.3 },
-      "distance": 10,
-      "decay": 2
+      "type": "mesh",
+      "geometry": {
+        "type": "box",
+        "params": [
+          0.52,
+          0.08,
+          0.04
+        ]
+      },
+      "material": {
+        "type": "basic",
+        "color": "#f59e0b",
+        "transparent": true,
+        "opacity": 0.84,
+        "wireframe": false
+      },
+      "position": [
+        0,
+        1.1,
+        -0.84
+      ]
     }
   ]
 }

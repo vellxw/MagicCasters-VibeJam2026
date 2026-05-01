@@ -3,10 +3,12 @@ import { ARENA_BOUNDS } from '../../../shared/types';
 import type { SpellId } from '../../../shared/spells';
 import {
   applyDamage,
+  applyProjectileHitEffects,
   applyProjectileDamage,
   createTestPlayer,
   directionAwayFrom,
   executeSpellCast,
+  resolveGlacialSpikeHazards,
   validateCast
 } from './SpellSystem';
 
@@ -42,7 +44,7 @@ describe('SpellSystem', () => {
   });
 
   it('charges mana and creates a server-owned shadow_dart projectile along the caster aim', () => {
-    const caster = createTestPlayer('caster');
+    const caster = createTestPlayer('caster', 'A', 'arcanist');
     caster.x = 2;
     caster.y = 0;
     caster.z = 3;
@@ -79,8 +81,64 @@ describe('SpellSystem', () => {
     });
   });
 
+  it('rejects spells that do not belong to the caster class', () => {
+    const divine = createTestPlayer('divine', 'A', 'divine');
+    divine.mana = 100;
+
+    expect(validateCast(divine, 'shadow_dart', 1000, 'PLAYING')).toEqual({
+      ok: false,
+      reason: 'wrong_class'
+    });
+
+    expect(validateCast(divine, 'judgment_ray', 1000, 'PLAYING')).toEqual({
+      ok: true,
+      spellId: 'judgment_ray'
+    });
+  });
+
+  it('applies arcanist projectile mark combo only when the projectile hits', () => {
+    const caster = createTestPlayer('caster', 'A', 'arcanist');
+    const target = createTestPlayer('target', 'B', 'divine');
+
+    const firstHit = applyProjectileHitEffects(caster, target, 'shadow_dart', 1000);
+
+    expect(firstHit.damage).toBe(10);
+    expect(target.markedUntil).toBe(4000);
+    expect(firstHit.events).toContainEqual({
+      type: 'mark_applied',
+      targetId: 'target',
+      spellId: 'shadow_dart',
+      x: 0,
+      z: 0
+    });
+
+    const comboHit = applyProjectileHitEffects(caster, target, 'abyssal_claw', 1500);
+
+    expect(comboHit.damage).toBe(22);
+    expect(target.markedUntil).toBe(0);
+    expect(target.silencedUntil).toBe(2300);
+    expect(comboHit.events).toContainEqual({
+      type: 'mark_consumed',
+      targetId: 'target',
+      spellId: 'abyssal_claw',
+      x: 0,
+      z: 0
+    });
+  });
+
+  it('applies divine projectile bonus against controlled targets at impact time', () => {
+    const caster = createTestPlayer('caster', 'A', 'divine');
+    const target = createTestPlayer('target', 'B', 'arcanist');
+    target.slowedUntil = 2400;
+
+    const result = applyProjectileHitEffects(caster, target, 'judgment_ray', 1200);
+
+    expect(result.damage).toBe(21);
+    expect(target.hp).toBe(79);
+  });
+
   it('applies authoritative instant spells and projectile damage on the server', () => {
-    const caster = createTestPlayer('caster');
+    const caster = createTestPlayer('caster', 'A', 'arcanist');
     const nearTarget = createTestPlayer('near');
     const farTarget = createTestPlayer('far');
     caster.x = 0;
@@ -142,20 +200,20 @@ describe('SpellSystem', () => {
   });
 
   it('hits targets in a line with glacial_spikes', () => {
-    const caster = createTestPlayer('caster');
-    const inLine = createTestPlayer('in-line');
-    const offLine = createTestPlayer('off-line');
+    const caster = createTestPlayer('caster', 'A', 'divine');
+    const target = createTestPlayer('target', 'B', 'arcanist');
+    const defeated = createTestPlayer('defeated', 'B', 'arcanist');
     caster.x = 0;
     caster.z = 0;
-    caster.rotY = 0;
-    inLine.x = 0;
-    inLine.z = -4;
-    offLine.x = 3;
-    offLine.z = -4;
+    target.x = 2;
+    target.z = -3;
+    defeated.x = -2;
+    defeated.z = -3;
+    defeated.hp = 0;
 
     const result = executeSpellCast({
       caster,
-      targets: [inLine, offLine],
+      targets: [target, defeated],
       spellId: 'glacial_spikes',
       now: 1000,
       phase: 'PLAYING',
@@ -163,16 +221,96 @@ describe('SpellSystem', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.kind).toBe('ground_line');
-    if (result.kind !== 'ground_line') throw new Error('expected ground_line');
-    expect(result.hits.some(h => h.targetId === 'in-line')).toBe(true);
-    expect(result.hits.some(h => h.targetId === 'off-line')).toBe(false);
-    expect(inLine.hp).toBe(82);
-    expect(offLine.hp).toBe(100);
+    expect(result.kind).toBe('delayed_area');
+    if (result.kind !== 'delayed_area') throw new Error('expected delayed_area');
+    expect(result.hazards).toEqual([
+      {
+        id: 'glacial_caster_target_1000',
+        casterId: 'caster',
+        targetId: 'target',
+        x: 2,
+        z: -3,
+        radius: 1.15,
+        resolvesAt: 1850
+      }
+    ]);
+    expect(target.hp).toBe(100);
+  });
+
+  it('resolves glacial_spikes only if the target stays in the telegraph and knocks back with collision', () => {
+    const caster = createTestPlayer('caster', 'A', 'divine');
+    const hitTarget = createTestPlayer('hit', 'B', 'arcanist');
+    const dodgedTarget = createTestPlayer('dodged', 'B', 'arcanist');
+    caster.x = 0;
+    caster.z = 0;
+    hitTarget.x = 1;
+    hitTarget.z = -1;
+    dodgedTarget.x = -1;
+    dodgedTarget.z = -1;
+
+    const cast = executeSpellCast({
+      caster,
+      targets: [hitTarget, dodgedTarget],
+      spellId: 'glacial_spikes',
+      now: 1000,
+      phase: 'PLAYING',
+      nextProjectileId: () => 'unused'
+    });
+    if (cast.kind !== 'delayed_area') throw new Error('expected delayed_area');
+
+    dodgedTarget.x = -3;
+    const result = resolveGlacialSpikeHazards({
+      caster,
+      targets: [hitTarget, dodgedTarget],
+      hazards: cast.hazards,
+      now: 1850,
+      arenaCollision: {
+        bounds: { minX: -2, maxX: 2, minZ: -2, maxZ: 2 },
+        floorY: 0,
+        spawnPoints: [],
+        voxelCollisionUrl: null,
+        collisionErasers: [],
+        collisionWalls: []
+      },
+      voxelCollision: null
+    });
+
+    expect(result.hits).toEqual([{ targetId: 'hit', amount: 18, hp: 82 }]);
+    expect(hitTarget.hp).toBe(82);
+    expect(hitTarget.x).toBeGreaterThan(1);
+    expect(hitTarget.x).toBeLessThanOrEqual(2);
+    expect(dodgedTarget.hp).toBe(100);
+  });
+
+  it('roots controlled targets when glacial_spikes erupts', () => {
+    const caster = createTestPlayer('caster', 'A', 'divine');
+    const target = createTestPlayer('target', 'B', 'arcanist');
+    target.x = 0.5;
+    target.z = -0.5;
+    target.slowedUntil = 3000;
+
+    const cast = executeSpellCast({
+      caster,
+      targets: [target],
+      spellId: 'glacial_spikes',
+      now: 1000,
+      phase: 'PLAYING',
+      nextProjectileId: () => 'unused'
+    });
+    if (cast.kind !== 'delayed_area') throw new Error('expected delayed_area');
+
+    resolveGlacialSpikeHazards({
+      caster,
+      targets: [target],
+      hazards: cast.hazards,
+      now: 1850
+    });
+
+    expect(target.rootedUntil).toBe(2350);
   });
 
   it('activates shieldActive with firmament_shield', () => {
-    const caster = createTestPlayer('caster');
+    const caster = createTestPlayer('caster', 'A', 'divine');
     caster.mana = 100;
     const result = executeSpellCast({
       caster,
