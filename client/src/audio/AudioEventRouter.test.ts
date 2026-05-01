@@ -64,4 +64,48 @@ describe('AudioEventRouter', () => {
       localSessionId: 'local'
     })).toEqual([{ id: 'announcer.defeat' }]);
   });
+
+  it('selects arena-specific match music based on preset id', () => {
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'grand-medieval-castle-courtyard-high' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match.arcane', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'celestial-marble-crystal-palace-mid' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match.arcane', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'the-dragon-gate-bridge-low' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match.arcane', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'ruined-palace-of-purple-crystals-high' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match.aether', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'the-arcane-ritual-library-mid' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match.aether', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'unknown-arena-low' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: '' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
+  });
+
+  it('routes potion pickups to a clear positional pickup cue', () => {
+    expect(audioCuesForNetEvent('potion_collected', { x: 2, y: 0, z: -3 })).toEqual([
+      { id: 'ui.confirm', position: { x: 2, y: 0, z: -3 } }
+    ]);
+  });
 });

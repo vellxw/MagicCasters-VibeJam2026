@@ -229,7 +229,12 @@ describe('splat collision dev api helpers', () => {
   it('keeps published collision assets when a later publish omits them', async () => {
     const root = await mkdtemp(join(tmpdir(), 'magic-casters-publish-preserve-'));
     const presetDir = join(root, 'client', 'public', 'arena-presets');
+    const collisionDir = join(root, 'client', 'public', 'collision');
     await mkdir(presetDir, { recursive: true });
+    await mkdir(collisionDir, { recursive: true });
+    await writeFile(join(collisionDir, 'businesspark-belp-1og-ost.collision.glb'), 'glb');
+    await writeFile(join(collisionDir, 'businesspark-belp-1og-ost.voxel.json'), '{}');
+    await writeFile(join(collisionDir, 'businesspark-belp-1og-ost.voxel.bin'), 'bin');
     await writeFile(join(presetDir, 'businesspark-belp-1og-ost.json'), JSON.stringify({
       presetId: 'businesspark-belp-1og-ost',
       arenaId: 'splat-test',
@@ -269,5 +274,48 @@ describe('splat collision dev api helpers', () => {
     expect(preset.voxelCollisionUrl).toBe('/collision/businesspark-belp-1og-ost.voxel.json');
     expect(preset.collisionWalls).toHaveLength(1);
     expect(preset.collisionErasers).toHaveLength(1);
+  });
+
+  it('clears stale collision urls when publishing a preset without real assets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'magic-casters-publish-stale-collision-'));
+    const presetDir = join(root, 'client', 'public', 'arena-presets');
+    await mkdir(presetDir, { recursive: true });
+    await writeFile(join(presetDir, 'celestial-marble-crystal-palace-high.json'), JSON.stringify({
+      presetId: 'celestial-marble-crystal-palace-high',
+      calibrationGroupId: 'celestial-marble-crystal-palace',
+      arenaId: 'splat-test',
+      displayName: 'Celestial Marble',
+      type: 'splat',
+      splatUrl: '/splats/celestial-marble-crystal-palace-high.sog',
+      collisionMeshUrl: '/collision/celestial-marble-crystal-palace.collision.glb',
+      voxelCollisionUrl: '/collision/celestial-marble-crystal-palace.voxel.json'
+    }, null, 2));
+    await writeFile(join(presetDir, 'splat-catalog.json'), JSON.stringify({
+      defaultPresetId: 'celestial-marble-crystal-palace-high',
+      maps: []
+    }, null, 2));
+
+    await persistArenaPresetToProject(root, {
+      presetId: 'celestial-marble-crystal-palace-high',
+      calibrationGroupId: 'celestial-marble-crystal-palace',
+      arenaId: 'splat-test',
+      displayName: 'Celestial Marble',
+      type: 'splat',
+      splatUrl: '/splats/celestial-marble-crystal-palace-high.sog',
+      enabledModes: ['1v1', '2v2'],
+      spawnPoints: [
+        { x: -1, y: 0, z: 0, rotY: -1 },
+        { x: 1, y: 0, z: 0, rotY: 1 }
+      ],
+      bounds: { minX: -8, maxX: 8, minZ: -6, maxZ: 6 },
+      scale: 1,
+      rotation: { x: 180, y: 180, z: 0 },
+      offset: { x: 0, y: 0, z: 0 },
+      floorY: 0
+    });
+
+    const preset = JSON.parse(await readFile(join(presetDir, 'celestial-marble-crystal-palace-high.json'), 'utf8'));
+    expect(preset.collisionMeshUrl).toBeNull();
+    expect(preset.voxelCollisionUrl).toBeNull();
   });
 });

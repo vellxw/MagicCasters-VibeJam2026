@@ -2,6 +2,7 @@ import { MapSchema, Schema, type } from '@colyseus/schema';
 import type { RoomPhase } from '../../../shared/types.js';
 import { PlayerState } from './PlayerState.js';
 import { ProjectileState } from './ProjectileState.js';
+import { PotionState } from './PotionState.js';
 
 export class GameState extends Schema {
   @type('string') mode = '1v1';
@@ -22,4 +23,12 @@ export class GameState extends Schema {
   @type('number') rematchRequired = 0;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type({ map: ProjectileState }) projectiles = new MapSchema<ProjectileState>();
+  @type({ map: PotionState }) potions = new MapSchema<PotionState>();
+
+  constructor() {
+    super();
+    this.players ??= new MapSchema<PlayerState>();
+    this.projectiles ??= new MapSchema<ProjectileState>();
+    this.potions ??= new MapSchema<PotionState>();
+  }
 }

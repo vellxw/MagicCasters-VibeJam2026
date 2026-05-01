@@ -59,6 +59,8 @@ export class TutorialOverlay {
   private bodyEl: HTMLElement;
   private detailEl: HTMLElement;
   private progressEl: HTMLElement;
+  private dotsEl: HTMLElement;
+  private panelEl: HTMLElement;
   private nextButton: HTMLButtonElement;
   private skipButton: HTMLButtonElement;
   private index = 0;
@@ -77,10 +79,19 @@ export class TutorialOverlay {
     this.element.setAttribute('aria-hidden', 'true');
     this.element.innerHTML = `
       <div class="tutorial-overlay__panel" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
-        <div class="tutorial-overlay__progress" data-tutorial-progress></div>
-        <h2 id="tutorial-title" data-tutorial-title></h2>
-        <p data-tutorial-body></p>
-        <small data-tutorial-detail></small>
+        <div class="tutorial-overlay__aura" aria-hidden="true"></div>
+        <div class="tutorial-overlay__header">
+          <div>
+            <span class="tutorial-overlay__eyebrow">Quick start</span>
+            <div class="tutorial-overlay__progress" data-tutorial-progress></div>
+          </div>
+          <div class="tutorial-overlay__dots" data-tutorial-dots aria-hidden="true"></div>
+        </div>
+        <div class="tutorial-overlay__content" data-tutorial-content>
+          <h2 id="tutorial-title" data-tutorial-title></h2>
+          <p data-tutorial-body></p>
+          <small data-tutorial-detail></small>
+        </div>
         <div class="tutorial-overlay__actions">
           <button type="button" data-tutorial-skip>Skip</button>
           <button type="button" data-tutorial-next>Next</button>
@@ -89,10 +100,12 @@ export class TutorialOverlay {
     `;
 
     root.appendChild(this.element);
+    this.panelEl = this.element.querySelector('.tutorial-overlay__panel')!;
     this.titleEl = this.element.querySelector('[data-tutorial-title]')!;
     this.bodyEl = this.element.querySelector('[data-tutorial-body]')!;
     this.detailEl = this.element.querySelector('[data-tutorial-detail]')!;
     this.progressEl = this.element.querySelector('[data-tutorial-progress]')!;
+    this.dotsEl = this.element.querySelector('[data-tutorial-dots]')!;
     this.nextButton = this.element.querySelector('[data-tutorial-next]')!;
     this.skipButton = this.element.querySelector('[data-tutorial-skip]')!;
 
@@ -108,6 +121,7 @@ export class TutorialOverlay {
     this.render();
     this.element.dataset.visible = 'true';
     this.element.setAttribute('aria-hidden', 'false');
+    this.nextButton.focus({ preventScroll: true });
   }
 
   hide(): void {
@@ -122,6 +136,7 @@ export class TutorialOverlay {
     }
     this.index++;
     this.render();
+    this.animateStep();
   }
 
   private finish(): void {
@@ -139,6 +154,25 @@ export class TutorialOverlay {
     this.detailEl.textContent = step.detail;
     this.progressEl.textContent = `${this.index + 1} / ${TUTORIAL_STEPS.length}`;
     this.nextButton.textContent = this.index >= TUTORIAL_STEPS.length - 1 ? 'Enter Lobby' : 'Next';
+    this.dotsEl.replaceChildren(
+      ...TUTORIAL_STEPS.map((_, stepIndex) => {
+        const dot = document.createElement('span');
+        dot.className = 'tutorial-overlay__dot';
+        dot.dataset.active = String(stepIndex === this.index);
+        return dot;
+      })
+    );
+  }
+
+  private animateStep(): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !this.panelEl.animate) return;
+    this.panelEl.animate(
+      [
+        { opacity: 0.88, transform: 'translateY(6px) scale(0.992)' },
+        { opacity: 1, transform: 'translateY(0) scale(1)' }
+      ],
+      { duration: 220, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+    );
   }
 }
 

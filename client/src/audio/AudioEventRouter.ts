@@ -16,6 +16,7 @@ export interface AudioCue {
 
 export interface AudioRouteContext {
   localSessionId?: string | null;
+  arenaPresetId?: string | null;
 }
 
 export function audioCuesForNetEvent(
@@ -24,7 +25,7 @@ export function audioCuesForNetEvent(
   context: AudioRouteContext = {}
 ): AudioCue[] {
   if (type === 'phase') {
-    return typeof payload.phase === 'string' ? audioCuesForPhase(payload.phase) : [];
+    return typeof payload.phase === 'string' ? audioCuesForPhase(payload.phase, context) : [];
   }
 
   if (type === 'spell_confirmed' && typeof payload.spellId === 'string' && isSpellId(payload.spellId)) {
@@ -37,6 +38,10 @@ export function audioCuesForNetEvent(
 
   if (type === 'cast_denied') {
     return [{ id: 'ui.denied' }];
+  }
+
+  if (type === 'potion_collected') {
+    return [{ id: 'ui.confirm', position: positionFromPayload(payload) }];
   }
 
   if (type === 'damage') {
@@ -92,7 +97,7 @@ export function audioCuesForNetEvent(
   return [];
 }
 
-export function audioCuesForPhase(phase: string): AudioCue[] {
+export function audioCuesForPhase(phase: string, context?: AudioRouteContext): AudioCue[] {
   if (phase === 'SELECTING') {
     return [{ id: 'ui.confirm' }];
   }
@@ -102,11 +107,28 @@ export function audioCuesForPhase(phase: string): AudioCue[] {
   if (phase === 'PLAYING') {
     return [
       { id: 'announcer.duel_begins' },
-      { id: 'music.match', mode: 'music' },
+      { id: resolveMatchMusic(context?.arenaPresetId), mode: 'music' },
       { id: 'ambience.match', mode: 'ambience' }
     ];
   }
   return [];
+}
+
+function resolveMatchMusic(presetId: string | null | undefined): AudioId {
+  if (!presetId) return 'music.match';
+  const groupId = presetId.replace(/-(low|mid|high)$/i, '');
+  const arcaneGroups = [
+    'grand-medieval-castle-courtyard',
+    'celestial-marble-crystal-palace',
+    'the-dragon-gate-bridge'
+  ];
+  const aetherGroups = [
+    'ruined-palace-of-purple-crystals',
+    'the-arcane-ritual-library'
+  ];
+  if (arcaneGroups.includes(groupId)) return 'music.match.arcane';
+  if (aetherGroups.includes(groupId)) return 'music.match.aether';
+  return 'music.match';
 }
 
 export function audioCuesForMatchResult(args: {

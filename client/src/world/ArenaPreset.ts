@@ -116,7 +116,7 @@ export async function loadSplatArenaPreset(url: string): Promise<SplatArenaPrese
 }
 
 export async function loadSplatMapCatalog(url = SPLAT_CATALOG_URL): Promise<SplatMapCatalog> {
-  const response = await fetch(url, { cache: 'no-store' });
+  const response = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Splat map catalog failed: ${response.status}`);
   }

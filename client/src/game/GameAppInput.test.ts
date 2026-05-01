@@ -4,10 +4,12 @@ import {
   createQualitySettingsAudioProps,
   createDifferentMatchQueueIntent,
   normalizeDamageAmount,
+  resolveSpawnAimReset,
   resolveDevHotkeyAction,
   resolveKeyboardSpellForClass,
   resolveMatchResultKind,
   sceneSupportsLocalDash,
+  shouldQueueSpawnAimReset,
   shouldDisposeArenaBeforeEnterMatch
 } from './GameApp';
 
@@ -88,6 +90,23 @@ describe('GameApp keyboard spell slots', () => {
     expect(shouldDisposeArenaBeforeEnterMatch('RESULTS', true)).toBe(true);
     expect(shouldDisposeArenaBeforeEnterMatch('MATCH', true)).toBe(false);
     expect(shouldDisposeArenaBeforeEnterMatch('RESULTS', false)).toBe(false);
+  });
+
+  it('queues spawn aim reset only on fresh round start phases', () => {
+    expect(shouldQueueSpawnAimReset('ENDED', 'SELECTING')).toBe(true);
+    expect(shouldQueueSpawnAimReset('COUNTDOWN', 'PLAYING')).toBe(true);
+    expect(shouldQueueSpawnAimReset('SELECTING', 'SELECTING')).toBe(false);
+    expect(shouldQueueSpawnAimReset('PLAYING', 'PLAYING')).toBe(false);
+    expect(shouldQueueSpawnAimReset('PLAYING', 'ENDED')).toBe(false);
+  });
+
+  it('resolves a pending spawn aim reset from the local spawn rotation', () => {
+    expect(resolveSpawnAimReset({ rotY: Math.PI / 2 }, true)).toEqual({
+      yaw: Math.PI / 2,
+      pitch: 0
+    });
+    expect(resolveSpawnAimReset({ rotY: Math.PI / 2 }, false)).toBeNull();
+    expect(resolveSpawnAimReset(undefined, true)).toBeNull();
   });
 
   it('resolves protected dev hotkeys without gating calibration exit', () => {

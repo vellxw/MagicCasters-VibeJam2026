@@ -173,6 +173,18 @@ export function shouldDisposeArenaBeforeEnterMatch(sceneMode: SceneMode, hasAren
   return hasArenaRuntime && sceneMode !== 'MATCH';
 }
 
+export function shouldQueueSpawnAimReset(previousPhase: string, nextPhase: string): boolean {
+  return previousPhase !== nextPhase && (nextPhase === 'SELECTING' || nextPhase === 'PLAYING');
+}
+
+export function resolveSpawnAimReset(
+  local: Pick<PlayerSnapshot, 'rotY'> | undefined,
+  pending: boolean
+): { yaw: number; pitch: number } | null {
+  if (!pending || !local || !Number.isFinite(local.rotY)) return null;
+  return { yaw: local.rotY, pitch: 0 };
+}
+
 export type DevHotkeyAction = 'enter-calibration' | 'exit-calibration' | 'enter-vfx-editor';
 
 export function resolveDevHotkeyAction(key: string, sceneMode: SceneMode): DevHotkeyAction | null {
@@ -269,6 +281,8 @@ export class GameApp {
   private localControllerId: string | null = null;
   private localPlayerBound = false;
   private controlsEnabled = false;
+  private lastSpawnAimResetPhase = '';
+  private spawnAimResetPending = false;
   private lastMoveSent = 0;
   private queueToken = 0;
   private animationId = 0;
@@ -686,6 +700,7 @@ export class GameApp {
     this.selectedArenaPresetId = stringValue(state.arenaPresetId, this.selectedArenaPresetId);
     this.selectedArenaPresetUrl = stringValue(state.arenaPresetUrl, this.selectedArenaPresetUrl);
     this.selectedArenaDisplayName = stringValue(state.arenaDisplayName, this.selectedArenaDisplayName);
+    this.updateSpawnAimResetForPhase(this.phase);
     this.handleMatchPhaseTransition();
 
     this.playerSnapshots.clear();
@@ -749,6 +764,7 @@ export class GameApp {
     this.projectileSnapshots = Array.from(state.projectiles?.values?.() ?? []) as ProjectileSnapshot[];
     this.vfx.syncProjectiles(this.projectileSnapshots);
     this.vfx.syncPlayerStatusVfx(Array.from(this.playerSnapshots.values()));
+    this.applyPendingSpawnAimReset();
     this.syncControlState();
 
     if (this.sceneMode === 'MATCH' && this.phase === 'ENDED') {
@@ -775,6 +791,7 @@ export class GameApp {
       this.selectedArenaPresetId = stringValue(payload.arenaPresetId, this.selectedArenaPresetId);
       this.selectedArenaPresetUrl = stringValue(payload.arenaPresetUrl, this.selectedArenaPresetUrl);
       this.selectedArenaDisplayName = stringValue(payload.arenaDisplayName, this.selectedArenaDisplayName);
+      this.updateSpawnAimResetForPhase(this.phase);
       this.syncControlState();
       this.handleMatchPhaseTransition();
       if (this.sceneMode === 'MATCH' && payload.phase === 'ENDED') {
@@ -838,7 +855,8 @@ export class GameApp {
       this.lastAudioPhase = nextPhase;
     }
     this.audio.playCues(audioCuesForNetEvent(type, payload, {
-      localSessionId: this.network.localSessionId
+      localSessionId: this.network.localSessionId,
+      arenaPresetId: this.selectedArenaPresetId || null
     }));
   }
 
@@ -1233,6 +1251,7 @@ export class GameApp {
     this.controlsEnabled = this.sceneMode === 'MATCH'
       && this.network.connected
       && Boolean(local && local.hp > 0)
+      && !this.spawnAimResetPending
       && this.phase === 'PLAYING';
 
     if (!this.controlsEnabled) {
@@ -1326,6 +1345,8 @@ export class GameApp {
     this.clearQueuedActions();
     this.touchControls.reset();
     try {
+      this.publishedMaps = [];
+      this.publishedMapsLoad = null;
       const maps = await this.ensurePublishedMaps();
       if (token !== this.queueToken || this.sceneMode !== 'CUSTOM') return;
       this.customMatchUi.setMaps(maps);
@@ -1729,6 +1750,23 @@ export class GameApp {
     this.ui.showToast(this.selectedArenaDisplayName
       ? `${this.selectedMode ?? 'Match'}: ${this.displayNameForSelectedMap()}`
       : `${this.selectedMode ?? 'Match'} started`);
+  }
+
+  private updateSpawnAimResetForPhase(nextPhase: string): void {
+    if (shouldQueueSpawnAimReset(this.lastSpawnAimResetPhase, nextPhase)) {
+      this.spawnAimResetPending = true;
+    }
+    this.lastSpawnAimResetPhase = nextPhase;
+  }
+
+  private applyPendingSpawnAimReset(): void {
+    const reset = resolveSpawnAimReset(this.getLocalSnapshot(), this.spawnAimResetPending);
+    if (!reset) return;
+    this.aimYaw = reset.yaw;
+    this.aimPitch = reset.pitch;
+    this.spawnAimResetPending = false;
+    this.clearQueuedActions();
+    this.touchControls.reset();
   }
 
   private updateMapIntro(): void {
@@ -2345,6 +2383,8 @@ export class GameApp {
     const modes = preset.enabledModes.length ? preset.enabledModes.join(', ') : 'no matchmaking modes';
     this.calibrationUi.setFeedback(`Map published for ${modes}. Updated ${updated}.`);
     this.ui.showToast('Map published');
+    this.publishedMaps = [];
+    this.publishedMapsLoad = null;
   }
 
   private async updateLobbyFromCalibration(): Promise<void> {
@@ -2367,6 +2407,8 @@ export class GameApp {
     const updated = result.updatedPresets?.length ? result.updatedPresets.join(', ') : 'project presets';
     this.calibrationUi.setFeedback(`Lobby published to ${updated}. All browsers will load these settings.`);
     this.ui.showToast('Lobby published');
+    this.publishedMaps = [];
+    this.publishedMapsLoad = null;
   }
 
   private autosaveCalibrationPreset(settings: SplatCalibrationSettings): void {

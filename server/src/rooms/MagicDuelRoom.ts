@@ -24,8 +24,18 @@ import { circleIntersectsWall, defaultArenaCollisionConfig, normalizeArenaCollis
 import type { SparseVoxelCollision } from '../../../shared/voxelCollision.js';
 import { GameState } from '../schema/GameState.js';
 import { PlayerState } from '../schema/PlayerState.js';
+import { PotionState } from '../schema/PotionState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { applyMovement, regenerateMana } from '../systems/MovementSystem.js';
+import {
+  collectGroundedPotions,
+  createPotion,
+  potionIsExpired,
+  randomPotionPosition,
+  randomPotionType,
+  shouldSpawnPotion,
+  updatePotionFall
+} from '../systems/PotionSystem.js';
 import { selectPublishedSplatArenaByPresetId, selectPublishedSplatArenaForMode } from '../systems/ServerSplatMapPool.js';
 import { loadServerVoxelCollisionSync } from '../systems/ServerVoxelCollision.js';
 import {
@@ -101,6 +111,8 @@ export class MagicDuelRoom extends Room<GameState> {
   private requestedBotCount = 0;
   private minHumanPlayersBeforeBots = 1;
   private botSerial = 0;
+  private potionSerial = 0;
+  private lastPotionSpawnAt = 0;
 
   onCreate(options?: JoinOptions): void {
     this.mode = normalizeMatchMode(options?.mode);
@@ -250,7 +262,9 @@ export class MagicDuelRoom extends Room<GameState> {
       player.resetForMatch(this.getSpawnForSlot(index), teamId);
       index++;
     }
+    clearRoundInputs(this.inputs);
     this.clearProjectiles();
+    this.clearPotions();
     this.traps.clear();
     this.glacialSpikes.clear();
     this.resetRematchState();
@@ -278,6 +292,7 @@ export class MagicDuelRoom extends Room<GameState> {
     if (this.state.phase !== 'SELECTING' && this.state.phase !== 'COUNTDOWN') return;
     this.state.phase = 'PLAYING';
     this.state.message = message;
+    this.lastPotionSpawnAt = Date.now();
     this.broadcastPhase();
   }
 
@@ -524,7 +539,47 @@ export class MagicDuelRoom extends Room<GameState> {
     this.updateProjectiles();
     this.updateTraps();
     this.updateGlacialSpikes(now);
+    this.updatePotions(now);
     this.checkForWinner();
+  }
+
+  private updatePotions(now: number): void {
+    for (const potion of this.state.potions.values()) {
+      updatePotionFall(potion, TICK_DT, this.arenaCollision.floorY, now);
+    }
+
+    const collected = collectGroundedPotions(
+      Array.from(this.state.potions.values()),
+      Array.from(this.state.players.values()),
+      now
+    );
+
+    for (const event of collected) {
+      this.state.potions.delete(event.potionId);
+      this.broadcast('potion_collected', event);
+    }
+
+    for (const potion of Array.from(this.state.potions.values())) {
+      if (potionIsExpired(potion, now)) {
+        this.state.potions.delete(potion.id);
+      }
+    }
+
+    if (!shouldSpawnPotion({ now, lastSpawnAt: this.lastPotionSpawnAt, activeCount: this.state.potions.size })) {
+      return;
+    }
+
+    const position = randomPotionPosition(this.arenaCollision);
+    const potion = createPotion({
+      id: `potion_${++this.potionSerial}`,
+      type: randomPotionType(),
+      x: position.x,
+      z: position.z,
+      floorY: this.arenaCollision.floorY,
+      now
+    });
+    this.state.potions.set(potion.id, new PotionState(potion));
+    this.lastPotionSpawnAt = now;
   }
 
   private updateBots(now: number): void {
@@ -775,6 +830,12 @@ export class MagicDuelRoom extends Room<GameState> {
     }
   }
 
+  private clearPotions(): void {
+    for (const id of Array.from(this.state.potions.keys())) {
+      this.state.potions.delete(id);
+    }
+  }
+
   private clearDefeatedCombatArtifacts(): void {
     const defeatedIds = new Set(
       Array.from(this.state.players.values())
@@ -925,6 +986,7 @@ export class MagicDuelRoom extends Room<GameState> {
       player.resetForMatch(this.getSpawnForSlot(index), assignTeamId(this.mode, index));
       index++;
     }
+    clearRoundInputs(this.inputs);
   }
 
   private getSpawnForSlot(slotIndex: number): { x: number; y: number; z: number; rotY: number } {
@@ -1028,6 +1090,12 @@ export class MagicDuelRoom extends Room<GameState> {
 
 export function emptyInput(): MoveInput {
   return { forward: false, backward: false, left: false, right: false, jump: false, dash: false };
+}
+
+export function clearRoundInputs(inputs: Map<string, MoveInput>): void {
+  for (const id of inputs.keys()) {
+    inputs.set(id, emptyInput());
+  }
 }
 
 export function normalizeInput(input: MoveInput): MoveInput {

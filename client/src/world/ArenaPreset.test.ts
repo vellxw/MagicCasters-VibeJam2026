@@ -193,7 +193,7 @@ describe('ArenaPreset quality resolution', () => {
     };
 
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = String(input).split('?')[0];
       const body = responses[url];
       return {
         ok: body !== undefined,

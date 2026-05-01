@@ -414,7 +414,10 @@ export async function persistArenaPresetToProject(repoRoot: string, value: unkno
   const presetFilename = `${preset.presetId}.json`;
   const presetPath = resolveUnderBase(presetDir, presetFilename);
   const existingPreset = await readJsonRecordIfExists(presetPath);
-  const mergedPreset = mergePublishedPreset(existingPreset, preset);
+  const mergedPreset = removeMissingCollisionUrls(
+    mergePublishedPreset(existingPreset, preset),
+    assetRoot
+  );
   await writeFile(presetPath, `${JSON.stringify(mergedPreset, null, 2)}\n`);
   invalidateServerVoxelCollision(asNullableString(mergedPreset.voxelCollisionUrl));
 
@@ -528,6 +531,30 @@ function mergePublishedPreset(
     collisionWalls: hasOwn(existing, next, 'collisionWalls'),
     collisionErasers: hasOwn(existing, next, 'collisionErasers')
   };
+}
+
+function removeMissingCollisionUrls<T extends Record<string, unknown>>(preset: T, assetRoot: ClientAssetRoot): T {
+  const collisionMeshUrl = asNullableString(preset.collisionMeshUrl);
+  const voxelCollisionUrl = asNullableString(preset.voxelCollisionUrl);
+  return {
+    ...preset,
+    collisionMeshUrl: collisionMeshUrl && assetUrlExists(assetRoot, collisionMeshUrl) ? collisionMeshUrl : null,
+    voxelCollisionUrl: voxelCollisionUrl && voxelCollisionAssetsExist(assetRoot, voxelCollisionUrl) ? voxelCollisionUrl : null
+  };
+}
+
+function voxelCollisionAssetsExist(assetRoot: ClientAssetRoot, voxelCollisionUrl: string): boolean {
+  if (!assetUrlExists(assetRoot, voxelCollisionUrl)) return false;
+  const pathname = safeDecodedPathname(voxelCollisionUrl);
+  if (!pathname.endsWith('.voxel.json')) return false;
+  const binPathname = `${pathname.slice(0, -'.voxel.json'.length)}.voxel.bin`;
+  return assetUrlExists(assetRoot, binPathname);
+}
+
+function assetUrlExists(assetRoot: ClientAssetRoot, url: string): boolean {
+  const pathname = safeDecodedPathname(url);
+  if (!pathname.startsWith('/collision/')) return false;
+  return existsSync(resolveUnderBase(assetRoot.absolute, pathname.slice(1)));
 }
 
 function hasOwn(

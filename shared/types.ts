@@ -167,3 +167,18 @@ export interface PublicProjectileState {
   speed: number;
   ttl: number;
 }
+
+export type PotionType = 'health' | 'mana';
+export type PotionLifecycleState = 'falling' | 'grounded';
+
+export interface PublicPotionState {
+  id: string;
+  type: PotionType;
+  x: number;
+  y: number;
+  z: number;
+  state: PotionLifecycleState;
+  spawnedAt: number;
+  landedAt: number;
+  expiresAt: number;
+}

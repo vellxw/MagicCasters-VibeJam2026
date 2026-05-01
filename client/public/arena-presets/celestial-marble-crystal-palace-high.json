@@ -90,17 +90,6 @@
   "collisionErasers": [],
   "collisionWalls": [
     {
-      "id": "ramp-momqzbp6",
-      "x": -6.8,
-      "z": -0.5,
-      "width": 7.6,
-      "depth": 4,
-      "height": 2.4,
-      "rotY": -1.578,
-      "climbable": false,
-      "ramp": true
-    },
-    {
       "id": "wall-mon516ae",
       "x": -8,
       "z": -0.09685422398782972,
@@ -211,17 +200,6 @@
       "ramp": false
     },
     {
-      "id": "ramp-mon5ftww",
-      "x": 6.5111861827359006,
-      "z": -0.10938456047983099,
-      "width": 8.6,
-      "depth": 4,
-      "height": 2.7,
-      "rotY": 1.5687036732051052,
-      "climbable": false,
-      "ramp": true
-    },
-    {
       "id": "wall-mon5i81p",
       "x": 6.147893748495082,
       "z": -4.255888984529737,
@@ -240,6 +218,149 @@
       "depth": 0.35,
       "height": 5,
       "rotY": 6.094203673205111,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mon71g4k",
+      "x": -0.7643343284178687,
+      "z": -6.78191999925917,
+      "width": 23,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 0.08470367320509846,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mon71wln",
+      "x": -0.11727590484949293,
+      "z": 7.2,
+      "width": 23,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 3.1437036732050987,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mon743t4",
+      "x": 8,
+      "z": -0.06242989356926322,
+      "width": 23,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": -1.5462963267948933,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mon74k0g",
+      "x": -7.364615263273035,
+      "z": 0.17687858248363758,
+      "width": 23,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 1.5862036732051072,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "ramp-mona7uz0",
+      "x": 6.053975218272749,
+      "z": 0.10728572843647516,
+      "width": 7.8,
+      "depth": 4,
+      "height": 1.2,
+      "rotY": 1.5302036732051059,
+      "climbable": false,
+      "ramp": true
+    },
+    {
+      "id": "wall-mona8fxn",
+      "x": 7.481713812412937,
+      "z": 4.300021021187035,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -3.3942963267948927,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mona8il2",
+      "x": 5.746506896550897,
+      "z": 4.262354742929884,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -3.3592963267948917,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mona8zle",
+      "x": 7.481713812412937,
+      "z": 4.300021021187035,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -2.193796326794891,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mona920i",
+      "x": 7.165013409424241,
+      "z": 4.075832762930519,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -2.169296326794891,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mona93re",
+      "x": 6.604845727234142,
+      "z": 3.69383369458342,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": -2.211296326794891,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mona99ea",
+      "x": 6.752249969745305,
+      "z": 4.268862513313417,
+      "width": 2,
+      "depth": 0.35,
+      "height": 278,
+      "rotY": -2.211296326794891,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "ramp-monaa3mx",
+      "x": -6.184826630759875,
+      "z": -0.21174221712494526,
+      "width": 7.7,
+      "depth": 4,
+      "height": 1.2,
+      "rotY": -1.5567963267948912,
+      "climbable": false,
+      "ramp": true
+    },
+    {
+      "id": "wall-monaamq0",
+      "x": -6.801636310902426,
+      "z": -3.853038246976975,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 0.03220367320510499,
       "climbable": false,
       "ramp": false
     }

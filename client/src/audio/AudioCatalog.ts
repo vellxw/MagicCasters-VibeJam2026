@@ -32,6 +32,8 @@ const spellEntries = Object.fromEntries(
 export const AUDIO_CATALOG = {
   'music.lobby': music('/audio/music/lobby-music.mp3', 0.68),
   'music.match': music('/audio/music/match-loop.mp3', 0.54),
+  'music.match.arcane': music('/audio/music/arcane-duel-anew.mp3', 0.54),
+  'music.match.aether': music('/audio/music/aether-duel.mp3', 0.54),
   'ambience.lobby': ambience('/audio/ambience/lobby-embers.ogg', 0.12),
   'ambience.match': ambience('/audio/ambience/match-wind.ogg', 0.3),
 
