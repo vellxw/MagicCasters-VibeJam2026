@@ -7,6 +7,7 @@ import {
   formatCombatKeyBinding,
   type CombatKeyBindings
 } from '../input/CombatKeyBindings';
+import { clampHealthRatio } from '../player/CombatIdentity';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
 import {
@@ -21,9 +22,13 @@ export class DebugOverlay {
   readonly element: HTMLDivElement;
   readonly voiceButton: HTMLButtonElement;
 
+  private statusStackEl: HTMLElement;
   private hpFill: HTMLSpanElement;
   private manaFill: HTMLSpanElement;
+  private hpValueEl: HTMLElement;
+  private manaValueEl: HTMLElement;
   private nameEl: HTMLElement;
+  private teamEl: HTMLElement;
   private statusEffectsEl: HTMLElement;
   private phaseEl: HTMLElement;
   private dockEl: HTMLElement;
@@ -60,11 +65,25 @@ export class DebugOverlay {
     this.element.className = 'hud';
     this.element.innerHTML = `
       <div class="hud__top">
-        <div class="status-stack">
-          <div class="status-row"><strong data-name>Mage</strong><span data-room>offline</span></div>
+        <div class="status-stack" data-health-state="healthy">
+          <div class="status-row">
+            <div class="status-identity">
+              <strong data-name>Mage</strong>
+              <span data-team>TEAM --</span>
+            </div>
+            <span class="status-room" data-room>offline</span>
+          </div>
           <div class="bars">
-            <div class="bar bar--hp"><span data-hp></span></div>
-            <div class="bar bar--mana"><span data-mana></span></div>
+            <div class="bar-row">
+              <span class="bar-label">HP</span>
+              <div class="bar bar--hp"><span data-hp></span></div>
+              <b data-hp-value>100</b>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">MANA</span>
+              <div class="bar bar--mana"><span data-mana></span></div>
+              <b data-mana-value>100</b>
+            </div>
           </div>
           <div class="status-effects" data-status-effects></div>
         </div>
@@ -99,9 +118,13 @@ export class DebugOverlay {
     `;
 
     root.appendChild(this.element);
+    this.statusStackEl = this.element.querySelector('.status-stack')!;
     this.hpFill = this.element.querySelector('[data-hp]')!;
     this.manaFill = this.element.querySelector('[data-mana]')!;
+    this.hpValueEl = this.element.querySelector('[data-hp-value]')!;
+    this.manaValueEl = this.element.querySelector('[data-mana-value]')!;
     this.nameEl = this.element.querySelector('[data-name]')!;
+    this.teamEl = this.element.querySelector('[data-team]')!;
     this.statusEffectsEl = this.element.querySelector('[data-status-effects]')!;
     this.phaseEl = this.element.querySelector('[data-phase]')!;
     this.dockEl = this.element.querySelector('[data-spells]')!;
@@ -204,9 +227,13 @@ export class DebugOverlay {
     this.element.dataset.scene = args.scene.toLowerCase();
     const hp = args.local?.hp ?? 100;
     const mana = args.local?.mana ?? 100;
-    this.hpFill.style.transform = `scaleX(${Math.max(0, Math.min(1, hp / 100))})`;
+    this.hpFill.style.transform = `scaleX(${clampHealthRatio(hp)})`;
     this.manaFill.style.transform = `scaleX(${Math.max(0, Math.min(1, mana / 100))})`;
+    this.statusStackEl.dataset.healthState = healthStateFor(hp);
+    this.hpValueEl.textContent = resourceValue(hp);
+    this.manaValueEl.textContent = resourceValue(mana);
     this.nameEl.textContent = args.local?.name ?? 'Mage';
+    this.teamEl.textContent = args.teamId ? `TEAM ${args.teamId}` : 'NO TEAM';
     const roomEl = this.element.querySelector<HTMLElement>('[data-room]');
     if (roomEl) roomEl.textContent = args.roomId ? args.roomId.slice(0, 6) : args.status;
     this.phaseEl.textContent = messageForPhase(args.scene, args.phase, args.playerCount, args.requiredPlayers);
@@ -285,6 +312,18 @@ function primaryCombatState(effects: ReturnType<typeof getActiveStatusEffects>):
   if (effects.some((effect) => effect.id === 'marked')) return 'marked';
   if (effects.some((effect) => effect.id === 'shielded')) return 'shielded';
   return 'none';
+}
+
+function healthStateFor(hp: number): 'healthy' | 'wounded' | 'critical' {
+  const ratio = clampHealthRatio(hp);
+  if (ratio <= 0.25) return 'critical';
+  if (ratio <= 0.55) return 'wounded';
+  return 'healthy';
+}
+
+function resourceValue(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return String(Math.max(0, Math.min(100, Math.round(value))));
 }
 
 function messageForPhase(scene: SceneMode, phase: string, count: number, required: number): string {

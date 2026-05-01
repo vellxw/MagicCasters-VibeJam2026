@@ -11,7 +11,19 @@ describe('LobbyScene', () => {
       clearRect: vi.fn(),
       fillRect: vi.fn(),
       strokeRect: vi.fn(),
-      fillText: vi.fn()
+      fillText: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      quadraticCurveTo: vi.fn(),
+      closePath: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      createLinearGradient: vi.fn(() => ({
+        addColorStop: vi.fn()
+      }))
     };
     globalThis.document = {
       createElement: vi.fn(() => ({

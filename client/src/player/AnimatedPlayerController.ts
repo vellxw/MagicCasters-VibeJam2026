@@ -2,8 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CLASSES, type CharacterClass } from '../../../shared/classes';
+import { MAX_HP } from '../../../shared/types';
 import type { PlayerSnapshot } from './LocalPlayerController';
 import { applyCharacterLighting } from './CharacterLighting';
+import {
+  makeCombatNameplateTexture,
+  styleForCombatRelation,
+  type CombatRelation
+} from './CombatIdentity';
 
 const ANIM_MAP: Record<string, string> = {
   idle: 'reposo',
@@ -19,6 +25,7 @@ export class AnimatedPlayerController {
   target = new THREE.Vector3();
   modelLoaded = true;
 
+  private local: boolean;
   private modelRoot: THREE.Group | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private actions = new Map<string, THREE.AnimationAction>();
@@ -29,6 +36,9 @@ export class AnimatedPlayerController {
   private firstPersonHidden = false;
   private shadowGroundY = Number.NaN;
   private defeatAnimationFinished = false;
+  private nameplateName = 'Mage';
+  private nameplateHp = MAX_HP;
+  private nameplateRelation: CombatRelation;
 
   static create(
     scene: THREE.Object3D,
@@ -47,6 +57,8 @@ export class AnimatedPlayerController {
     characterClass: CharacterClass,
     teamId: string = 'A'
   ) {
+    this.local = local;
+    this.nameplateRelation = local ? 'self' : 'neutral';
     this.group = new THREE.Group();
 
     this.groundShadow = new THREE.Mesh(
@@ -62,21 +74,34 @@ export class AnimatedPlayerController {
     this.groundShadow.renderOrder = 4;
     scene.add(this.groundShadow);
 
-    const trimColor = local ? 0xf5c45e : teamId === 'B' ? 0x7dd3fc : 0xffb07c;
+    const trimColor = styleForCombatRelation(this.nameplateRelation).accentColor;
 
     this.ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.58, 0.018, 6, 36),
-      new THREE.MeshBasicMaterial({ color: trimColor })
+      new THREE.MeshBasicMaterial({
+        color: trimColor,
+        transparent: true,
+        opacity: styleForCombatRelation(this.nameplateRelation).ringOpacity,
+        depthWrite: false
+      })
     );
     this.ring.rotation.x = Math.PI / 2;
     this.ring.position.y = 0.05;
     this.group.add(this.ring);
 
     this.nameSprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: makeNameTexture('Mage'), transparent: true })
+      new THREE.SpriteMaterial({
+        map: makeCombatNameplateTexture({
+          name: this.nameplateName,
+          hp: this.nameplateHp,
+          relation: this.nameplateRelation
+        }),
+        transparent: true,
+        depthWrite: false
+      })
     );
-    this.nameSprite.position.y = 2.25;
-    this.nameSprite.scale.set(1.8, 0.45, 1);
+    this.nameSprite.position.y = 2.34;
+    this.nameSprite.scale.set(2.16, 0.65, 1);
     this.group.add(this.nameSprite);
 
     scene.add(this.group);
@@ -126,15 +151,45 @@ export class AnimatedPlayerController {
     const animName = ANIM_MAP[snapshot.anim] ?? 'reposo';
     this.playAnim(animName);
 
-    this.ring.visible = !this.firstPersonHidden && snapshot.casting;
+    this.applyRingState(snapshot.casting);
     this.updateGroundShadow(snapshot, snap);
   }
 
   setName(name: string): void {
-    const material = this.nameSprite.material as THREE.SpriteMaterial;
-    material.map?.dispose();
-    material.map = makeNameTexture(name);
-    material.needsUpdate = true;
+    this.setCombatIdentity({ name });
+  }
+
+  setCombatIdentity(update: {
+    name?: string;
+    hp?: number;
+    relation?: CombatRelation;
+  }): void {
+    const nextName = update.name ?? this.nameplateName;
+    const nextHp = update.hp ?? this.nameplateHp;
+    const nextRelation = update.relation ?? this.nameplateRelation;
+    const changed = nextName !== this.nameplateName
+      || nextHp !== this.nameplateHp
+      || nextRelation !== this.nameplateRelation;
+
+    this.nameplateName = nextName;
+    this.nameplateHp = nextHp;
+    this.nameplateRelation = nextRelation;
+
+    if (changed) {
+      const material = this.nameSprite.material as THREE.SpriteMaterial;
+      material.map?.dispose();
+      material.map = makeCombatNameplateTexture({
+        name: this.nameplateName,
+        hp: this.nameplateHp,
+        relation: this.nameplateRelation
+      });
+      material.needsUpdate = true;
+    }
+
+    this.nameSprite.visible = !this.firstPersonHidden && styleForCombatRelation(this.nameplateRelation).showNameplate;
+    if (changed) {
+      this.applyRingStyle(false);
+    }
   }
 
   setFirstPersonHidden(hidden: boolean): void {
@@ -142,7 +197,7 @@ export class AnimatedPlayerController {
     if (this.modelRoot) {
       this.modelRoot.visible = !hidden;
     }
-    this.nameSprite.visible = !hidden;
+    this.nameSprite.visible = !hidden && styleForCombatRelation(this.nameplateRelation).showNameplate;
     this.ring.visible = false;
   }
 
@@ -203,6 +258,21 @@ export class AnimatedPlayerController {
     this.groundShadow.scale.set(scale, scale, 1);
     this.groundShadow.material.opacity = alpha;
   }
+
+  private applyRingState(casting: boolean): void {
+    const showRemoteMarker = !this.firstPersonHidden && !this.local && this.nameplateRelation !== 'self';
+    this.ring.visible = showRemoteMarker || (!this.firstPersonHidden && casting);
+    this.ring.scale.setScalar(casting ? 1.12 : 1);
+    this.applyRingStyle(casting);
+  }
+
+  private applyRingStyle(casting: boolean): void {
+    const style = styleForCombatRelation(this.nameplateRelation);
+    const material = this.ring.material as THREE.MeshBasicMaterial;
+    material.color.setHex(style.accentColor);
+    material.opacity = casting ? Math.min(0.92, style.ringOpacity + 0.22) : style.ringOpacity;
+    material.needsUpdate = true;
+  }
 }
 
 // Alias for type clarity
@@ -231,24 +301,4 @@ export function cloneCharacterScene(scene: THREE.Group): THREE.Group {
   });
   applyCharacterLighting(clone);
   return clone;
-}
-
-function makeNameTexture(name: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const context = canvas.getContext('2d')!;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = 'rgba(21,18,15,0.74)';
-  context.fillRect(0, 8, canvas.width, 48);
-  context.strokeStyle = 'rgba(247,231,198,0.35)';
-  context.strokeRect(0.5, 8.5, canvas.width - 1, 47);
-  context.fillStyle = '#f7e7c6';
-  context.font = 'bold 24px Trebuchet MS, sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(name.slice(0, 18), canvas.width / 2, canvas.height / 2);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
 }

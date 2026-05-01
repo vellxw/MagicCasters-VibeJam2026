@@ -7,7 +7,8 @@ import {
   resolveDevHotkeyAction,
   resolveKeyboardSpellForClass,
   resolveMatchResultKind,
-  sceneSupportsLocalDash
+  sceneSupportsLocalDash,
+  shouldDisposeArenaBeforeEnterMatch
 } from './GameApp';
 
 describe('GameApp keyboard spell slots', () => {
@@ -72,6 +73,12 @@ describe('GameApp keyboard spell slots', () => {
     expect(sceneSupportsLocalDash('MATCH')).toBe(true);
     expect(sceneSupportsLocalDash('CHARACTER_SELECT')).toBe(false);
     expect(sceneSupportsLocalDash('CUSTOM')).toBe(false);
+  });
+
+  it('disposes an existing arena when rematch returns from results into match flow', () => {
+    expect(shouldDisposeArenaBeforeEnterMatch('RESULTS', true)).toBe(true);
+    expect(shouldDisposeArenaBeforeEnterMatch('MATCH', true)).toBe(false);
+    expect(shouldDisposeArenaBeforeEnterMatch('RESULTS', false)).toBe(false);
   });
 
   it('resolves protected dev hotkeys without gating calibration exit', () => {

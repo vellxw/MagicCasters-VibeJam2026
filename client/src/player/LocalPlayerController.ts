@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import type { CharacterClass } from '../../../shared/classes';
-import type { BotSkill } from '../../../shared/types';
+import { MAX_HP, type BotSkill } from '../../../shared/types';
+import {
+  makeCombatNameplateTexture,
+  styleForCombatRelation,
+  type CombatRelation
+} from './CombatIdentity';
 
 export interface PlayerSnapshot {
   id: string;
@@ -38,6 +43,7 @@ export class LocalPlayerController {
   group: THREE.Group;
   target = new THREE.Vector3();
 
+  private local: boolean;
   private body: THREE.Mesh;
   private hat: THREE.Mesh;
   private ring: THREE.Mesh;
@@ -45,12 +51,17 @@ export class LocalPlayerController {
   private nameSprite: THREE.Sprite;
   private firstPersonHidden = false;
   private shadowGroundY = Number.NaN;
+  private nameplateName = 'Mage';
+  private nameplateHp = MAX_HP;
+  private nameplateRelation: CombatRelation;
 
   constructor(scene: THREE.Object3D, local: boolean, teamId: string = 'A') {
+    this.local = local;
+    this.nameplateRelation = local ? 'self' : 'neutral';
     this.group = new THREE.Group();
     const teamColor = teamId === 'B' ? 0x2d9e9b : 0xd95030;
     const bodyColor = local ? teamColor : teamColor;
-    const trimColor = local ? 0xf5c45e : teamId === 'B' ? 0x7dd3fc : 0xffb07c;
+    const trimColor = styleForCombatRelation(this.nameplateRelation).accentColor;
 
     this.groundShadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.72, 32),
@@ -89,15 +100,28 @@ export class LocalPlayerController {
 
     this.ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.58, 0.018, 6, 36),
-      new THREE.MeshBasicMaterial({ color: trimColor })
+      new THREE.MeshBasicMaterial({
+        color: trimColor,
+        transparent: true,
+        opacity: styleForCombatRelation(this.nameplateRelation).ringOpacity,
+        depthWrite: false
+      })
     );
     this.ring.rotation.x = Math.PI / 2;
     this.ring.position.y = 0.05;
     this.group.add(this.ring);
 
-    this.nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeNameTexture('Mage'), transparent: true }));
-    this.nameSprite.position.y = 2.25;
-    this.nameSprite.scale.set(1.8, 0.45, 1);
+    this.nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeCombatNameplateTexture({
+        name: this.nameplateName,
+        hp: this.nameplateHp,
+        relation: this.nameplateRelation
+      }),
+      transparent: true,
+      depthWrite: false
+    }));
+    this.nameSprite.position.y = 2.34;
+    this.nameSprite.scale.set(2.16, 0.65, 1);
     this.group.add(this.nameSprite);
 
     scene.add(this.group);
@@ -111,22 +135,52 @@ export class LocalPlayerController {
     this.group.rotation.y = snapshot.rotY;
     this.body.scale.y = snapshot.casting ? 1.08 : 1;
     this.hat.rotation.y += dt * (snapshot.anim === 'run' ? 6 : 1.8);
-    this.ring.visible = !this.firstPersonHidden && snapshot.casting;
+    this.applyRingState(snapshot.casting);
     this.updateGroundShadow(snapshot, snap);
   }
 
   setName(name: string): void {
-    const material = this.nameSprite.material as THREE.SpriteMaterial;
-    material.map?.dispose();
-    material.map = makeNameTexture(name);
-    material.needsUpdate = true;
+    this.setCombatIdentity({ name });
+  }
+
+  setCombatIdentity(update: {
+    name?: string;
+    hp?: number;
+    relation?: CombatRelation;
+  }): void {
+    const nextName = update.name ?? this.nameplateName;
+    const nextHp = update.hp ?? this.nameplateHp;
+    const nextRelation = update.relation ?? this.nameplateRelation;
+    const changed = nextName !== this.nameplateName
+      || nextHp !== this.nameplateHp
+      || nextRelation !== this.nameplateRelation;
+
+    this.nameplateName = nextName;
+    this.nameplateHp = nextHp;
+    this.nameplateRelation = nextRelation;
+
+    if (changed) {
+      const material = this.nameSprite.material as THREE.SpriteMaterial;
+      material.map?.dispose();
+      material.map = makeCombatNameplateTexture({
+        name: this.nameplateName,
+        hp: this.nameplateHp,
+        relation: this.nameplateRelation
+      });
+      material.needsUpdate = true;
+    }
+
+    this.nameSprite.visible = !this.firstPersonHidden && styleForCombatRelation(this.nameplateRelation).showNameplate;
+    if (changed) {
+      this.applyRingStyle(false);
+    }
   }
 
   setFirstPersonHidden(hidden: boolean): void {
     this.firstPersonHidden = hidden;
     this.body.visible = !hidden;
     this.hat.visible = !hidden;
-    this.nameSprite.visible = !hidden;
+    this.nameSprite.visible = !hidden && styleForCombatRelation(this.nameplateRelation).showNameplate;
     this.ring.visible = false;
   }
 
@@ -158,26 +212,21 @@ export class LocalPlayerController {
     this.groundShadow.scale.set(scale, scale, 1);
     this.groundShadow.material.opacity = alpha;
   }
+
+  private applyRingState(casting: boolean): void {
+    const showRemoteMarker = !this.firstPersonHidden && !this.local && this.nameplateRelation !== 'self';
+    this.ring.visible = showRemoteMarker || (!this.firstPersonHidden && casting);
+    this.ring.scale.setScalar(casting ? 1.12 : 1);
+    this.applyRingStyle(casting);
+  }
+
+  private applyRingStyle(casting: boolean): void {
+    const style = styleForCombatRelation(this.nameplateRelation);
+    const material = this.ring.material as THREE.MeshBasicMaterial;
+    material.color.setHex(style.accentColor);
+    material.opacity = casting ? Math.min(0.92, style.ringOpacity + 0.22) : style.ringOpacity;
+    material.needsUpdate = true;
+  }
 }
 
 export class RemotePlayerController extends LocalPlayerController {}
-
-function makeNameTexture(name: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const context = canvas.getContext('2d')!;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = 'rgba(21,18,15,0.74)';
-  context.fillRect(0, 8, canvas.width, 48);
-  context.strokeStyle = 'rgba(247,231,198,0.35)';
-  context.strokeRect(0.5, 8.5, canvas.width - 1, 47);
-  context.fillStyle = '#f7e7c6';
-  context.font = 'bold 24px Trebuchet MS, sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(name.slice(0, 18), canvas.width / 2, canvas.height / 2);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}

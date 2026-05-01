@@ -47,6 +47,7 @@ import { applyPredictedHorizontalMovement, needsReconciliation } from '../networ
 import { LocalPlayerController, type PlayerSnapshot } from '../player/LocalPlayerController';
 import { RemotePlayerController } from '../player/RemotePlayerController';
 import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } from '../player/AnimatedPlayerController';
+import { resolveCombatRelation } from '../player/CombatIdentity';
 import { SpellVfxManager } from '../spells/SpellVfxManager';
 import { CharacterSelectOverlay } from '../ui/CharacterSelectOverlay';
 import { DebugOverlay } from '../ui/DebugOverlay';
@@ -157,6 +158,10 @@ export function createDifferentMatchQueueIntent(selectedMode: MatchMode | null):
 
 export function sceneSupportsLocalDash(sceneMode: SceneMode): boolean {
   return sceneMode === 'MATCH' || sceneMode === 'LOBBY' || sceneMode === 'QUEUE' || sceneMode === 'VFX_EDITOR';
+}
+
+export function shouldDisposeArenaBeforeEnterMatch(sceneMode: SceneMode, hasArenaRuntime: boolean): boolean {
+  return hasArenaRuntime && sceneMode !== 'MATCH';
 }
 
 export type DevHotkeyAction = 'enter-calibration' | 'exit-calibration' | 'enter-vfx-editor';
@@ -939,9 +944,21 @@ export class GameApp {
       applyPredictedHorizontalMovement(localSnapshot, input, dt);
     }
 
+    const localTeamId = localSnapshot?.teamId ?? null;
     for (const [id, snapshot] of this.playerSnapshots) {
       const controller = this.players.get(id);
-      controller?.update(snapshot, dt, id === localId);
+      if (!controller) continue;
+      controller.setCombatIdentity({
+        name: snapshot.name,
+        hp: snapshot.hp,
+        relation: resolveCombatRelation({
+          playerId: snapshot.id,
+          playerTeamId: snapshot.teamId ?? null,
+          localSessionId: localId,
+          localTeamId
+        })
+      });
+      controller.update(snapshot, dt, id === localId);
     }
 
     const local = this.getLocalSnapshot();
@@ -1626,8 +1643,12 @@ export class GameApp {
 
   private enterMatch(): void {
     this.stopLobbyMusic();
-    if (this.sceneMode === 'MATCH') {
+    const previousSceneMode = this.sceneMode;
+    if (previousSceneMode === 'MATCH') {
       return;
+    }
+    if (shouldDisposeArenaBeforeEnterMatch(previousSceneMode, Boolean(this.arenaRuntime))) {
+      this.disposeArenaRuntime();
     }
     this.sceneMode = 'MATCH';
     this.renderer.setClearColor(0x15120f, 1);
@@ -2526,6 +2547,10 @@ export class GameApp {
     this.calibrationSettings = null;
     this.calibrationVelocityY = 0;
     this.calibrationUi.hide();
+    this.disposeArenaRuntime();
+  }
+
+  private disposeArenaRuntime(): void {
     this.arenaRuntime?.dispose();
     this.arenaRuntime = null;
   }
