@@ -8,6 +8,7 @@ import {
   resolveSpawnPointsForMode,
   type SplatMapPoolCatalog
 } from '../../../shared/splatMapPool.js';
+import { defaultDevAccessState, requireDevAccessToken, type DevAccessState } from './devAccessAuth.js';
 import { invalidateServerVoxelCollision } from '../systems/ServerVoxelCollision.js';
 
 const API_PREFIX = '/api/dev/splat-collision/';
@@ -44,7 +45,8 @@ let activeGeneration = false;
 export function handleSplatCollisionDevApi(
   request: IncomingMessage,
   response: ServerResponse,
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  devAccessState: DevAccessState = defaultDevAccessState
 ): boolean {
   const pathname = safeApiPathname(request.url);
   if (!pathname.startsWith(API_PREFIX) && !pathname.startsWith(MAP_API_PREFIX) && !pathname.startsWith(VFX_MAP_API_PREFIX)) return false;
@@ -76,6 +78,12 @@ export function handleSplatCollisionDevApi(
     return true;
   }
 
+  const auth = isDevPostRequestAuthorized(env, request.headers.authorization, request.headers.host, request.socket.remoteAddress, devAccessState);
+  if (!auth.ok) {
+    sendJson(response, auth.status, { ok: false, error: auth.error });
+    return true;
+  }
+
   void readJsonBody(request)
     .then((body) => (
       pathname.startsWith(VFX_MAP_API_PREFIX)
@@ -86,6 +94,16 @@ export function handleSplatCollisionDevApi(
     ))
     .catch((error) => sendJson(response, 400, { ok: false, error: errorMessage(error) }));
   return true;
+}
+
+export function isDevPostRequestAuthorized(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  authorization: string | undefined,
+  host: string | undefined,
+  remoteAddress: string | undefined,
+  devAccessState: DevAccessState = defaultDevAccessState
+): { ok: true } | { ok: false; status: number; error: string } {
+  return requireDevAccessToken(env, devAccessState, authorization, host, remoteAddress);
 }
 
 export function isLocalDevSplatCollisionRequestAllowed(
@@ -670,7 +688,7 @@ function applyCorsHeaders(request: IncomingMessage, response: ServerResponse): v
     response.setHeader('vary', 'origin');
   }
   response.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
-  response.setHeader('access-control-allow-headers', 'content-type');
+  response.setHeader('access-control-allow-headers', 'content-type, authorization');
 }
 
 function sendJson(response: ServerResponse, status: number, payload: object): void {

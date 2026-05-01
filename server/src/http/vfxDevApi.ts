@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { defaultDevAccessState, requireDevAccessToken, type DevAccessState } from './devAccessAuth.js';
 
 const VFX_DIR = resolve(process.cwd(), 'client', 'public', 'vfx');
 
@@ -18,12 +19,17 @@ function sendJson(response: ServerResponse, status: number, data: unknown): void
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type'
+    'access-control-allow-headers': 'content-type, authorization'
   });
   response.end(JSON.stringify(data));
 }
 
-export async function handleVfxDevApi(request: IncomingMessage, response: ServerResponse): Promise<boolean> {
+export async function handleVfxDevApi(
+  request: IncomingMessage,
+  response: ServerResponse,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  devAccessState: DevAccessState = defaultDevAccessState
+): Promise<boolean> {
   if (request.url !== '/api/vfx/save') {
     return false;
   }
@@ -32,7 +38,7 @@ export async function handleVfxDevApi(request: IncomingMessage, response: Server
     response.writeHead(204, {
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': 'content-type'
+      'access-control-allow-headers': 'content-type, authorization'
     });
     response.end();
     return true;
@@ -40,6 +46,12 @@ export async function handleVfxDevApi(request: IncomingMessage, response: Server
 
   if (request.method !== 'POST') {
     sendJson(response, 405, { error: 'Method not allowed' });
+    return true;
+  }
+
+  const auth = isVfxDevPostAuthorized(env, request.headers.authorization, request.headers.host, request.socket.remoteAddress, devAccessState);
+  if (!auth.ok) {
+    sendJson(response, auth.status, { ok: false, error: auth.error });
     return true;
   }
 
@@ -93,4 +105,14 @@ export async function handleVfxDevApi(request: IncomingMessage, response: Server
   }
 
   return true;
+}
+
+export function isVfxDevPostAuthorized(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  authorization: string | undefined,
+  host: string | undefined,
+  remoteAddress: string | undefined,
+  devAccessState: DevAccessState = defaultDevAccessState
+): { ok: true } | { ok: false; status: number; error: string } {
+  return requireDevAccessToken(env, devAccessState, authorization, host, remoteAddress);
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { ArenaBounds, ArenaCollisionWall } from '../../../shared/types';
+import { getDevAccessAuthorizationHeaders } from '../dev/DevAccessClient';
 import type { SplatArenaPreset, SplatCalibrationSettings } from './ArenaPreset';
 
 const AUTO_COLLISION_CELL_SIZE = 0.85;
@@ -235,7 +236,7 @@ async function postDevMapPublishApiToBaseUrl(
   try {
     const response = await fetch(`${baseUrl}/api/dev/splat-map/publish`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: getDevAccessAuthorizationHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify(preset)
     });
     const payload = await response.json().catch(() => ({})) as SplatCollisionDevApiResult;
@@ -265,7 +266,7 @@ async function postDevCollisionApiToBaseUrl(
     const requestPreset = makeCollisionGenerationPreset(preset);
     const response = await fetch(`${baseUrl}/api/dev/splat-collision/${action}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: getDevAccessAuthorizationHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({
         arenaId: requestPreset.arenaId,
         calibrationGroupId: requestPreset.calibrationGroupId,

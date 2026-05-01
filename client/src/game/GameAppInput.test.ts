@@ -3,6 +3,7 @@ import {
   clampMediaVolume,
   createDifferentMatchQueueIntent,
   normalizeDamageAmount,
+  resolveDevHotkeyAction,
   resolveKeyboardSpellForClass,
   resolveMatchResultKind,
   sceneSupportsLocalDash
@@ -57,5 +58,12 @@ describe('GameApp keyboard spell slots', () => {
     expect(sceneSupportsLocalDash('MATCH')).toBe(true);
     expect(sceneSupportsLocalDash('CHARACTER_SELECT')).toBe(false);
     expect(sceneSupportsLocalDash('CUSTOM')).toBe(false);
+  });
+
+  it('resolves protected dev hotkeys without gating calibration exit', () => {
+    expect(resolveDevHotkeyAction('f8', 'LOBBY')).toBe('enter-calibration');
+    expect(resolveDevHotkeyAction('f8', 'CALIBRATION')).toBe('exit-calibration');
+    expect(resolveDevHotkeyAction('f9', 'LOBBY')).toBe('enter-vfx-editor');
+    expect(resolveDevHotkeyAction('f9', 'MATCH')).toBeNull();
   });
 });
