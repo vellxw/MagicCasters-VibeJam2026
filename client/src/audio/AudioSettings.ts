@@ -17,9 +17,9 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   muted: false,
   master: 0.82,
   channels: {
-    music: 0.74,
-    ambience: 0.58,
-    sfx: 0.86,
+    music: 0.78,
+    ambience: 0.28,
+    sfx: 0.64,
     ui: 0.78,
     voice: 0.92
   }

@@ -54,6 +54,12 @@ describe('AudioSettings', () => {
     expect(loadAudioSettings(memoryStorage('{bad json'))).toEqual(DEFAULT_AUDIO_SETTINGS);
   });
 
+  it('defaults ambience and combat SFX below music so the soundtrack leads', () => {
+    expect(DEFAULT_AUDIO_SETTINGS.channels.music).toBeGreaterThan(DEFAULT_AUDIO_SETTINGS.channels.ambience);
+    expect(DEFAULT_AUDIO_SETTINGS.channels.sfx).toBeLessThanOrEqual(0.68);
+    expect(DEFAULT_AUDIO_SETTINGS.channels.ambience).toBeLessThanOrEqual(0.32);
+  });
+
   it('saves normalized settings to the configured storage key', () => {
     const storage = memoryStorage();
     const saved = saveAudioSettings(storage, {

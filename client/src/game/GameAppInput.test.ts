@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampMediaVolume,
+  createQualitySettingsAudioProps,
   createDifferentMatchQueueIntent,
   normalizeDamageAmount,
   resolveDevHotkeyAction,
@@ -15,6 +16,19 @@ describe('GameApp keyboard spell slots', () => {
     expect(resolveKeyboardSpellForClass('arcanist', '4')).toBe('eclipse');
     expect(resolveKeyboardSpellForClass('divine', '1')).toBe('judgment_ray');
     expect(resolveKeyboardSpellForClass('divine', '4')).toBe('firmament_shield');
+  });
+
+  it('resolves custom combat key bindings through the active character class slots', () => {
+    const bindings = {
+      spell1: { code: 'KeyQ', key: 'q' },
+      spell2: { code: 'KeyE', key: 'e' },
+      spell3: { code: 'KeyF', key: 'f' },
+      spell4: { code: 'KeyG', key: 'g' }
+    };
+
+    expect(resolveKeyboardSpellForClass('arcanist', { code: 'KeyQ', key: 'q' }, bindings)).toBe('shadow_dart');
+    expect(resolveKeyboardSpellForClass('arcanist', { code: 'KeyG', key: 'g' }, bindings)).toBe('eclipse');
+    expect(resolveKeyboardSpellForClass('divine', { code: 'KeyF', key: 'f' }, bindings)).toBe('glacial_spikes');
   });
 
   it('ignores keys outside the four class slots', () => {
@@ -65,5 +79,29 @@ describe('GameApp keyboard spell slots', () => {
     expect(resolveDevHotkeyAction('f8', 'CALIBRATION')).toBe('exit-calibration');
     expect(resolveDevHotkeyAction('f9', 'LOBBY')).toBe('enter-vfx-editor');
     expect(resolveDevHotkeyAction('f9', 'MATCH')).toBeNull();
+  });
+
+  it('wires settings modal audio changes back into AudioManager persistence', () => {
+    const calls: unknown[] = [];
+    const current = {
+      muted: false,
+      master: 0.82,
+      channels: {
+        music: 0.78,
+        ambience: 0.28,
+        sfx: 0.64,
+        ui: 0.78,
+        voice: 0.92
+      }
+    };
+    const props = createQualitySettingsAudioProps({
+      getSettings: () => current,
+      updateSettings: (settings) => calls.push(settings)
+    });
+
+    props.onAudioSettingsChange({ ...current, master: 0.4 });
+
+    expect(props.audioSettings).toBe(current);
+    expect(calls).toEqual([{ ...current, master: 0.4 }]);
   });
 });

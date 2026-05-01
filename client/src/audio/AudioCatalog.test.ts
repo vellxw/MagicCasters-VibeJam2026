@@ -30,6 +30,22 @@ describe('AudioCatalog', () => {
     expect(getAudioAsset('movement.jump')?.src).toEqual(['/audio/sfx/movement/jump.ogg']);
   });
 
+  it('keeps lobby ambience tucked under the lobby music lead', () => {
+    const music = getAudioAsset('music.lobby');
+    const ambience = getAudioAsset('ambience.lobby');
+
+    expect(music?.volume).toBeGreaterThanOrEqual(0.66);
+    expect(ambience?.volume ?? 1).toBeLessThanOrEqual((music?.volume ?? 0) * 0.25);
+  });
+
+  it('starts combat effects below the old aggressive mix', () => {
+    for (const spellId of SPELL_IDS) {
+      expect(AUDIO_CATALOG[spellAudioId(spellId, 'cast')].volume).toBeLessThanOrEqual(0.68);
+      expect(AUDIO_CATALOG[spellAudioId(spellId, 'impact')].volume).toBeLessThanOrEqual(0.72);
+    }
+    expect(AUDIO_CATALOG['combat.final_blow'].volume).toBeLessThanOrEqual(0.76);
+  });
+
   it('groups ids by channel without exposing other channels', () => {
     expect(listAudioIdsByChannel('voice')).toEqual(expect.arrayContaining([
       'announcer.victory',

@@ -14,7 +14,7 @@ import {
   shouldLockRoom,
   shouldStartMatch
 } from './MatchSystem';
-import { createTestPlayer } from './SpellSystem';
+import { createTestPlayer, directionFromRotation } from './SpellSystem';
 
 describe('MatchSystem', () => {
   it('sets max clients and required players per mode', () => {
@@ -88,6 +88,14 @@ describe('MatchSystem', () => {
 
     expect(shouldDamagePlayer(attacker, ally)).toBe(false);
     expect(shouldDamagePlayer(attacker, enemy)).toBe(true);
+  });
+
+  it('aims spawn rotations toward the opposing side', () => {
+    const leftSpawn = getSpawnForSlot('1v1', 0);
+    const rightSpawn = getSpawnForSlot('1v1', 1);
+
+    expect(directionFromRotation(leftSpawn.rotY).x).toBeGreaterThan(0);
+    expect(directionFromRotation(rightSpawn.rotY).x).toBeLessThan(0);
   });
 
   it('finds a 1v1 winner when one player is defeated', () => {

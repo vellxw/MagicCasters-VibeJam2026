@@ -22,8 +22,10 @@ export interface ServerPlayer {
   selectedSpell: string;
   characterClass: CharacterClass;
   shieldActive?: boolean;
+  shieldExpiresAt?: number;
   silencedUntil?: number;
   slowedUntil?: number;
+  slowMultiplier?: number;
   speedBoostUntil?: number;
   airDashAvailable?: boolean;
   markedUntil?: number;
@@ -80,6 +82,12 @@ export interface ProjectileHitResult {
   events: SpellSideEffectEvent[];
 }
 
+export const FIRMAMENT_SHIELD_DURATION_MS = 5000;
+export const MILD_ATTACK_SLOW_MS = 900;
+export const MILD_ATTACK_SLOW_MULTIPLIER = 0.82;
+export const STRONG_ATTACK_SLOW_MS = 2400;
+export const STRONG_ATTACK_SLOW_MULTIPLIER = 0.22;
+
 export function createTestPlayer(id: string, teamId: TeamId = 'A', characterClass: CharacterClass = 'arcanist'): ServerPlayer {
   return {
     id,
@@ -95,7 +103,10 @@ export function createTestPlayer(id: string, teamId: TeamId = 'A', characterClas
     cooldowns: {},
     casting: false,
     selectedSpell: '',
-    characterClass
+    characterClass,
+    shieldExpiresAt: 0,
+    slowedUntil: 0,
+    slowMultiplier: 1
   };
 }
 
@@ -170,12 +181,14 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
         if (target.id === args.caster.id || target.hp <= 0) continue;
         const distance = Math.hypot(target.x - args.caster.x, target.z - args.caster.z);
         if (distance <= spell.range) {
-          const result = applyDamage(target, spell.damage);
+          const result = applyDamage(target, spell.damage, args.now);
+          if (!result.shieldBroken) applySpellSlow(target, validation.spellId, args.now);
           hits.push({ targetId: target.id, damage: result.damage, hp: target.hp });
         }
       }
       if (validation.spellId === 'firmament_shield') {
         args.caster.shieldActive = true;
+        args.caster.shieldExpiresAt = args.now + FIRMAMENT_SHIELD_DURATION_MS;
       }
     }
     return { ok: true, kind: 'instant', spellId: validation.spellId, hits };
@@ -194,7 +207,7 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
   }
 
   if (spell.kind === 'ground_line') {
-    const hits = computeGroundLineHits(args.caster, args.targets, spell.range, spell.radius);
+    const hits = computeGroundLineHits(args.caster, args.targets, validation.spellId, spell.range, spell.radius, args.now);
     return { ok: true, kind: 'ground_line', spellId: validation.spellId, hits };
   }
 
@@ -229,8 +242,10 @@ export function executeSpellCast(args: ExecuteCastArgs): CastResult {
 function computeGroundLineHits(
   caster: ServerPlayer,
   targets: ServerPlayer[],
+  spellId: SpellId,
   range: number,
-  halfWidth: number
+  halfWidth: number,
+  now: number
 ): Array<{ targetId: string; damage: number; hp: number }> {
   const hits: Array<{ targetId: string; damage: number; hp: number }> = [];
   const dir = directionFromRotation(caster.rotY);
@@ -247,7 +262,8 @@ function computeGroundLineHits(
     const perpZ = dz - longitudinal * dir.z;
     const perpDist = Math.hypot(perpX, perpZ);
     if (perpDist <= halfWidth) {
-      const result = applyDamage(target, SPELLS.glacial_spikes.damage);
+      const result = applyDamage(target, SPELLS[spellId].damage, now);
+      if (!result.shieldBroken) applySpellSlow(target, spellId, now);
       hits.push({ targetId: target.id, damage: result.damage, hp: target.hp });
     }
   }
@@ -255,9 +271,9 @@ function computeGroundLineHits(
   return hits;
 }
 
-export function applyProjectileDamage(target: ServerPlayer, spellId: SpellId): { damage: number; defeated: boolean; shieldBroken: boolean } {
+export function applyProjectileDamage(target: ServerPlayer, spellId: SpellId, now = Date.now()): { damage: number; defeated: boolean; shieldBroken: boolean } {
   const spell = SPELLS[spellId];
-  const result = applyDamage(target, spell.damage);
+  const result = applyDamage(target, spell.damage, now);
   return {
     damage: result.damage,
     defeated: target.hp <= 0,
@@ -309,8 +325,10 @@ export function resolveGlacialSpikeHazards(args: {
     if (target && target.hp > 0 && !hitTargetIds.has(target.id)) {
       const distance = Math.hypot(target.x - hazard.x, target.z - hazard.z);
       if (distance <= hazard.radius) {
-        const damage = applyDamage(target, SPELLS.glacial_spikes.damage);
-        if ((target.silencedUntil ?? 0) > args.now || (target.slowedUntil ?? 0) > args.now) {
+        const wasControlled = (target.silencedUntil ?? 0) > args.now || (target.slowedUntil ?? 0) > args.now;
+        const damage = applyDamage(target, SPELLS.glacial_spikes.damage, args.now);
+        if (!damage.shieldBroken) applySpellSlow(target, 'glacial_spikes', args.now);
+        if (wasControlled) {
           target.rootedUntil = args.now + 500;
         }
         const knockDir = directionAwayFrom({ x: hazard.x, z: hazard.z }, target);
@@ -356,9 +374,10 @@ export function applyProjectileHitEffects(
   spellId: SpellId,
   now: number
 ): ProjectileHitResult {
-  const base = applyProjectileDamage(target, spellId);
+  const base = applyProjectileDamage(target, spellId, now);
   const events: SpellSideEffectEvent[] = [];
   let damage = base.damage;
+  const wasControlled = (target.silencedUntil ?? 0) > now || (target.slowedUntil ?? 0) > now;
 
   if (base.shieldBroken) {
     return {
@@ -368,6 +387,8 @@ export function applyProjectileHitEffects(
       events
     };
   }
+
+  applySpellSlow(target, spellId, now);
 
   if (caster.characterClass === 'arcanist') {
     if (spellId === 'shadow_dart') {
@@ -383,7 +404,7 @@ export function applyProjectileHitEffects(
 
     if (spellId === 'abyssal_claw' && (target.markedUntil ?? 0) > now) {
       target.markedUntil = 0;
-      const bonus = applyDamage(target, 8);
+      const bonus = applyDamage(target, 8, now);
       damage += bonus.damage;
       target.silencedUntil = now + 800;
       events.push({
@@ -399,9 +420,9 @@ export function applyProjectileHitEffects(
   if (
     caster.characterClass === 'divine' &&
     spellId === 'judgment_ray' &&
-    ((target.silencedUntil ?? 0) > now || (target.slowedUntil ?? 0) > now)
+    wasControlled
   ) {
-    const bonus = applyDamage(target, 7);
+    const bonus = applyDamage(target, 7, now);
     damage += bonus.damage;
   }
 
@@ -431,18 +452,51 @@ export function directionAwayFrom(
   return { x: round(dx / length), z: round(dz / length) };
 }
 
+export function applySpellSlow(target: ServerPlayer, spellId: SpellId, now: number): void {
+  if (spellId === 'firmament_shield') return;
+  if (spellId === 'penitent_seal' || spellId === 'glacial_spikes') {
+    applySlow(target, now, STRONG_ATTACK_SLOW_MS, STRONG_ATTACK_SLOW_MULTIPLIER);
+    return;
+  }
+  applySlow(target, now, MILD_ATTACK_SLOW_MS, MILD_ATTACK_SLOW_MULTIPLIER);
+}
+
+export function applyMildAttackSlow(target: ServerPlayer, now: number): void {
+  applySlow(target, now, MILD_ATTACK_SLOW_MS, MILD_ATTACK_SLOW_MULTIPLIER);
+}
+
+export function refreshShieldState(target: ServerPlayer, now: number): void {
+  if (!target.shieldActive) return;
+  const expiresAt = target.shieldExpiresAt ?? 0;
+  if (expiresAt > 0 && now >= expiresAt) {
+    target.shieldActive = false;
+    target.shieldExpiresAt = 0;
+    target.explosiveShield = false;
+  }
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function applyDamage(target: ServerPlayer, amount: number): { damage: number; shieldBroken: boolean } {
+export function applyDamage(target: ServerPlayer, amount: number, now = Date.now()): { damage: number; shieldBroken: boolean } {
+  refreshShieldState(target, now);
   if (target.shieldActive) {
     target.shieldActive = false;
+    target.shieldExpiresAt = 0;
     return { damage: 0, shieldBroken: true };
   }
   const before = target.hp;
   target.hp = Math.max(0, target.hp - amount);
   return { damage: before - target.hp, shieldBroken: false };
+}
+
+function applySlow(target: ServerPlayer, now: number, durationMs: number, multiplier: number): void {
+  const currentUntil = target.slowedUntil ?? 0;
+  const slowIsActive = currentUntil > now;
+  const currentMultiplier = slowIsActive ? target.slowMultiplier ?? 1 : 1;
+  target.slowedUntil = Math.max(slowIsActive ? currentUntil : now, now + durationMs);
+  target.slowMultiplier = Math.min(currentMultiplier, multiplier);
 }
 
 function round(value: number): number {

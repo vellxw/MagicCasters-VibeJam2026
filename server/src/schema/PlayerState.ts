@@ -29,8 +29,10 @@ export class PlayerState extends Schema implements ServerPlayer {
   @type('number') glacialSpikesReadyAt = 0;
   @type('number') firmamentShieldReadyAt = 0;
   @type('boolean') shieldActive = false;
+  @type('number') shieldExpiresAt = 0;
   @type('number') silencedUntil = 0;
   @type('number') slowedUntil = 0;
+  @type('number') slowMultiplier = 1;
   @type('number') speedBoostUntil = 0;
   @type('number') markedUntil = 0;
   @type('number') rootedUntil = 0;
@@ -81,8 +83,10 @@ export class PlayerState extends Schema implements ServerPlayer {
     this.casting = false;
     this.selectedSpell = '';
     this.shieldActive = false;
+    this.shieldExpiresAt = 0;
     this.silencedUntil = 0;
     this.slowedUntil = 0;
+    this.slowMultiplier = 1;
     this.speedBoostUntil = 0;
     this.markedUntil = 0;
     this.rootedUntil = 0;

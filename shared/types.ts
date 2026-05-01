@@ -9,7 +9,7 @@ export const TICK_DT = 1 / TICK_RATE;
 
 export const PLAYER_RADIUS = 0.45;
 export const PLAYER_HEIGHT = 1.7;
-export const PLAYER_SPEED = 5.8;
+export const PLAYER_SPEED = 5.2;
 export const PLAYER_JUMP_VELOCITY = 6.4;
 export const PLAYER_GRAVITY = 18.5;
 export const PLAYER_CLIMB_SPEED = 3.2;
@@ -137,8 +137,10 @@ export interface PublicPlayerState {
   isBot?: boolean;
   botSkill?: string;
   shieldActive?: boolean;
+  shieldExpiresAt?: number;
   silencedUntil?: number;
   slowedUntil?: number;
+  slowMultiplier?: number;
   speedBoostUntil?: number;
   markedUntil?: number;
   rootedUntil?: number;

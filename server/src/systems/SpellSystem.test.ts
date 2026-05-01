@@ -3,12 +3,18 @@ import { ARENA_BOUNDS } from '../../../shared/types';
 import type { SpellId } from '../../../shared/spells';
 import {
   applyDamage,
+  applySpellSlow,
   applyProjectileHitEffects,
   applyProjectileDamage,
   createTestPlayer,
   directionAwayFrom,
   executeSpellCast,
+  FIRMAMENT_SHIELD_DURATION_MS,
+  MILD_ATTACK_SLOW_MS,
+  MILD_ATTACK_SLOW_MULTIPLIER,
   resolveGlacialSpikeHazards,
+  STRONG_ATTACK_SLOW_MS,
+  STRONG_ATTACK_SLOW_MULTIPLIER,
   validateCast
 } from './SpellSystem';
 
@@ -126,6 +132,25 @@ describe('SpellSystem', () => {
     });
   });
 
+  it('applies a mild slow when projectile attacks connect', () => {
+    const caster = createTestPlayer('caster', 'A', 'arcanist');
+    const target = createTestPlayer('target', 'B', 'divine');
+
+    applyProjectileHitEffects(caster, target, 'shadow_dart', 1000);
+
+    expect(target.slowedUntil).toBe(1000 + MILD_ATTACK_SLOW_MS);
+    expect(target.slowMultiplier).toBe(MILD_ATTACK_SLOW_MULTIPLIER);
+  });
+
+  it('upgrades current slow spells to a stronger slow', () => {
+    const target = createTestPlayer('target', 'B', 'arcanist');
+
+    applySpellSlow(target, 'penitent_seal', 1000);
+
+    expect(target.slowedUntil).toBe(1000 + STRONG_ATTACK_SLOW_MS);
+    expect(target.slowMultiplier).toBe(STRONG_ATTACK_SLOW_MULTIPLIER);
+  });
+
   it('applies divine projectile bonus against controlled targets at impact time', () => {
     const caster = createTestPlayer('caster', 'A', 'divine');
     const target = createTestPlayer('target', 'B', 'arcanist');
@@ -135,6 +160,17 @@ describe('SpellSystem', () => {
 
     expect(result.damage).toBe(21);
     expect(target.hp).toBe(79);
+  });
+
+  it('does not count judgment_ray own new slow as a pre-existing control bonus', () => {
+    const caster = createTestPlayer('caster', 'A', 'divine');
+    const target = createTestPlayer('target', 'B', 'arcanist');
+
+    const result = applyProjectileHitEffects(caster, target, 'judgment_ray', 1200);
+
+    expect(result.damage).toBe(14);
+    expect(target.hp).toBe(86);
+    expect(target.slowedUntil).toBe(1200 + MILD_ATTACK_SLOW_MS);
   });
 
   it('applies authoritative instant spells and projectile damage on the server', () => {
@@ -323,16 +359,32 @@ describe('SpellSystem', () => {
     expect(result.ok).toBe(true);
     expect(result.kind).toBe('instant');
     expect(caster.shieldActive).toBe(true);
+    expect(caster.shieldExpiresAt).toBe(1000 + FIRMAMENT_SHIELD_DURATION_MS);
   });
 
   it('absorbs damage when shieldActive is true', () => {
     const target = createTestPlayer('target');
     target.shieldActive = true;
-    const result = applyDamage(target, 20);
+    target.shieldExpiresAt = 7000;
+    const result = applyDamage(target, 20, 3000);
     expect(result.damage).toBe(0);
     expect(result.shieldBroken).toBe(true);
     expect(target.shieldActive).toBe(false);
+    expect(target.shieldExpiresAt).toBe(0);
     expect(target.hp).toBe(100);
+  });
+
+  it('lets damage through after firmament_shield expires', () => {
+    const target = createTestPlayer('target');
+    target.shieldActive = true;
+    target.shieldExpiresAt = 6000;
+
+    const result = applyDamage(target, 20, 6001);
+
+    expect(result.damage).toBe(20);
+    expect(result.shieldBroken).toBe(false);
+    expect(target.shieldActive).toBe(false);
+    expect(target.hp).toBe(80);
   });
 
   it('computes horizontal knockback away from the caster', () => {

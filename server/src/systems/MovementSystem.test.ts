@@ -34,6 +34,17 @@ describe('MovementSystem', () => {
     expect(player.mana).toBe(MAX_MANA);
   });
 
+  it('uses the active slow strength instead of one fixed slow speed', () => {
+    const player = createTestPlayer('slowed-runner');
+    player.rotY = 0;
+    player.slowedUntil = Date.now() + 1000;
+    player.slowMultiplier = 0.75;
+
+    applyMovement(player, { forward: true, backward: false, left: false, right: false }, 1);
+
+    expect(player.z).toBeCloseTo(-(PLAYER_SPEED * 0.75), 5);
+  });
+
   it('keeps players outside invisible collision walls', () => {
     const player = createTestPlayer('blocked');
     player.x = 0;

@@ -67,7 +67,14 @@ export function applyMovement(
 
   let speedMultiplier = 1;
   if ((player.speedBoostUntil ?? 0) > now) speedMultiplier *= 2;
-  if ((player.slowedUntil ?? 0) > now) speedMultiplier *= 0.3;
+  if ((player.slowedUntil ?? 0) > now) {
+    const slowMultiplier = typeof player.slowMultiplier === 'number' && Number.isFinite(player.slowMultiplier)
+      ? player.slowMultiplier
+      : 0.82;
+    speedMultiplier *= Math.min(1, Math.max(0.05, slowMultiplier));
+  } else if (player.slowMultiplier !== undefined && player.slowMultiplier !== 1) {
+    player.slowMultiplier = 1;
+  }
 
   const bounds = arenaCollision?.bounds ?? ARENA_BOUNDS;
   const floorY = arenaCollision?.floorY ?? 0;

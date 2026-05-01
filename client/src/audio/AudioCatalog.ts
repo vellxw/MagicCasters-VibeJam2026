@@ -20,20 +20,20 @@ const spellEntries = Object.fromEntries(
   SPELL_IDS.flatMap((spellId) => [
     [
       spellAudioIdUnchecked(spellId, 'cast'),
-      sfx(`/audio/sfx/spells/${spellId}-cast.ogg`, 0.82, 75)
+      sfx(`/audio/sfx/spells/${spellId}-cast.ogg`, 0.66, 75)
     ],
     [
       spellAudioIdUnchecked(spellId, 'impact'),
-      sfx(`/audio/sfx/spells/${spellId}-impact.ogg`, 0.9, 60)
+      sfx(`/audio/sfx/spells/${spellId}-impact.ogg`, 0.7, 60)
     ]
   ])
 ) as Record<`spell.${SpellId}.${SpellAudioMoment}`, AudioAsset>;
 
 export const AUDIO_CATALOG = {
-  'music.lobby': music('/audio/music/lobby-music.mp3', 0.62),
+  'music.lobby': music('/audio/music/lobby-music.mp3', 0.68),
   'music.match': music('/audio/music/match-loop.mp3', 0.54),
-  'ambience.lobby': ambience('/audio/ambience/lobby-embers.ogg', 0.42),
-  'ambience.match': ambience('/audio/ambience/match-wind.ogg', 0.38),
+  'ambience.lobby': ambience('/audio/ambience/lobby-embers.ogg', 0.12),
+  'ambience.match': ambience('/audio/ambience/match-wind.ogg', 0.3),
 
   'ui.confirm': ui('/audio/ui/confirm.ogg', 0.72, 55),
   'ui.denied': ui('/audio/ui/denied.ogg', 0.72, 140),
@@ -41,13 +41,13 @@ export const AUDIO_CATALOG = {
   'ui.countdown': ui('/audio/ui/countdown.ogg', 0.7, 260),
   'ui.portal': ui('/audio/ui/portal.ogg', 0.76, 280),
 
-  'movement.jump': sfx('/audio/sfx/movement/jump.ogg', 0.72, 150),
-  'movement.land': sfx('/audio/sfx/movement/land.ogg', 0.66, 140),
-  'movement.dash': sfx('/audio/sfx/movement/dash.ogg', 0.78, 180),
-  'combat.damage_taken': sfx('/audio/sfx/combat/damage-taken.ogg', 0.72, 120),
-  'combat.final_blow': sfx('/audio/sfx/combat/final-blow.ogg', 0.9, 500),
-  'status.mark_applied': sfx('/audio/sfx/status/mark-applied.ogg', 0.72, 160),
-  'status.mark_consumed': sfx('/audio/sfx/status/mark-consumed.ogg', 0.8, 160),
+  'movement.jump': sfx('/audio/sfx/movement/jump.ogg', 0.62, 150),
+  'movement.land': sfx('/audio/sfx/movement/land.ogg', 0.56, 140),
+  'movement.dash': sfx('/audio/sfx/movement/dash.ogg', 0.66, 180),
+  'combat.damage_taken': sfx('/audio/sfx/combat/damage-taken.ogg', 0.62, 120),
+  'combat.final_blow': sfx('/audio/sfx/combat/final-blow.ogg', 0.74, 500),
+  'status.mark_applied': sfx('/audio/sfx/status/mark-applied.ogg', 0.62, 160),
+  'status.mark_consumed': sfx('/audio/sfx/status/mark-consumed.ogg', 0.68, 160),
 
   ...spellEntries,
 

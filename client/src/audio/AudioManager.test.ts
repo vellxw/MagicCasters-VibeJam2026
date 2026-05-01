@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AudioManager } from './AudioManager';
-import { DEFAULT_AUDIO_SETTINGS, type AudioSettingsStorage } from './AudioSettings';
+import { AUDIO_SETTINGS_STORAGE_KEY, DEFAULT_AUDIO_SETTINGS, type AudioSettingsStorage } from './AudioSettings';
 
 class FakeHowl {
   static instances: FakeHowl[] = [];
@@ -69,6 +69,30 @@ describe('AudioManager', () => {
     });
     expect(FakeHowl.instances[0].mute).toHaveBeenCalledWith(true);
     expect(FakeHowl.instances[0].volume).toHaveBeenCalledWith(0);
+  });
+
+  it('persists settings to browser storage when no storage override is passed', () => {
+    FakeHowl.instances = [];
+    const previousWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+    const browserStorage = storage();
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { localStorage: browserStorage as unknown as Storage }
+    });
+    const manager = new AudioManager({
+      HowlCtor: FakeHowl,
+      now: () => 1000
+    });
+
+    try {
+      manager.setMasterVolume(0.35);
+      expect(browserStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY)).toContain('"master":0.35');
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: previousWindow
+      });
+    }
   });
 
   it('crossfades music when switching tracks', () => {

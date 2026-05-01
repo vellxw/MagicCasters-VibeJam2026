@@ -7,6 +7,7 @@ import {
   type AudioId
 } from './AudioCatalog';
 import {
+  browserStorage,
   loadAudioSettings,
   saveAudioSettings,
   type AudioSettings,
@@ -96,7 +97,8 @@ export class AudioManager {
   }
 
   updateSettings(settings: AudioSettings): void {
-    this.settings = saveAudioSettings(this.options.storage ?? null, settings);
+    const storage = this.options.storage === undefined ? browserStorage() : this.options.storage;
+    this.settings = saveAudioSettings(storage, settings);
     this.applySettingsToLoadedSounds();
   }
 

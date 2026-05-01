@@ -53,9 +53,12 @@ import {
 } from '../systems/BotSystem.js';
 import {
   applyDamage,
+  applyMildAttackSlow,
   applyProjectileHitEffects,
+  applySpellSlow,
   directionAwayFrom,
   executeSpellCast,
+  refreshShieldState,
   resolveGlacialSpikeHazards,
   type GlacialSpikeHazard
 } from '../systems/SpellSystem.js';
@@ -410,7 +413,7 @@ export class MagicDuelRoom extends Room<GameState> {
           const target = this.state.players.get(targetId);
           if (target && target.markedUntil > now) {
             target.markedUntil = 0;
-            const result = applyDamage(target, 8);
+            const result = applyDamage(target, 8, now);
             target.silencedUntil = now + 800;
             this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
             this.broadcast('mark_consumed', { targetId: target.id, spellId, x: target.x, z: target.z });
@@ -424,7 +427,7 @@ export class MagicDuelRoom extends Room<GameState> {
           const distance = Math.hypot(target.x - caster.x, target.z - caster.z);
           if (distance <= SPELLS.eclipse.range && target.markedUntil > now) {
             target.markedUntil = 0;
-            const result = applyDamage(target, 10);
+            const result = applyDamage(target, 10, now);
             caster.hp = Math.min(100, caster.hp + 5);
             this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
             this.broadcast('mark_consumed', { targetId: target.id, spellId, x: target.x, z: target.z });
@@ -439,7 +442,7 @@ export class MagicDuelRoom extends Room<GameState> {
         for (const targetId of hitTargetIds) {
           const target = this.state.players.get(targetId);
           if (target && (target.silencedUntil > now || target.slowedUntil > now)) {
-            const result = applyDamage(target, 7); // extra damage on top of base 14
+            const result = applyDamage(target, 7, now); // extra damage on top of base 14
             this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
           }
         }
@@ -450,7 +453,7 @@ export class MagicDuelRoom extends Room<GameState> {
           const target = this.state.players.get(targetId);
           if (target) {
             target.silencedUntil = now + 1000;
-            target.slowedUntil = now + 1500;
+            applySpellSlow(target, spellId, now);
           }
         }
       }
@@ -488,6 +491,7 @@ export class MagicDuelRoom extends Room<GameState> {
         player.anim = 'defeat';
         continue;
       }
+      refreshShieldState(player, now);
       const input = this.inputs.get(player.id) ?? emptyInput();
       if (typeof input.rotY === 'number' && Number.isFinite(input.rotY)) {
         player.rotY = input.rotY;
@@ -595,7 +599,8 @@ export class MagicDuelRoom extends Room<GameState> {
         if (player.id === trap.ownerId || player.hp <= 0) continue;
         const dist = Math.hypot(player.x - trap.x, player.z - trap.z);
         if (dist <= trap.radius) {
-          const damage = applyDamage(player, SPELLS[trap.spellId].damage);
+          const damage = applyDamage(player, SPELLS[trap.spellId].damage, now);
+          if (!damage.shieldBroken) applySpellSlow(player, trap.spellId, now);
           this.broadcast('damage', { targetId: player.id, amount: damage.damage, hp: player.hp });
           this.broadcast('trap_triggered', { trapOwnerId: trap.ownerId, targetId: player.id, x: trap.x, z: trap.z });
           if (damage.shieldBroken && player.explosiveShield) {
@@ -741,7 +746,8 @@ export class MagicDuelRoom extends Room<GameState> {
         const dir = directionAwayFrom(player, target);
         target.x = clamp(target.x + dir.x * 2, this.arenaCollision.bounds.minX, this.arenaCollision.bounds.maxX);
         target.z = clamp(target.z + dir.z * 2, this.arenaCollision.bounds.minZ, this.arenaCollision.bounds.maxZ);
-        const result = applyDamage(target, 10);
+        const result = applyDamage(target, 10, now);
+        if (!result.shieldBroken) applyMildAttackSlow(target, now);
         this.broadcast('damage', { targetId: target.id, amount: result.damage, hp: target.hp });
       }
     }
@@ -975,20 +981,23 @@ export class MagicDuelRoom extends Room<GameState> {
   }
 }
 
-function emptyInput(): MoveInput {
-  return { forward: false, backward: false, left: false, right: false, jump: false, dash: false, rotY: 0 };
+export function emptyInput(): MoveInput {
+  return { forward: false, backward: false, left: false, right: false, jump: false, dash: false };
 }
 
-function normalizeInput(input: MoveInput): MoveInput {
-  return {
+export function normalizeInput(input: MoveInput): MoveInput {
+  const normalized: MoveInput = {
     forward: Boolean(input?.forward),
     backward: Boolean(input?.backward),
     left: Boolean(input?.left),
     right: Boolean(input?.right),
     jump: Boolean(input?.jump),
-    dash: Boolean(input?.dash),
-    rotY: typeof input?.rotY === 'number' && Number.isFinite(input.rotY) ? input.rotY : 0
+    dash: Boolean(input?.dash)
   };
+  if (typeof input?.rotY === 'number' && Number.isFinite(input.rotY)) {
+    normalized.rotY = input.rotY;
+  }
+  return normalized;
 }
 
 function moving(input: MoveInput): boolean {

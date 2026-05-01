@@ -1,6 +1,12 @@
 import { SPELLS, type SpellId } from '../../../shared/spells';
 import { CLASSES, type CharacterClass } from '../../../shared/classes';
 import type { ArenaId, MatchMode } from '../../../shared/types';
+import {
+  COMBAT_ACTIONS,
+  DEFAULT_COMBAT_KEY_BINDINGS,
+  formatCombatKeyBinding,
+  type CombatKeyBindings
+} from '../input/CombatKeyBindings';
 import type { PlayerSnapshot } from '../player/LocalPlayerController';
 import type { ArenaDebugInfo } from '../world/ArenaProvider';
 import {
@@ -36,6 +42,7 @@ export class DebugOverlay {
   private toastEl: HTMLElement;
   private spellButtons = new Map<SpellId, HTMLButtonElement>();
   private toastTimer = 0;
+  private combatKeyBindings: CombatKeyBindings = DEFAULT_COMBAT_KEY_BINDINGS;
 
   onCast?: (spellId: SpellId) => void;
   onVoiceToggle?: () => void;
@@ -132,17 +139,26 @@ export class DebugOverlay {
     }
   }
 
+  setCombatKeyBindings(bindings: CombatKeyBindings): void {
+    this.combatKeyBindings = bindings;
+    this.rebuildSpellDock();
+  }
+
   private rebuildSpellDock(): void {
     this.dockEl.innerHTML = '';
     this.spellButtons.clear();
     const classDef = CLASSES[this.characterClass];
-    for (const id of classDef.spellIds as SpellId[]) {
+    for (const [index, id] of (classDef.spellIds as SpellId[]).entries()) {
       const spell = SPELLS[id];
+      const action = COMBAT_ACTIONS[index];
+      const keyLabel = action
+        ? formatCombatKeyBinding(this.combatKeyBindings[action])
+        : spell.key;
       const button = document.createElement('button');
       button.className = 'spell-button';
       button.style.setProperty('--spell-color', `#${spell.color.toString(16).padStart(6, '0')}`);
       button.innerHTML = `
-        <b>${spell.key} ${spell.incantation}</b>
+        <b>${keyLabel} ${spell.incantation}</b>
         <span>${spell.label}</span>
         <small data-spell-state>Ready</small>
       `;

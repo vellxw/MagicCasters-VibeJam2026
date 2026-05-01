@@ -3,7 +3,7 @@ import {
   clearAutoCollisionWalls,
   countAutoCollisionWalls
 } from '../../../shared/autoCollisionWalls';
-import { spellIdFromClassSlot, type SpellId } from '../../../shared/spells';
+import type { SpellId } from '../../../shared/spells';
 import {
   findClimbableWall,
   findStandingSurfaceY,
@@ -26,12 +26,21 @@ import {
 } from '../../../shared/splatMapPool';
 import { FirstPersonCamera, clampPitch } from '../camera/FirstPersonCamera';
 import { AudioManager } from '../audio/AudioManager';
+import type { AudioSettings } from '../audio/AudioSettings';
 import { DevAccessClient, getDevAccessAuthorizationHeaders, promptForDevAccessPassword } from '../dev/DevAccessClient';
 import {
   audioCuesForMatchResult,
   audioCuesForNetEvent
 } from '../audio/AudioEventRouter';
 import { TouchControls } from '../input/TouchControls';
+import {
+  DEFAULT_COMBAT_KEY_BINDINGS,
+  loadCombatKeyBindings,
+  resolveCombatSpellForClass,
+  saveCombatKeyBindings,
+  type CombatKeyBindings,
+  type CombatKeyInput
+} from '../input/CombatKeyBindings';
 import { GlobalChatClient } from '../network/GlobalChatClient';
 import { NetworkClient } from '../network/NetworkClient';
 import { applyPredictedHorizontalMovement, needsReconciliation } from '../network/PredictedMovement';
@@ -104,8 +113,12 @@ type QueueRequest =
   | { kind: 'custom-create'; partyCode: string; arenaPresetId: string; arenaName: string; botSkill?: CustomCreateRequest['botSkill'] }
   | { kind: 'custom-join'; partyCode: string };
 
-export function resolveKeyboardSpellForClass(characterClass: CharacterClass, key: string): SpellId | null {
-  return spellIdFromClassSlot(characterClass, key);
+export function resolveKeyboardSpellForClass(
+  characterClass: CharacterClass,
+  key: string | CombatKeyInput,
+  bindings: CombatKeyBindings = DEFAULT_COMBAT_KEY_BINDINGS
+): SpellId | null {
+  return resolveCombatSpellForClass(characterClass, key, bindings);
 }
 
 export function normalizeDamageAmount(payload: { amount?: unknown; damage?: unknown }): number | null {
@@ -155,6 +168,20 @@ export function resolveDevHotkeyAction(key: string, sceneMode: SceneMode): DevHo
   return null;
 }
 
+export interface QualitySettingsAudioProps {
+  audioSettings: AudioSettings;
+  onAudioSettingsChange: (settings: AudioSettings) => void;
+}
+
+export function createQualitySettingsAudioProps(
+  audio: Pick<AudioManager, 'getSettings' | 'updateSettings'>
+): QualitySettingsAudioProps {
+  return {
+    audioSettings: audio.getSettings(),
+    onAudioSettingsChange: (settings) => audio.updateSettings(settings)
+  };
+}
+
 export class GameApp {
   private shell: HTMLDivElement;
   private renderer: THREE.WebGLRenderer;
@@ -199,6 +226,7 @@ export class GameApp {
   private playerSnapshots = new Map<string, PlayerSnapshot>();
   private projectileSnapshots: ProjectileSnapshot[] = [];
   private keys = new Set<string>();
+  private combatKeyBindings: CombatKeyBindings = loadCombatKeyBindings();
   private jumpQueued = false;
   private lastJumpActionAt = 0;
   private dashQueued = false;
@@ -264,6 +292,7 @@ export class GameApp {
 
     this.touchControls = new TouchControls(this.shell);
     this.ui = new DebugOverlay(this.root);
+    this.ui.setCombatKeyBindings(this.combatKeyBindings);
     this.calibrationUi = new SplatCalibrationOverlay(this.root);
     this.vfxEditorUi = new VfxEditorOverlay(this.root);
     this.customMatchUi = new CustomMatchOverlay(this.root);
@@ -581,7 +610,7 @@ export class GameApp {
 
     if (this.sceneMode !== 'MATCH') return;
 
-    const spell = resolveKeyboardSpellForClass(this.getLocalCharacterClass(), event.key);
+    const spell = resolveKeyboardSpellForClass(this.getLocalCharacterClass(), event, this.combatKeyBindings);
     if (spell) {
       event.preventDefault();
       this.cast(spell);
@@ -1121,7 +1150,19 @@ export class GameApp {
 
   private openQualityModal(): void {
     const currentTier: GraphicsTier = (localStorage.getItem('mc_graphics_tier') as GraphicsTier | null) ?? 'auto';
-    this.qualityModal = new QualitySettingsModal(this.root, currentTier);
+    const audioProps = createQualitySettingsAudioProps(this.audio);
+    this.qualityModal?.dispose();
+    this.qualityModal = new QualitySettingsModal(
+      this.root,
+      currentTier,
+      audioProps.audioSettings,
+      audioProps.onAudioSettingsChange,
+      this.combatKeyBindings,
+      (bindings) => {
+        this.combatKeyBindings = saveCombatKeyBindings(bindings);
+        this.ui.setCombatKeyBindings(this.combatKeyBindings);
+      }
+    );
   }
 
   private syncControlState(): void {
@@ -2547,7 +2588,7 @@ export class GameApp {
 
   private startLobbyMusic(): void {
     this.audio.playMusic('music.lobby');
-    this.audio.playAmbience('ambience.lobby');
+    this.audio.stopAmbience();
   }
 
   private stopLobbyMusic(): void {
