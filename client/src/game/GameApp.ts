@@ -26,6 +26,7 @@ import {
 } from '../../../shared/splatMapPool';
 import { FirstPersonCamera, clampPitch } from '../camera/FirstPersonCamera';
 import { AudioManager } from '../audio/AudioManager';
+import { DevAccessClient, getDevAccessAuthorizationHeaders, promptForDevAccessPassword } from '../dev/DevAccessClient';
 import {
   audioCuesForMatchResult,
   audioCuesForNetEvent
@@ -145,6 +146,15 @@ export function sceneSupportsLocalDash(sceneMode: SceneMode): boolean {
   return sceneMode === 'MATCH' || sceneMode === 'LOBBY' || sceneMode === 'QUEUE' || sceneMode === 'VFX_EDITOR';
 }
 
+export type DevHotkeyAction = 'enter-calibration' | 'exit-calibration' | 'enter-vfx-editor';
+
+export function resolveDevHotkeyAction(key: string, sceneMode: SceneMode): DevHotkeyAction | null {
+  if (key === 'f8' && sceneMode === 'CALIBRATION') return 'exit-calibration';
+  if (key === 'f8' && sceneMode === 'LOBBY') return 'enter-calibration';
+  if (key === 'f9' && sceneMode === 'LOBBY') return 'enter-vfx-editor';
+  return null;
+}
+
 export class GameApp {
   private shell: HTMLDivElement;
   private renderer: THREE.WebGLRenderer;
@@ -168,6 +178,7 @@ export class GameApp {
   private voice = new VoiceCommandManager();
   private chatClient: GlobalChatClient;
   private chatOverlay: GlobalChatOverlay;
+  private devAccess: DevAccessClient;
   private network: NetworkClient;
   private lobby: LobbyScene | null = null;
   private arenaRuntime: ArenaRuntime | null = null;
@@ -261,6 +272,10 @@ export class GameApp {
     this.chatOverlay = new GlobalChatOverlay(this.root);
     this.mobileStartEl = this.createMobileStartOverlay();
     this.createPortraitBlocker();
+    this.devAccess = new DevAccessClient({
+      resolveBaseUrl: resolveDevApiBaseUrl,
+      requestPassword: () => promptForDevAccessPassword(this.root)
+    });
     this.network = new NetworkClient(resolveServerUrl());
     this.chatClient = new GlobalChatClient(resolveServerUrl());
     this.voice.setCharacterClass(this.selectedCharacterClass);
@@ -287,7 +302,7 @@ export class GameApp {
     void this.preloadCharacterModels();
     void this.connectGlobalChat();
     if (new URLSearchParams(window.location.search).get('calibrateSplat') === '1') {
-      void this.enterCalibration();
+      void this.enterProtectedCalibration();
     } else {
       this.promptInitialQualityIfNeeded();
     }
@@ -498,16 +513,12 @@ export class GameApp {
     }
 
     if (!down || event.repeat) return;
-    if (key === 'f8' && (this.sceneMode === 'LOBBY' || this.sceneMode === 'CALIBRATION')) {
+    const devHotkeyAction = resolveDevHotkeyAction(key, this.sceneMode);
+    if (devHotkeyAction) {
       event.preventDefault();
-      if (this.sceneMode === 'CALIBRATION') void this.returnToLobby();
-      else void this.enterCalibration();
-      return;
-    }
-
-    if (key === 'f9' && this.sceneMode === 'LOBBY') {
-      event.preventDefault();
-      void this.enterVfxEditor();
+      if (devHotkeyAction === 'exit-calibration') void this.returnToLobby();
+      else if (devHotkeyAction === 'enter-calibration') void this.enterProtectedCalibration();
+      else void this.enterProtectedVfxEditor();
       return;
     }
 
@@ -1373,6 +1384,26 @@ export class GameApp {
     this.calibrationUi.show(preset, settings, this.calibrationBasePreset ?? preset);
     this.calibrationUi.setSaveInfo(loadLatestCompatibleHistoryEntry(preset));
     this.ui.showToast('Splat calibration mode');
+  }
+
+  private async enterProtectedCalibration(): Promise<void> {
+    if (await this.ensureDevAccess()) {
+      await this.enterCalibration();
+    }
+  }
+
+  private async enterProtectedVfxEditor(): Promise<void> {
+    if (await this.ensureDevAccess()) {
+      await this.enterVfxEditor();
+    }
+  }
+
+  private async ensureDevAccess(): Promise<boolean> {
+    const result = await this.devAccess.ensureUnlocked();
+    if (result.ok) return true;
+    this.audio.play('ui.denied');
+    this.ui.showToast(result.error);
+    return false;
   }
 
   private async enterVfxEditor(): Promise<void> {
@@ -2415,7 +2446,7 @@ export class GameApp {
       const apiUrl = `${resolveDevApiBaseUrl()}/api/dev/vfx-map/publish`;
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getDevAccessAuthorizationHeaders({ 'content-type': 'application/json' }),
         body: JSON.stringify(config)
       });
       if (!response.ok) {

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   getSplatCollisionDevStatus,
+  isDevPostRequestAuthorized,
   isLocalDevSplatCollisionRequestAllowed,
   normalizeSplatCollisionDevRequest,
   persistArenaPresetToProject,
@@ -62,6 +63,19 @@ describe('splat collision dev api helpers', () => {
       enabled: false,
       localOnly: true,
       production: true
+    });
+  });
+
+  it('requires an unlocked dev access token for mutating local dev requests', () => {
+    const env = {
+      NODE_ENV: 'development',
+      DEV_ACCESS_PASSWORD_SALT: '00112233445566778899aabbccddeeff',
+      DEV_ACCESS_PASSWORD_KEY: '00'.repeat(32)
+    };
+
+    expect(isDevPostRequestAuthorized(env, undefined, '127.0.0.1:3001', '::1')).toMatchObject({
+      ok: false,
+      error: 'Dev access token required.'
     });
   });
 
