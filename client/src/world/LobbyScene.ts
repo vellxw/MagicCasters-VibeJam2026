@@ -80,6 +80,7 @@ export class LobbyScene {
   async loadVfx(runtime: VfxRuntime, presetId: string): Promise<string[]> {
     this.vfxRuntime = runtime;
     this.stopVfx();
+    this.clearPortals();
     const config = await loadMapVfxConfig(presetId);
     const ids: string[] = [];
     if (!config) return ids;
@@ -87,6 +88,7 @@ export class LobbyScene {
       const id = this.playVfxEntry(entry);
       if (id) ids.push(id);
     }
+    this.buildPortalsFromVfx(config);
     return ids;
   }
 
@@ -200,6 +202,7 @@ export class LobbyScene {
 
   dispose(): void {
     this.stopVfx();
+    this.clearPortals();
     this.vfxRuntime = null;
     this.splatLayer?.dispose();
     this.splatLayer = null;
@@ -214,8 +217,20 @@ export class LobbyScene {
     });
   }
 
-  buildPortalsFromVfx(config: MapVfxConfig): void {
+  clearPortals(): void {
+    for (const portal of this.portals) {
+      if (portal.mesh) {
+        this.group.remove(portal.mesh);
+        portal.mesh.geometry.dispose();
+        const mat = portal.mesh.material as THREE.Material;
+        mat?.dispose?.();
+      }
+    }
     this.portals.length = 0;
+  }
+
+  buildPortalsFromVfx(config: MapVfxConfig): void {
+    this.clearPortals();
     const portalDefs: Array<{ mode: MatchMode; label: string; color: number; arenaId?: ArenaId; badge?: string }> = [
       { mode: '1v1', label: '1v1 Duel', color: 0xff6b35, arenaId: undefined },
       { mode: '2v2', label: '2v2 Team Duel', color: 0x7dd3fc, arenaId: undefined },
