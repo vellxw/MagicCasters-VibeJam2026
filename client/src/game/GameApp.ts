@@ -104,8 +104,9 @@ export class GameApp {
   private lobby: LobbyScene | null = null;
   private arenaRuntime: ArenaRuntime | null = null;
   private calibrationController: LocalPlayerController | null = null;
-  private referenceCharacter: LocalPlayerController | null = null;
+  private referenceCharacter: PlayerController | null = null;
   private referenceCharacterSnapshot: PlayerSnapshot | null = null;
+  private referenceCharacterClass: CharacterClass = 'arcanist';
   private splatCatalog: SplatMapCatalog | null = null;
   private calibrationBasePreset: SplatArenaPreset | null = null;
   private calibrationPreset: SplatArenaPreset | null = null;
@@ -370,6 +371,12 @@ export class GameApp {
     if (key === 'f9' && this.sceneMode === 'LOBBY') {
       event.preventDefault();
       void this.enterVfxEditor();
+      return;
+    }
+
+    if (key === 'r' && this.sceneMode === 'CALIBRATION') {
+      event.preventDefault();
+      this.toggleReferenceCharacterClass();
       return;
     }
 
@@ -1004,9 +1011,8 @@ export class GameApp {
     // Reference character for scale visualization
     const refSpawn = settings.spawnPoints[1] ?? settings.spawnPoints[0];
     this.referenceCharacterSnapshot = makeCalibrationSnapshot('Reference', refSpawn, settings.floorY);
-    this.referenceCharacter = new LocalPlayerController(this.scene, false, 'B');
-    this.referenceCharacter.setName('Reference');
-    this.referenceCharacter.update(this.referenceCharacterSnapshot, 1, true);
+    this.referenceCharacterClass = 'arcanist';
+    this.spawnReferenceCharacter();
 
     this.calibrationGuide = createCalibrationGuide(settings);
     this.scene.add(this.calibrationGuide);
@@ -1464,6 +1470,53 @@ export class GameApp {
     ref.anim = length > 0 ? 'run' : 'idle';
     ref.rotY = mz < 0 ? Math.PI : mz > 0 ? 0 : mx < 0 ? -Math.PI / 2 : mx > 0 ? Math.PI / 2 : ref.rotY;
     this.referenceCharacter.update(ref, dt, true);
+  }
+
+  private spawnReferenceCharacter(): void {
+    if (this.referenceCharacter) {
+      this.referenceCharacter.dispose(this.scene);
+    }
+    const gltf = this.gltfCache.get(this.referenceCharacterClass);
+    if (gltf) {
+      try {
+        this.referenceCharacter = AnimatedPlayerController.create(this.scene, false, gltf, this.referenceCharacterClass, 'B');
+      } catch (error) {
+        console.warn(`[GameApp] Failed to create animated reference character, using fallback`, error);
+        this.referenceCharacter = new RemotePlayerController(this.scene, false, 'B');
+      }
+    } else {
+      this.referenceCharacter = new RemotePlayerController(this.scene, false, 'B');
+      void this.loadCharacterGltfCached(this.referenceCharacterClass).then((loadedGltf) => {
+        if (loadedGltf && this.sceneMode === 'CALIBRATION' && this.referenceCharacterClass === (this.referenceCharacterClass)) {
+          this.referenceCharacter?.dispose(this.scene);
+          this.referenceCharacter = AnimatedPlayerController.create(this.scene, false, loadedGltf, this.referenceCharacterClass, 'B');
+          this.referenceCharacter.setName('Reference');
+          if (this.referenceCharacterSnapshot) {
+            this.referenceCharacter.update(this.referenceCharacterSnapshot, 1, true);
+          }
+        }
+      });
+    }
+    this.referenceCharacter.setName('Reference');
+    if (this.referenceCharacterSnapshot) {
+      this.referenceCharacter.update(this.referenceCharacterSnapshot, 1, true);
+    }
+  }
+
+  private toggleReferenceCharacterClass(): void {
+    if (this.sceneMode !== 'CALIBRATION') return;
+    this.referenceCharacterClass = this.referenceCharacterClass === 'arcanist' ? 'divine' : 'arcanist';
+    const pos = this.referenceCharacterSnapshot
+      ? { x: this.referenceCharacterSnapshot.x, y: this.referenceCharacterSnapshot.y, z: this.referenceCharacterSnapshot.z, rotY: this.referenceCharacterSnapshot.rotY }
+      : undefined;
+    this.spawnReferenceCharacter();
+    if (pos && this.referenceCharacterSnapshot) {
+      this.referenceCharacterSnapshot.x = pos.x;
+      this.referenceCharacterSnapshot.y = pos.y;
+      this.referenceCharacterSnapshot.z = pos.z;
+      this.referenceCharacterSnapshot.rotY = pos.rotY;
+    }
+    this.ui.showToast(`Reference: ${this.referenceCharacterClass === 'arcanist' ? 'Arcanist' : 'Divine'}`);
   }
 
   private applyCalibrationSettings(settings: SplatCalibrationSettings, options: { autosave?: boolean } = {}): void {
