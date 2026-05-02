@@ -2739,38 +2739,38 @@ export class GameApp {
 
 function defaultSplatCalibrationPreset(): SplatArenaPreset {
   return {
-    presetId: 'businesspark-belp-1og-ost',
-    calibrationGroupId: 'businesspark-belp-1og-ost',
+    presetId: 'grand-ornate-marble-hallway-high',
+    calibrationGroupId: 'grand-ornate-marble-hallway',
     quality: 'high',
     arenaId: SPLAT_TEST_ARENA_ID,
-    displayName: 'Businesspark Belp 1OG Ost',
+    displayName: 'Grand Ornate Marble Hallway (HIGH)',
     type: 'splat',
-    splatUrl: '/splats/businesspark-belp-1og-ost.sog',
-    splatFileSizeBytes: 14381152,
-    enabledModes: ['1v1'],
-    collisionMeshUrl: '/collision/businesspark-belp-1og-ost.collision.glb',
-    voxelCollisionUrl: '/collision/businesspark-belp-1og-ost.voxel.json',
+    splatUrl: '/splats/grand-ornate-marble-hallway-high.sog',
+    splatFileSizeBytes: 24358004,
+    enabledModes: ['1v1', '2v2'],
+    collisionMeshUrl: null,
+    voxelCollisionUrl: null,
     spawnPoints: [
-      { x: -3.8, y: 0, z: 0.9, rotY: -1.4 },
-      { x: 6.1, y: 0, z: -0.9, rotY: 1.8 }
+      { x: 0, y: 0, z: 9, rotY: 0 },
+      { x: 0, y: 0, z: -5, rotY: 3.1 }
     ],
     spawnPointsByMode: {
       '1v1': [
-        { x: -3.8, y: 0, z: 0.9, rotY: -1.4 },
-        { x: 6.1, y: 0, z: -0.9, rotY: 1.8 }
+        { x: 0, y: 0, z: 9, rotY: 0 },
+        { x: 0, y: 0, z: -5, rotY: 3.1 }
       ],
       '2v2': [
-        { x: -3.8, y: 0, z: 0.9, rotY: -1.4 },
-        { x: 6.1, y: 0, z: -0.9, rotY: 1.8 },
-        { x: -3.8, y: 0, z: 2.2, rotY: -1.4 },
-        { x: 6.1, y: 0, z: -2.2, rotY: 1.8 }
+        { x: -1, y: 0, z: 9, rotY: 0 },
+        { x: 1, y: 0, z: 9, rotY: 0 },
+        { x: -1, y: 0, z: -5, rotY: -3.1 },
+        { x: 1, y: 0, z: -5, rotY: -3.1 }
       ]
     },
-    bounds: { minX: -8, maxX: 11.1, minZ: -12, maxZ: 9.8 },
+    bounds: { minX: -3.5, maxX: 3.5, minZ: -6.4, maxZ: 10.3 },
     scale: 1,
     rotation: { x: 180, y: 180, z: 0 },
     offset: { x: 0, y: 0, z: 0 },
-    floorY: 0,
+    floorY: -2,
     collisionErasers: [],
     collisionWalls: []
   };

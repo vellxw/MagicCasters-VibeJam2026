@@ -11,3 +11,5 @@ logs/
 _legacy_snapshot/
 .playwright-mcp/
 mobile-landscape-smoke.png
+client/public/splats/*.tmp
+client/public/splats/.*.sog.*.tmp

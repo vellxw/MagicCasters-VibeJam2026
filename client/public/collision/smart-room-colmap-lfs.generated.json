@@ -1,8 +1,0 @@
-{
-  "generatedBy": "magic-casters-dev-api",
-  "arenaId": "smart-room-colmap-lfs",
-  "splatFilename": "Smart_room_colmap_LFS.sog",
-  "collisionMeshUrl": "/collision/smart-room-colmap-lfs.collision.glb",
-  "voxelCollisionUrl": "/collision/smart-room-colmap-lfs.voxel.json",
-  "generatedAt": "2026-04-27T21:17:38.355Z"
-}
