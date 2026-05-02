@@ -91,6 +91,11 @@ describe('AudioEventRouter', () => {
       { id: 'music.match.aether', mode: 'music' },
       { id: 'ambience.match', mode: 'ambience' }
     ]);
+    expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'grand-ornate-marble-hallway-low' })).toEqual([
+      { id: 'announcer.duel_begins' },
+      { id: 'music.match.aether', mode: 'music' },
+      { id: 'ambience.match', mode: 'ambience' }
+    ]);
     expect(audioCuesForPhase('PLAYING', { arenaPresetId: 'unknown-arena-low' })).toEqual([
       { id: 'announcer.duel_begins' },
       { id: 'music.match', mode: 'music' },

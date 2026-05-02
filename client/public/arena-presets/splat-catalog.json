@@ -128,6 +128,69 @@
       ]
     },
     {
+      "presetId": "grand-ornate-marble-hallway",
+      "calibrationGroupId": "grand-ornate-marble-hallway",
+      "displayName": "Grand Ornate Marble Hallway",
+      "presetUrl": "/arena-presets/grand-ornate-marble-hallway-high.json",
+      "splatUrl": "/splats/grand-ornate-marble-hallway-high.sog",
+      "splatFileSizeBytes": 24358004,
+      "enabledModes": [],
+      "defaultQuality": "high",
+      "qualities": {
+        "low": {
+          "presetId": "grand-ornate-marble-hallway-low",
+          "presetUrl": "/arena-presets/grand-ornate-marble-hallway-low.json",
+          "splatUrl": "/splats/grand-ornate-marble-hallway-low.sog",
+          "splatFileSizeBytes": 6785341
+        },
+        "mid": {
+          "presetId": "grand-ornate-marble-hallway-mid",
+          "presetUrl": "/arena-presets/grand-ornate-marble-hallway-mid.json",
+          "splatUrl": "/splats/grand-ornate-marble-hallway-mid.sog",
+          "splatFileSizeBytes": 13557704
+        },
+        "high": {
+          "presetId": "grand-ornate-marble-hallway-high",
+          "presetUrl": "/arena-presets/grand-ornate-marble-hallway-high.json",
+          "splatUrl": "/splats/grand-ornate-marble-hallway-high.sog",
+          "splatFileSizeBytes": 24358004
+        }
+      }
+    },
+    {
+      "presetId": "grand-ornate-marble-hallway-high",
+      "displayName": "Grand Ornate Marble Hallway (HIGH)",
+      "presetUrl": "/arena-presets/grand-ornate-marble-hallway-high.json",
+      "splatUrl": "/splats/grand-ornate-marble-hallway-high.sog",
+      "splatFileSizeBytes": 24358004,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "grand-ornate-marble-hallway-low",
+      "displayName": "Grand Ornate Marble Hallway (LOW)",
+      "presetUrl": "/arena-presets/grand-ornate-marble-hallway-low.json",
+      "splatUrl": "/splats/grand-ornate-marble-hallway-low.sog",
+      "splatFileSizeBytes": 6785341,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
+      "presetId": "grand-ornate-marble-hallway-mid",
+      "displayName": "Grand Ornate Marble Hallway (MID)",
+      "presetUrl": "/arena-presets/grand-ornate-marble-hallway-mid.json",
+      "splatUrl": "/splats/grand-ornate-marble-hallway-mid.sog",
+      "splatFileSizeBytes": 13557704,
+      "enabledModes": [
+        "1v1",
+        "2v2"
+      ]
+    },
+    {
       "presetId": "ruined-palace-of-purple-crystals",
       "calibrationGroupId": "ruined-palace-of-purple-crystals",
       "displayName": "Ruined Palace of Purple Crystals",

@@ -124,7 +124,8 @@ function resolveMatchMusic(presetId: string | null | undefined): AudioId {
   ];
   const aetherGroups = [
     'ruined-palace-of-purple-crystals',
-    'the-arcane-ritual-library'
+    'the-arcane-ritual-library',
+    'grand-ornate-marble-hallway'
   ];
   if (arcaneGroups.includes(groupId)) return 'music.match.arcane';
   if (aetherGroups.includes(groupId)) return 'music.match.aether';

@@ -344,4 +344,18 @@ describe('server published splat map pool', () => {
       expect(selected?.collision.spawnPoints).toHaveLength(mode === '2v2' ? 4 : 2);
     }
   });
+
+  it('loads the real Grand Ornate Marble Hallway public preset for every enabled match mode', () => {
+    const repoRoot = join(process.cwd(), '..');
+
+    for (const mode of ['1v1', '2v2'] as const) {
+      const selected = selectPublishedSplatArenaByPresetId('grand-ornate-marble-hallway', mode, repoRoot);
+
+      expect(selected, `Grand Ornate Marble Hallway should load for ${mode}`).not.toBeNull();
+      expect(selected?.presetId).toBe('grand-ornate-marble-hallway-high');
+      expect(selected?.presetUrl).toBe('/arena-presets/grand-ornate-marble-hallway-high.json');
+      expect(selected?.collision.voxelCollisionUrl).toBeNull();
+      expect(selected?.collision.spawnPoints).toHaveLength(mode === '2v2' ? 4 : 2);
+    }
+  });
 });

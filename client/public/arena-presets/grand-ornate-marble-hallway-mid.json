@@ -1,0 +1,203 @@
+{
+  "presetId": "grand-ornate-marble-hallway-mid",
+  "calibrationGroupId": "grand-ornate-marble-hallway",
+  "quality": "mid",
+  "arenaId": "splat-test",
+  "displayName": "Grand Ornate Marble Hallway (MID)",
+  "type": "splat",
+  "splatUrl": "/splats/grand-ornate-marble-hallway-mid.sog",
+  "splatFileSizeBytes": 13557704,
+  "enabledModes": [
+    "1v1",
+    "2v2"
+  ],
+  "collisionMeshUrl": null,
+  "voxelCollisionUrl": null,
+  "spawnPoints": [
+    {
+      "x": 0,
+      "y": 0,
+      "z": 9,
+      "rotY": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -5,
+      "rotY": 3.1
+    }
+  ],
+  "spawnPointsByMode": {
+    "1v1": [
+      {
+        "x": 0,
+        "y": 0,
+        "z": 9,
+        "rotY": 0
+      },
+      {
+        "x": 0,
+        "y": 0,
+        "z": -5,
+        "rotY": 3.1
+      }
+    ],
+    "2v2": [
+      {
+        "x": -1,
+        "y": 0,
+        "z": 9,
+        "rotY": 0
+      },
+      {
+        "x": 1,
+        "y": 0,
+        "z": 9,
+        "rotY": 0
+      },
+      {
+        "x": -1,
+        "y": 0,
+        "z": -5,
+        "rotY": -3.1
+      },
+      {
+        "x": 1,
+        "y": 0,
+        "z": -5,
+        "rotY": -3.1
+      }
+    ]
+  },
+  "bounds": {
+    "minX": -3.5,
+    "maxX": 3.5,
+    "minZ": -6.4,
+    "maxZ": 10.3
+  },
+  "scale": 1,
+  "rotation": {
+    "x": 180,
+    "y": 180,
+    "z": 0
+  },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "floorY": -2,
+  "collisionErasers": [],
+  "collisionWalls": [
+    {
+      "id": "wall-moouep3h",
+      "x": 3.5,
+      "z": -0.02545472044429438,
+      "width": 40,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 17.269703673205132,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moouh6ux",
+      "x": -3.5,
+      "z": 0.540119622117333,
+      "width": 40,
+      "depth": 0.35,
+      "height": 12,
+      "rotY": 14.119703673205125,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mooumpip",
+      "x": -0.021904724083654334,
+      "z": -6.4,
+      "width": 12,
+      "depth": 0.35,
+      "height": 6,
+      "rotY": -6.274796326794894,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-mooumzh5",
+      "x": 0.04885628615233969,
+      "z": 10.3,
+      "width": 12,
+      "depth": 0.35,
+      "height": 6,
+      "rotY": -3.1422963267948916,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moounnmo",
+      "x": -2.8178335027910593,
+      "z": -2.7276182246363057,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 7.851203673205111,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moount2n",
+      "x": -2.9219979733383146,
+      "z": 3.2365507826741755,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 7.9457036732051165,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moounypz",
+      "x": -2.9000214125807156,
+      "z": 9.261706691785268,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 7.9282036732051075,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moouo7kg",
+      "x": 2.6125739585315024,
+      "z": -3.135856935482692,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 4.690703673205104,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moouodha",
+      "x": 2.8495152524826692,
+      "z": 2.7857912171399253,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 11.018703673205112,
+      "climbable": false,
+      "ramp": false
+    },
+    {
+      "id": "wall-moouohvy",
+      "x": 2.7001995768555687,
+      "z": 9.275457336963319,
+      "width": 2,
+      "depth": 0.35,
+      "height": 2,
+      "rotY": 10.948703673205117,
+      "climbable": false,
+      "ramp": false
+    }
+  ]
+}
