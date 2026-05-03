@@ -48,17 +48,23 @@ async function uploadFile(objectPath, file) {
     cacheControl,
     '--remote'
   ];
-  await run(process.platform === 'win32' ? 'npx.cmd' : 'npx', args);
+  await run('npx', args);
 }
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: 'inherit' });
+    const child = process.platform === 'win32'
+      ? spawn('cmd.exe', ['/d', '/c', [command, ...args].map(quoteCmdArg).join(' ')], { stdio: 'inherit' })
+      : spawn(command, args, { stdio: 'inherit' });
     child.on('error', reject);
     child.on('exit', (code) => {
       code === 0 ? resolve() : reject(new Error(`${command} ${args.join(' ')} exited with ${code}`));
     });
   });
+}
+
+function quoteCmdArg(value) {
+  return `"${String(value).replace(/"/g, '""')}"`;
 }
 
 function contentType(file) {
