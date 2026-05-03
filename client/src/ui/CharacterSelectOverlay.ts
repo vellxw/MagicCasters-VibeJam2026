@@ -23,10 +23,13 @@ interface CharacterProfile {
 
 type AuthEndpoint = 'login' | 'register';
 
-interface AuthSessionResponse {
+export interface CharacterSelectSession {
   mmr: number;
-  token?: string;
   username: string;
+}
+
+interface AuthSessionResponse extends CharacterSelectSession {
+  token?: string;
 }
 
 interface AuthErrorResponse {
@@ -45,14 +48,48 @@ function isLocalDevHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
 }
 
-function resolveAuthBaseUrl(): string {
+function resolveHttpBaseUrl(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === 'wss:') {
+      url.protocol = 'https:';
+    } else if (url.protocol === 'ws:') {
+      url.protocol = 'http:';
+    } else if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+    url.pathname = url.pathname.replace(/\/+$/, '');
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
+export function resolveAuthBaseUrl(): string {
   if (typeof window === 'undefined') {
     return 'http://localhost:3001';
+  }
+
+  const configuredAuthUrl = resolveHttpBaseUrl(import.meta.env.VITE_AUTH_API_URL as string | undefined);
+  if (configuredAuthUrl) {
+    return configuredAuthUrl;
   }
 
   const { hostname, origin, port, protocol } = window.location;
   if ((port === '5173' || port === '5174') && isLocalDevHost(hostname)) {
     return `${protocol}//${hostname}:3001`;
+  }
+
+  const realtimeServerUrl = resolveHttpBaseUrl(import.meta.env.VITE_COLYSEUS_URL as string | undefined);
+  if (realtimeServerUrl) {
+    return realtimeServerUrl;
   }
 
   return origin;
@@ -147,8 +184,12 @@ export class CharacterSelectOverlay {
   private classTitle: HTMLHeadingElement;
   private modeLabel: HTMLSpanElement;
   private arenaLabel: HTMLElement;
+  private playerAvatar: HTMLElement;
+  private playerName: HTMLElement;
   private profileClass: HTMLElement;
   private confirmClass: HTMLElement;
+  private anonymousName: string;
+  private activeSession: CharacterSelectSession | null = null;
 
   private selectedClass: CharacterClass = 'arcanist';
   private selectedSpell: SpellId | null = null;
@@ -158,9 +199,11 @@ export class CharacterSelectOverlay {
   onBack?: () => void;
   onClassSelect?: (characterClass: CharacterClass) => void;
   onConfirm?: (characterClass: CharacterClass) => void;
+  onSessionChange?: (session: CharacterSelectSession | null) => void;
   onSpellHover?: (spellId: SpellId | null) => void;
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, initialPlayerName = 'Mage 000') {
+    this.anonymousName = initialPlayerName;
     this.element = document.createElement('div');
     this.element.className = 'character-select';
     this.element.setAttribute('aria-hidden', 'true');
@@ -251,9 +294,9 @@ export class CharacterSelectOverlay {
         </main>
         <aside class="character-select__side character-select__side--loadout">
           <div class="character-select__card character-select__profile">
-            <div class="character-select__player-avatar" aria-hidden="true">K</div>
+            <div class="character-select__player-avatar" aria-hidden="true"></div>
             <div>
-              <strong>Kairos</strong>
+              <strong class="character-select__player-name"></strong>
               <span class="character-select__profile-class"></span>
             </div>
             <div class="character-select__context">
@@ -284,22 +327,22 @@ export class CharacterSelectOverlay {
         <div class="character-select__modal-backdrop" data-close-modal></div>
         <div class="character-select__modal-content">
           <button type="button" class="character-select__modal-close" data-close-modal aria-label="Close">&times;</button>
-          <h2 class="character-select__modal-title">Perfil del Duelista</h2>
+          <h2 class="character-select__modal-title">Duelist Profile</h2>
 
           <!-- Guest State -->
           <div id="auth-guest-state">
             <p class="character-select__modal-desc">
-              Crea una cuenta para guardar tus estadísticas, rango y progreso.
-              <br/><strong>¡Es totalmente opcional!</strong>
+              Create an account to save your stats, rank, and progress.
+              <br/><strong>Totally optional.</strong>
             </p>
             <div class="character-select__auth-error" id="auth-error"></div>
             <div class="character-select__auth-form">
-              <input type="text" id="auth-username" class="character-select__input" placeholder="Nombre de usuario" />
-              <input type="password" id="auth-password" class="character-select__input" placeholder="Contraseña" />
+              <input type="text" id="auth-username" class="character-select__input" placeholder="Username" autocomplete="username" />
+              <input type="password" id="auth-password" class="character-select__input" placeholder="Password" autocomplete="current-password" />
             </div>
             <div class="character-select__modal-actions">
-              <button type="button" class="character-select__modal-btn character-select__btn--primary" id="btn-login">Iniciar Sesión</button>
-              <button type="button" class="character-select__modal-btn character-select__btn--secondary" id="btn-register">Crear Cuenta</button>
+              <button type="button" class="character-select__modal-btn character-select__btn--primary" id="btn-login">Log In</button>
+              <button type="button" class="character-select__modal-btn character-select__btn--secondary" id="btn-register">Create Account</button>
             </div>
           </div>
 
@@ -310,7 +353,7 @@ export class CharacterSelectOverlay {
               <span style="color: rgba(224,233,241,0.7)">MMR: <strong id="logged-in-mmr"></strong></span>
             </div>
             <div class="character-select__modal-actions">
-              <button type="button" class="character-select__modal-btn character-select__btn--secondary" id="btn-logout">Cerrar Sesión</button>
+              <button type="button" class="character-select__modal-btn character-select__btn--secondary" id="btn-logout">Log Out</button>
             </div>
           </div>
 
@@ -336,8 +379,11 @@ export class CharacterSelectOverlay {
     this.classTitle = this.element.querySelector('.character-select__stage-title')!;
     this.modeLabel = this.element.querySelector('.character-select__mode')!;
     this.arenaLabel = this.element.querySelector('.character-select__arena')!;
+    this.playerAvatar = this.element.querySelector('.character-select__player-avatar')!;
+    this.playerName = this.element.querySelector('.character-select__player-name')!;
     this.profileClass = this.element.querySelector('.character-select__profile-class')!;
     this.confirmClass = this.element.querySelector('.character-select__confirm small')!;
+    this.updatePlayerDisplay(this.anonymousName);
 
     this.backButton.addEventListener('click', () => this.onBack?.());
     this.previousClassButton.addEventListener('click', () => this.selectClass(this.getAdjacentClass()));
@@ -402,27 +448,35 @@ export class CharacterSelectOverlay {
       storage.setItem('vibejam_mmr', String(session.mmr));
     };
 
-    const showGuestState = (message = '') => {
+    const showGuestState = (message = '', notify = false) => {
+      this.setPlayerProfile(null);
       guestState.style.display = 'block';
       loggedInState.style.display = 'none';
       usernameInput.value = '';
       passwordInput.value = '';
       errorDisplay.textContent = message;
+      if (notify) {
+        this.onSessionChange?.(null);
+      }
     };
 
-    const showLoggedInState = (session: AuthSessionResponse) => {
+    const showLoggedInState = (session: AuthSessionResponse, notify = true) => {
+      this.setPlayerProfile(session);
       guestState.style.display = 'none';
       loggedInState.style.display = 'block';
-      displayUsername.textContent = `Bienvenido, ${session.username}`;
+      displayUsername.textContent = `Welcome, ${session.username}`;
       displayMmr.textContent = String(session.mmr);
       errorDisplay.textContent = '';
+      if (notify) {
+        this.onSessionChange?.(session);
+      }
     };
 
     const setAuthLoading = (loading: boolean) => {
       btnLogin?.toggleAttribute('disabled', loading);
       btnRegister?.toggleAttribute('disabled', loading);
       if (loading) {
-        errorDisplay.textContent = 'Validando sesión...';
+        errorDisplay.textContent = 'Checking session...';
       }
     };
 
@@ -442,14 +496,14 @@ export class CharacterSelectOverlay {
         const session = res.ok ? parseAuthSession(data) : null;
         if (!session) {
           clearStoredSession();
-          showGuestState(parseAuthError(data) ?? 'Sesión expirada');
+          showGuestState(parseAuthError(data) ?? 'Session expired', true);
           return;
         }
 
         storeSession(session);
         showLoggedInState(session);
       } catch {
-        showGuestState('No pudimos validar tu sesión');
+        showGuestState("We couldn't verify your session", true);
       } finally {
         setAuthLoading(false);
       }
@@ -462,7 +516,7 @@ export class CharacterSelectOverlay {
       const username = usernameInput.value.trim();
       const password = passwordInput.value;
       if (!username || !password) {
-        errorDisplay.textContent = 'Completa ambos campos';
+        errorDisplay.textContent = 'Enter both fields';
         return;
       }
 
@@ -476,20 +530,20 @@ export class CharacterSelectOverlay {
         const data: unknown = await res.json();
         const session = res.ok ? parseAuthSession(data) : null;
         if (!res.ok) {
-          errorDisplay.textContent = parseAuthError(data) ?? 'Error de autenticación';
+          errorDisplay.textContent = parseAuthError(data) ?? 'Authentication error';
           return;
         }
 
         if (!session?.token) {
-          errorDisplay.textContent = 'La respuesta de sesión no fue válida';
+          errorDisplay.textContent = 'The session response was invalid';
           return;
         }
 
         storeSession(session, session.token);
         showLoggedInState(session);
-        showToast(endpoint === 'register' ? 'Cuenta creada' : 'Sesión iniciada');
+        showToast(endpoint === 'register' ? 'Account created' : 'Signed in');
       } catch {
-        errorDisplay.textContent = 'Error de conexión';
+        errorDisplay.textContent = 'Connection error';
       } finally {
         setAuthLoading(false);
       }
@@ -499,7 +553,7 @@ export class CharacterSelectOverlay {
     btnRegister?.addEventListener('click', () => doAuth('register'));
     btnLogout?.addEventListener('click', () => {
       clearStoredSession();
-      showGuestState();
+      showGuestState('', true);
     });
 
     // Toasts for 'Coming soon'
@@ -517,11 +571,24 @@ export class CharacterSelectOverlay {
       }, 3000);
     };
 
-    btnLore?.addEventListener('click', () => showToast('Grimorio: Próximamente'));
-    btnMessages?.addEventListener('click', () => showToast('Mensajes: Próximamente'));
-    btnCustomize?.addEventListener('click', () => showToast('Skins y Cosméticos: Próximamente'));
+    btnLore?.addEventListener('click', () => showToast('Grimoire: Coming soon'));
+    btnMessages?.addEventListener('click', () => showToast('Messages: Coming soon'));
+    btnCustomize?.addEventListener('click', () => showToast('Skins and cosmetics: Coming soon'));
 
     this.selectClass('arcanist');
+  }
+
+  setAnonymousName(name: string): void {
+    const trimmed = name.trim();
+    this.anonymousName = trimmed || 'Mage 000';
+    if (!this.activeSession) {
+      this.updatePlayerDisplay(this.anonymousName);
+    }
+  }
+
+  setPlayerProfile(session: CharacterSelectSession | null): void {
+    this.activeSession = session;
+    this.updatePlayerDisplay(session?.username ?? this.anonymousName);
   }
 
   show(context?: CharacterSelectContext): void {
@@ -553,6 +620,12 @@ export class CharacterSelectOverlay {
       cancelUiFrame(id);
     }
     this.statAnimationIds = [];
+  }
+
+  private updatePlayerDisplay(name: string): void {
+    const displayName = name.trim() || this.anonymousName;
+    this.playerName.textContent = displayName;
+    this.playerAvatar.textContent = displayName.match(/[a-zA-Z0-9]/)?.[0]?.toUpperCase() ?? 'M';
   }
 
   private animateQuote(text: string): void {

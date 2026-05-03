@@ -41,7 +41,7 @@ VITE_COLYSEUS_URL=ws://localhost:3001
 
 - Client: `http://localhost:5173`
 - Server: `ws://localhost:3001`
-- No login/signup; players queue via lobby portals
+- Optional username/password profile auth; anonymous `Mage ###` players can still queue via lobby portals
 - Voice casting uses browser SpeechRecognition (`ignis`, `gelu`, `lux`, `umbra`)
 - Keyboard casting always available (`1`-`4`)
 - Render deployment: build `npm install && npm run build`, start `npm run start`

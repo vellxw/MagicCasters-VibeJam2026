@@ -3606,6 +3606,13 @@ button {
   line-height: 1.1;
 }
 
+.character-select__player-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .character-select__profile-class {
   display: block;
   margin-top: 5px;

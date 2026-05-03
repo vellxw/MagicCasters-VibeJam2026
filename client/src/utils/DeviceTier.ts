@@ -3,9 +3,9 @@ export type DeviceTier = 'low' | 'medium' | 'high';
 let cachedTier: DeviceTier | null = null;
 
 /**
- * Detecta el tier de hardware del dispositivo del usuario.
- * Basado en: hardwareConcurrency, deviceMemory, mobile UA, y capacidades GPU básicas.
- * Cachea el resultado para evitar re-computación.
+ * Detects the user's hardware tier.
+ * Based on hardwareConcurrency, deviceMemory, mobile UA, and basic GPU capabilities.
+ * Caches the result to avoid recomputation.
  */
 export function getDeviceTier(): DeviceTier {
   if (cachedTier) return cachedTier;
@@ -16,7 +16,7 @@ export function getDeviceTier(): DeviceTier {
   const cores = navigator.hardwareConcurrency || 2;
   const memory = (navigator as any).deviceMemory || 4;
 
-  // GPU básica: detectar si es GPU integrada típica de gama baja
+  // Basic GPU check: detect common low-end integrated GPUs.
   const gl = document.createElement('canvas').getContext('webgl');
   let gpuTier = 2; // default medium
   if (gl) {
@@ -27,7 +27,7 @@ export function getDeviceTier(): DeviceTier {
       const rendererStr = String(renderer).toLowerCase();
       const vendorStr = String(vendor).toLowerCase();
 
-      // GPUs integradas de gama baja conocidas
+      // Known low-end integrated GPUs.
       const lowEndGPUs = [
         'mali-g31', 'mali-g51', 'mali-g52', 'mali-g57 mc1', 'mali-g57 mc2',
         'adreno 304', 'adreno 306', 'adreno 308', 'adreno 505', 'adreno 506',
@@ -42,11 +42,11 @@ export function getDeviceTier(): DeviceTier {
         gpuTier = 3;
       }
     }
-    // Si no hay debug info, asumir mobile = potencialmente bajo
+    // If debug info is unavailable, treat mobile as potentially lower tier.
     if (gpuTier === 2 && isMobile) gpuTier = 1;
   }
 
-  // Reglas de tier
+  // Tier rules.
   if (
     gpuTier <= 0 ||
     (isMobile && (memory <= 2 || cores <= 4)) ||

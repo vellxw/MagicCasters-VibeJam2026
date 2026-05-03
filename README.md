@@ -2,7 +2,7 @@
 
 A lightweight AI-generated browser magic duel for VibeJam 2026.
 
-The game uses Three.js for a tiny local 3D lobby plus primitive arena, and Colyseus for authoritative public matchmaking. There is no login, no signup, no loading screen, and no heavy asset pipeline. Players enter a local lobby, choose either the `1v1 Duel` or `2v2 Team Duel` portal, then join the first available `magic_match` room for that mode.
+The game uses Three.js for a tiny local 3D lobby plus primitive arena, and Colyseus for authoritative public matchmaking. Profile accounts are optional: anonymous `Mage ###` names can still play, while registered users keep their username and starter MMR. Players enter a local lobby, choose either the `1v1 Duel` or `2v2 Team Duel` portal, then join the first available `magic_match` room for that mode.
 
 ## Requirements
 
@@ -53,9 +53,10 @@ Voice casting uses browser `SpeechRecognition` / `webkitSpeechRecognition` when 
 PORT=3001
 SERVER_PORT=3001
 VITE_COLYSEUS_URL=ws://localhost:3001
+VITE_AUTH_API_URL=http://localhost:3001
 ```
 
-For local Vite development, the client defaults to `ws://localhost:3001`. In production, when the built client is served by the Colyseus server, the client defaults to the same origin (`wss://your-domain` on HTTPS), so Fly.io does not need `VITE_COLYSEUS_URL`.
+For local Vite development, the client defaults to `ws://localhost:3001` and sends auth requests to `http://localhost:3001`. In production, when the built client is served by the Colyseus server, the client defaults to the same origin (`wss://your-domain` on HTTPS), so Fly.io does not need `VITE_COLYSEUS_URL`. If the frontend is hosted separately on Cloudflare, `VITE_AUTH_API_URL` can point directly to the Node server; otherwise auth automatically derives its HTTP base URL from `VITE_COLYSEUS_URL`.
 
 ## Fly.io Deployment
 
@@ -94,7 +95,7 @@ Build command: npm install && npm run build:cloudflare
 Deploy command: npx wrangler deploy
 ```
 
-The root `wrangler.jsonc` deploys `client/dist` as Workers Static Assets and enables SPA fallback. The Cloudflare build removes optional collision GLB files that exceed the 25 MiB Workers asset limit; source assets remain under `client/public`. Set `VITE_COLYSEUS_URL` to the live Colyseus server, for example `wss://your-game-server.onrender.com`.
+The root `wrangler.jsonc` deploys `client/dist` as Workers Static Assets and enables SPA fallback. The Cloudflare build removes optional collision GLB files that exceed the 25 MiB Workers asset limit; source assets remain under `client/public`. Set `VITE_COLYSEUS_URL` to the live Colyseus server, for example `wss://your-game-server.onrender.com`; auth will use the matching `https://` host unless `VITE_AUTH_API_URL` is set.
 
 For R2 asset hosting, enable R2 in the Cloudflare dashboard, create the `vibejam-assets` bucket, attach a public/custom domain, then run:
 

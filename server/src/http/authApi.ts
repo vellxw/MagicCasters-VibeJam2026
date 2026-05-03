@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
+import { randomBytes } from 'node:crypto';
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { createAuthDatabase, resolveDefaultAuthDbPath, type AuthDatabase } from '../db.js';
@@ -24,6 +25,15 @@ interface TokenPayload extends JwtPayload {
   sub: string;
   username: string;
 }
+
+interface AuthMetadataRow {
+  value: string;
+}
+
+const DEFAULT_PRODUCTION_AUTH_ORIGINS = new Set([
+  'https://playmagiccasters.com',
+  'https://www.playmagiccasters.com'
+]);
 
 const credentialsSchema = z.object({
   username: z
@@ -103,6 +113,10 @@ function isAllowedOrigin(origin: string | undefined, headers: IncomingHttpHeader
     return true;
   }
 
+  if (env.NODE_ENV === 'production' && DEFAULT_PRODUCTION_AUTH_ORIGINS.has(origin)) {
+    return true;
+  }
+
   return env.NODE_ENV !== 'production' && isLocalhost(originUrl.hostname);
 }
 
@@ -122,13 +136,27 @@ function applyCors(req: IncomingMessage, res: ServerResponse, env: EnvLike): boo
   return true;
 }
 
-function getJwtSecret(env: EnvLike): string | null {
+function getOrCreateDatabaseJwtSecret(db: AuthDatabase): string {
+  const existing = db.prepare('SELECT value FROM auth_metadata WHERE key = ?').get('jwt_secret') as
+    | AuthMetadataRow
+    | undefined;
+  if (existing?.value) {
+    return existing.value;
+  }
+
+  const generated = randomBytes(32).toString('hex');
+  db.prepare('INSERT OR IGNORE INTO auth_metadata (key, value) VALUES (?, ?)').run('jwt_secret', generated);
+  const stored = db.prepare('SELECT value FROM auth_metadata WHERE key = ?').get('jwt_secret') as AuthMetadataRow | undefined;
+  return stored?.value ?? generated;
+}
+
+function getJwtSecret(env: EnvLike, db: AuthDatabase): string | null {
   const configuredSecret = env.AUTH_JWT_SECRET?.trim();
   if (configuredSecret) {
     return configuredSecret;
   }
 
-  return env.NODE_ENV === 'production' ? null : 'local-development-auth-secret';
+  return env.NODE_ENV === 'production' ? getOrCreateDatabaseJwtSecret(db) : 'local-development-auth-secret';
 }
 
 function signToken(user: Pick<AuthUser, 'id' | 'username'>, secret: string): string {
@@ -203,14 +231,14 @@ export function createAuthApiHandler(options: AuthApiOptions = {}): AuthHandler 
       return true;
     }
 
-    const secret = getJwtSecret(env);
-    if (!secret) {
+    const database = getDatabase();
+    if (!database) {
       sendJson(res, 503, { error: 'Auth service unavailable' });
       return true;
     }
 
-    const database = getDatabase();
-    if (!database) {
+    const secret = getJwtSecret(env, database);
+    if (!secret) {
       sendJson(res, 503, { error: 'Auth service unavailable' });
       return true;
     }

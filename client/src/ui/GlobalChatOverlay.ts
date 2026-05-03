@@ -23,7 +23,7 @@ export class GlobalChatOverlay {
     this.element.dataset.expanded = 'false';
     this.element.innerHTML = `
       <button class="global-chat__peek" type="button" data-chat-peek aria-label="Open global chat">
-        <span class="global-chat__peek-title">Chat global</span>
+        <span class="global-chat__peek-title">Global chat</span>
         <span class="global-chat__peek-messages" data-chat-peek-messages></span>
         <span class="global-chat__peek-arrow" aria-hidden="true">^</span>
       </button>
@@ -93,7 +93,7 @@ export class GlobalChatOverlay {
     if (previewMessages.length === 0) {
       const preview = document.createElement('span');
       preview.className = 'global-chat__peek-empty';
-      preview.textContent = 'Sin mensajes todavia';
+      preview.textContent = 'No messages yet';
       this.peekMessagesEl.appendChild(preview);
     } else {
       for (const message of previewMessages) {

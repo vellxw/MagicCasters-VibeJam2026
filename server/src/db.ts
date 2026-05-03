@@ -29,6 +29,11 @@ export function createAuthDatabase(dbPath = resolveDefaultAuthDbPath()): AuthDat
       mmr INTEGER NOT NULL DEFAULT 1000,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS auth_metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 
   return db;

@@ -51,7 +51,7 @@ import { RemotePlayerController } from '../player/RemotePlayerController';
 import { AnimatedPlayerController, cloneCharacterScene, preloadCharacterGltf } from '../player/AnimatedPlayerController';
 import { resolveCombatRelation } from '../player/CombatIdentity';
 import { SpellVfxManager } from '../spells/SpellVfxManager';
-import { CharacterSelectOverlay } from '../ui/CharacterSelectOverlay';
+import { CharacterSelectOverlay, type CharacterSelectSession } from '../ui/CharacterSelectOverlay';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { formatCastBlockMessage, formatCastDeniedReason, getSpellAvailability } from '../ui/SpellAvailability';
 import { GlobalChatOverlay } from '../ui/GlobalChatOverlay';
@@ -215,6 +215,10 @@ export function createQualitySettingsAudioProps(
   };
 }
 
+export function createAnonymousMageName(random = Math.random): string {
+  return `Mage ${Math.floor(random() * 900 + 100)}`;
+}
+
 export class GameApp {
   private shell: HTMLDivElement;
   private renderer: THREE.WebGLRenderer;
@@ -266,7 +270,8 @@ export class GameApp {
   private lastJumpActionAt = 0;
   private dashQueued = false;
   private dashQueuedAt = 0;
-  private localName = `Mage ${Math.floor(Math.random() * 900 + 100)}`;
+  private readonly anonymousName = createAnonymousMageName();
+  private localName = this.anonymousName;
   private aimYaw = 0;
   private aimPitch = 0;
   private sceneMode: SceneMode = 'LOBBY';
@@ -337,7 +342,7 @@ export class GameApp {
     this.customMatchUi = new CustomMatchOverlay(this.root);
     this.mapIntroUi = new MapIntroOverlay(this.root);
     this.tutorialUi = new TutorialOverlay(this.root);
-    this.characterSelectUi = new CharacterSelectOverlay(this.root);
+    this.characterSelectUi = new CharacterSelectOverlay(this.root, this.localName);
     this.chatOverlay = new GlobalChatOverlay(this.root);
     this.mobileStartEl = this.createMobileStartOverlay();
     this.createPortraitBlocker();
@@ -352,6 +357,7 @@ export class GameApp {
     this.characterSelectUi.onBack = () => void this.returnToLobby();
     this.characterSelectUi.onClassSelect = (characterClass) => this.switchPreviewClass(characterClass);
     this.characterSelectUi.onConfirm = (characterClass) => this.confirmCharacterSelection(characterClass);
+    this.characterSelectUi.onSessionChange = (session) => void this.applyPlayerSession(session);
     this.characterSelectUi.onSpellHover = (spellId) => this.playPreviewSpell(spellId);
     this.customMatchUi.onBack = () => void this.returnToLobby();
     this.customMatchUi.onCreate = (request) => void this.createCustomMatch(request);
@@ -384,6 +390,20 @@ export class GameApp {
       await this.chatClient.connect(this.localName);
     } catch (error) {
       console.warn('[GameApp] Global chat unavailable', error);
+    }
+  }
+
+  private async applyPlayerSession(session: CharacterSelectSession | null): Promise<void> {
+    const nextName = session?.username.trim() || this.anonymousName;
+    if (nextName === this.localName) {
+      return;
+    }
+
+    const shouldReconnectChat = this.chatClient.status === 'connected' || this.chatClient.status === 'connecting';
+    this.localName = nextName;
+    if (shouldReconnectChat) {
+      this.chatClient.leave();
+      await this.connectGlobalChat();
     }
   }
 

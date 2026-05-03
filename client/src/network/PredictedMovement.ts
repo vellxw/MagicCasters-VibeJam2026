@@ -10,8 +10,8 @@ interface PredictedSnapshot {
 }
 
 /**
- * Aplica movimiento horizontal predicho (X/Z) para client-side prediction.
- * No predice Y (gravedad/salto) — eso sigue siendo autoridad del servidor.
+ * Applies predicted horizontal movement (X/Z) for client-side prediction.
+ * Does not predict Y (gravity/jump), which stays server-authoritative.
  */
 export function applyPredictedHorizontalMovement(
   snapshot: { x: number; z: number; rotY: number },
@@ -36,7 +36,7 @@ export function applyPredictedHorizontalMovement(
 }
 
 /**
- * Buffer circular de snapshots predichos para reconciliación.
+ * Ring buffer of predicted snapshots for reconciliation.
  */
 export class PredictionBuffer {
   private buffer: PredictedSnapshot[] = [];
@@ -52,8 +52,8 @@ export class PredictionBuffer {
   }
 
   /**
-   * Busca el snapshot predicho más cercano a un tiempo dado.
-   * Útil para reconciliar contra estado del servidor.
+   * Finds the predicted snapshot closest to a given time.
+   * Useful for reconciling against server state.
    */
   findNearest(time: number): PredictedSnapshot | null {
     if (this.buffer.length === 0) return null;
@@ -76,8 +76,8 @@ export class PredictionBuffer {
 }
 
 /**
- * Reconcilia posición predicha con posición del servidor.
- * Si la divergencia es mayor al threshold, devuelve true (necesita corrección).
+ * Reconciles predicted position against server position.
+ * Returns true when divergence is above the threshold.
  */
 export function needsReconciliation(
   predicted: { x: number; z: number },
@@ -90,7 +90,7 @@ export function needsReconciliation(
 }
 
 /**
- * Realiza un snap suave de predicted hacia server.
+ * Smoothly snaps predicted position toward server position.
  */
 export function smoothReconcile(
   predicted: { x: number; z: number },

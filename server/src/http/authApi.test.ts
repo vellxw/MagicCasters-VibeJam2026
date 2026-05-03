@@ -69,6 +69,27 @@ describe('auth API', () => {
     });
   });
 
+  it('rejects duplicate usernames on register', async () => {
+    await withAuthServer(configuredEnv, async (baseUrl) => {
+      const payload = { username: 'unique_mage', password: 'secret-123' };
+      const first = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: baseUrl },
+        body: JSON.stringify(payload)
+      });
+      const duplicate = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: baseUrl },
+        body: JSON.stringify(payload)
+      });
+      const duplicateBody = await readJson(duplicate);
+
+      expect(first.status).toBe(201);
+      expect(duplicate.status).toBe(409);
+      expect(duplicateBody.error).toBe('Username already exists');
+    });
+  });
+
   it('logs in with valid credentials and rejects wrong credentials', async () => {
     await withAuthServer(configuredEnv, async (baseUrl) => {
       await fetch(`${baseUrl}/api/auth/register`, {
@@ -125,7 +146,20 @@ describe('auth API', () => {
     });
   });
 
-  it('does not enable production auth without AUTH_JWT_SECRET', async () => {
+  it('allows the public frontend origin in production', async () => {
+    await withAuthServer({ ...configuredEnv, NODE_ENV: 'production' }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://playmagiccasters.com' },
+        body: JSON.stringify({ username: 'publicorigin', password: 'secret-123' })
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://playmagiccasters.com');
+    });
+  });
+
+  it('keeps production auth available without a hardcoded JWT secret', async () => {
     await withAuthServer({ NODE_ENV: 'production' }, async (baseUrl) => {
       const response = await fetch(`${baseUrl}/api/auth/register`, {
         method: 'POST',
@@ -134,8 +168,9 @@ describe('auth API', () => {
       });
       const body = await readJson(response);
 
-      expect(response.status).toBe(503);
-      expect(body.error).toEqual(expect.any(String));
+      expect(response.status).toBe(201);
+      expect(body.username).toBe('prod');
+      expect(body.token).toEqual(expect.any(String));
     });
   });
 });

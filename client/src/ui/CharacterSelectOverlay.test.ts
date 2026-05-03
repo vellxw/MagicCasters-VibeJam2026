@@ -45,6 +45,8 @@ class FakeElement {
       '.character-select__stage-title',
       '.character-select__mode',
       '.character-select__arena',
+      '.character-select__player-avatar',
+      '.character-select__player-name',
       '.character-select__profile-class',
       '.character-select__stat-value',
       '.character-select__confirm small',
@@ -155,5 +157,39 @@ describe('CharacterSelectOverlay spell preview', () => {
     expect(overlay.element.innerHTML).toContain('UNIT STATS');
     expect(overlay.element.innerHTML).toContain('ABILITIES');
     expect(overlay.element.innerHTML).toContain('profile-modal');
+  });
+
+  it('keeps the profile modal in English', () => {
+    const root = new FakeElement();
+    const overlay = new CharacterSelectOverlay(root as unknown as HTMLElement);
+    const html = overlay.element.innerHTML;
+
+    expect(html).toContain('Duelist Profile');
+    expect(html).toContain('Create an account to save your stats, rank, and progress.');
+    expect(html).toContain('Username');
+    expect(html).toContain('Password');
+    expect(html).toContain('Log In');
+    expect(html).toContain('Create Account');
+    expect(html).not.toMatch(/Perfil|Duelista|Iniciar|Sesión|Contraseña|Próximamente|Kairos/);
+  });
+
+  it('shows the anonymous mage name until a saved account session is active', () => {
+    const root = new FakeElement();
+    const overlay = new CharacterSelectOverlay(root as unknown as HTMLElement, 'Mage 726');
+    const playerName = overlay.element.querySelector('.character-select__player-name');
+    const playerAvatar = overlay.element.querySelector('.character-select__player-avatar');
+
+    expect(playerName?.textContent).toBe('Mage 726');
+    expect(playerAvatar?.textContent).toBe('M');
+
+    overlay.setPlayerProfile({ username: 'vellxw', mmr: 1000 });
+
+    expect(playerName?.textContent).toBe('vellxw');
+    expect(playerAvatar?.textContent).toBe('V');
+
+    overlay.setPlayerProfile(null);
+
+    expect(playerName?.textContent).toBe('Mage 726');
+    expect(playerAvatar?.textContent).toBe('M');
   });
 });

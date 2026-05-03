@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampMediaVolume,
+  createAnonymousMageName,
   createQualitySettingsAudioProps,
   createDifferentMatchQueueIntent,
   normalizeDamageAmount,
@@ -14,6 +15,11 @@ import {
 } from './GameApp';
 
 describe('GameApp keyboard spell slots', () => {
+  it('creates anonymous mage names in the expected public range', () => {
+    expect(createAnonymousMageName(() => 0)).toBe('Mage 100');
+    expect(createAnonymousMageName(() => 0.999)).toBe('Mage 999');
+  });
+
   it('resolves number keys as legacy fallback spell slots', () => {
     expect(resolveKeyboardSpellForClass('arcanist', '1')).toBe('shadow_dart');
     expect(resolveKeyboardSpellForClass('arcanist', '4')).toBe('eclipse');
