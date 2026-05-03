@@ -13,3 +13,6 @@ _legacy_snapshot/
 mobile-landscape-smoke.png
 client/public/splats/*.tmp
 client/public/splats/.*.sog.*.tmp
+
+*.sqlite
+*.sqlite-*

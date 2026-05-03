@@ -5,6 +5,7 @@ import { GLOBAL_CHAT_ROOM_NAME, ROOM_NAME } from '../../shared/types.js';
 import { handleDevAccessAuthApi } from './http/devAccessAuth.js';
 import { handleSplatCollisionDevApi } from './http/splatCollisionDev.js';
 import { handleVfxDevApi } from './http/vfxDevApi.js';
+import { handleAuthApi } from './http/authApi.js';
 import { loadLocalEnv } from './http/localEnv.js';
 import { resolveServerPort, serveClient } from './http/staticClient.js';
 import { GlobalChatRoom } from './rooms/GlobalChatRoom.js';
@@ -14,7 +15,11 @@ loadLocalEnv();
 
 const port = resolveServerPort(process.env);
 
-const httpServer = createServer((request, response) => {
+const httpServer = createServer(async (request, response) => {
+  if (await handleAuthApi(request, response)) {
+    return;
+  }
+
   if (handleDevAccessAuthApi(request, response, process.env)) {
     return;
   }

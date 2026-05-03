@@ -295,6 +295,8 @@ export class GameApp {
   private queueToken = 0;
   private animationId = 0;
   private previewGroup: THREE.Group | null = null;
+  private outgoingPreviewGroup: THREE.Group | null = null;
+  private previewSlideDirection: number = 1;
   private previewMixer: THREE.AnimationMixer | null = null;
   private previewActions = new Map<string, THREE.AnimationAction>();
   private previewRotY = 0;
@@ -1660,6 +1662,13 @@ export class GameApp {
   }
 
   private switchPreviewClass(characterClass: CharacterClass): void {
+    const classKeys = Object.keys(CLASSES) as CharacterClass[];
+    const oldIndex = classKeys.indexOf(this.selectedCharacterClass || 'arcanist');
+    const newIndex = classKeys.indexOf(characterClass);
+    if (oldIndex !== newIndex && oldIndex !== -1) {
+      this.previewSlideDirection = newIndex > oldIndex ? 1 : -1;
+    }
+
     this.selectedCharacterClass = characterClass;
     this.voice.setCharacterClass(characterClass);
     if (this.sceneMode === 'CHARACTER_SELECT') {
@@ -1917,49 +1926,66 @@ export class GameApp {
   }
 
   private async loadPreviewModel(characterClass: CharacterClass): Promise<void> {
-    this.clearPreview();
-    const token = ++this.previewToken;
+    this.vfx.clearPlayerAttachPoints(CHARACTER_SELECT_PREVIEW_PLAYER_ID);
+    if (this.previewGroup) {
+      if (this.outgoingPreviewGroup) {
+        this.scene.remove(this.outgoingPreviewGroup);
+        this.disposeGroup(this.outgoingPreviewGroup);
+      }
+      this.outgoingPreviewGroup = this.previewGroup;
+      this.previewGroup = null;
+    }
+
+    this.previewToken++;
+    const token = this.previewToken;
 
     const previewGroup = new THREE.Group();
-    previewGroup.position.set(0, 0, 0);
+    previewGroup.position.set(this.previewSlideDirection * 15, 0, 0);
     this.previewGroup = previewGroup;
     this.scene.add(previewGroup);
     this.setupVfxAttachPointsForRoot(CHARACTER_SELECT_PREVIEW_PLAYER_ID, previewGroup);
     void this.vfx.preload();
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x352416, 1.7);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x443322, 2.5);
     hemi.position.set(0, 2, 0);
     previewGroup.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xfff0d0, 2.2);
+    const key = new THREE.DirectionalLight(0xfff5e6, 3.5);
     key.position.set(2.4, 4, 2.8);
     previewGroup.add(key);
 
-    const rim = new THREE.DirectionalLight(0x8fbaff, 0.85);
+    const rim = new THREE.DirectionalLight(0xaaccff, 2.0);
     rim.position.set(-2.6, 2.2, -2.2);
     previewGroup.add(rim);
 
     const classTheme = CLASSES[characterClass].themeColor;
-    const pedestal = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.92, 1.08, 0.18, 48),
-      new THREE.MeshStandardMaterial({ color: 0x211912, roughness: 0.78, metalness: 0.1 })
-    );
-    pedestal.position.y = 0.08;
-    previewGroup.add(pedestal);
 
-    const pedestalRim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.92, 0.018, 8, 64),
-      new THREE.MeshStandardMaterial({
-        color: classTheme,
-        emissive: classTheme,
-        emissiveIntensity: 0.22,
-        roughness: 0.42,
-        metalness: 0.18
-      })
+    // Outer bright ring
+    const outerRing = new THREE.Mesh(
+      new THREE.RingGeometry(1.3, 1.35, 64),
+      new THREE.MeshBasicMaterial({ color: 0xf5c45e, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
     );
-    pedestalRim.rotation.x = Math.PI / 2;
-    pedestalRim.position.y = 0.18;
-    previewGroup.add(pedestalRim);
+    outerRing.rotation.x = -Math.PI / 2;
+    outerRing.position.y = 0.01;
+    previewGroup.add(outerRing);
+
+    // Inner bright ring matching class color
+    const innerRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 0.94, 64),
+      new THREE.MeshBasicMaterial({ color: classTheme, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+    );
+    innerRing.rotation.x = -Math.PI / 2;
+    innerRing.position.y = 0.02;
+    previewGroup.add(innerRing);
+
+    // Subtle dark base glow
+    const baseGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(1.3, 64),
+      new THREE.MeshBasicMaterial({ color: classTheme, transparent: true, opacity: 0.08, side: THREE.DoubleSide })
+    );
+    baseGlow.rotation.x = -Math.PI / 2;
+    baseGlow.position.y = 0.005;
+    previewGroup.add(baseGlow);
 
     const gltf = await this.loadCharacterGltfCached(characterClass);
     if (token !== this.previewToken || this.sceneMode !== 'CHARACTER_SELECT' || this.previewGroup !== previewGroup) {
@@ -1970,7 +1996,7 @@ export class GameApp {
       this.addFallbackPreview(previewGroup, characterClass);
     } else {
       const model = cloneCharacterScene(gltf.scene);
-      model.rotation.y = Math.PI;
+      // model.rotation.y = Math.PI; // removed backward spawn
       model.position.y = 0.16;
       previewGroup.add(model);
       this.previewMixer = new THREE.AnimationMixer(model);
@@ -2008,9 +2034,19 @@ export class GameApp {
 
   private updatePreview(dt: number): void {
     this.previewMixer?.update(dt);
-    if (this.previewGroup && this.previewAutoRotate && !this.previewDrag) {
-      this.previewRotY += dt * 0.42;
+    if (this.previewGroup) {
+      this.previewGroup.position.x += (0 - this.previewGroup.position.x) * 10 * dt;
       this.previewGroup.rotation.y = this.previewRotY;
+    }
+    if (this.outgoingPreviewGroup) {
+      const targetX = -this.previewSlideDirection * 15;
+      this.outgoingPreviewGroup.position.x += (targetX - this.outgoingPreviewGroup.position.x) * 10 * dt;
+      this.outgoingPreviewGroup.rotation.y = this.previewRotY;
+      if (Math.abs(this.outgoingPreviewGroup.position.x - targetX) < 0.5) {
+        this.scene.remove(this.outgoingPreviewGroup);
+        this.disposeGroup(this.outgoingPreviewGroup);
+        this.outgoingPreviewGroup = null;
+      }
     }
   }
 
@@ -2033,19 +2069,28 @@ export class GameApp {
     this.vfx.playCast(spellId, CHARACTER_SELECT_PREVIEW_PLAYER_ID, 0, 0, 0);
   }
 
+  private disposeGroup(group: THREE.Group): void {
+    group.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      mesh.geometry?.dispose?.();
+      const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+      else material?.dispose?.();
+    });
+  }
+
   private clearPreview(): void {
     this.previewToken++;
     this.vfx.clearPlayerAttachPoints(CHARACTER_SELECT_PREVIEW_PLAYER_ID);
     if (this.previewGroup) {
       this.scene.remove(this.previewGroup);
-      this.previewGroup.traverse((object) => {
-        const mesh = object as THREE.Mesh;
-        mesh.geometry?.dispose?.();
-        const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-        else material?.dispose?.();
-      });
+      this.disposeGroup(this.previewGroup);
       this.previewGroup = null;
+    }
+    if (this.outgoingPreviewGroup) {
+      this.scene.remove(this.outgoingPreviewGroup);
+      this.disposeGroup(this.outgoingPreviewGroup);
+      this.outgoingPreviewGroup = null;
     }
     this.previewMixer = null;
     this.previewActions.clear();
