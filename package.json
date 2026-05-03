@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client",
     "test": "npm run test --workspace server",
     "deploy:cloudflare": "wrangler deploy",
+    "r2:upload-assets": "node tools/upload-r2-assets.mjs",
     "splat:collision": "node tools/generate-splat-collision.mjs",
     "splat:qualities": "node tools/generate-splat-qualities.mjs"
   },

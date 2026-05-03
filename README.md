@@ -94,7 +94,15 @@ Build command: npm install && npm run build:cloudflare
 Deploy command: npx wrangler deploy
 ```
 
-The root `wrangler.jsonc` deploys `client/dist` as Workers Static Assets and enables SPA fallback. The Cloudflare build removes optional collision GLB files that exceed the 25 MiB Workers asset limit; source assets remain under `client/public`. Set `VITE_COLYSEUS_URL` to the live Colyseus server, for example `wss://your-game-server.onrender.com`. For R2 asset hosting later, set `VITE_ASSET_BASE_URL` to the public R2/custom-domain origin and upload `splats/`, `collision/`, `map-previews/`, and `models/` with the same paths.
+The root `wrangler.jsonc` deploys `client/dist` as Workers Static Assets and enables SPA fallback. The Cloudflare build removes optional collision GLB files that exceed the 25 MiB Workers asset limit; source assets remain under `client/public`. Set `VITE_COLYSEUS_URL` to the live Colyseus server, for example `wss://your-game-server.onrender.com`.
+
+For R2 asset hosting, enable R2 in the Cloudflare dashboard, create the `vibejam-assets` bucket, attach a public/custom domain, then run:
+
+```bash
+npm run r2:upload-assets
+```
+
+Set `VITE_ASSET_BASE_URL` to the public R2/custom-domain origin. The upload keeps `splats/`, `collision/`, `map-previews/`, and `models/` under the same paths.
 
 ## Project Layout
 
