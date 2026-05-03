@@ -18,6 +18,7 @@ import {
   spawnPointsByModeForPreset,
   type SplatQuality
 } from '../../../shared/splatMapPool';
+import { assetUrl, getDefaultSplatQuality } from './AssetUrls';
 
 export interface ArenaVector {
   x: number;
@@ -210,9 +211,11 @@ export function setStoredSplatPresetId(presetId: string): void {
 export function getStoredSplatQuality(): SplatQuality | undefined {
   try {
     const quality = localStorage.getItem(ACTIVE_SPLAT_QUALITY_KEY);
-    return quality === 'low' || quality === 'mid' || quality === 'high' ? quality : undefined;
+    return quality === 'low' || quality === 'mid' || quality === 'high'
+      ? quality
+      : getDefaultSplatQuality();
   } catch {
-    return undefined;
+    return getDefaultSplatQuality();
   }
 }
 
@@ -262,11 +265,11 @@ export function normalizeSplatArenaPreset(value: unknown): SplatArenaPreset {
     arenaId,
     displayName: asString(data.displayName, 'Realistic Arena Test'),
     type: 'splat',
-    splatUrl: requiredString(data.splatUrl, 'splatUrl'),
+    splatUrl: assetUrl(requiredString(data.splatUrl, 'splatUrl')) ?? requiredString(data.splatUrl, 'splatUrl'),
     splatFileSizeBytes: asOptionalNumber(data.splatFileSizeBytes),
     enabledModes: resolveEnabledModes(data),
-    collisionMeshUrl: asNullableString(data.collisionMeshUrl),
-    voxelCollisionUrl: asVoxelCollisionUrl(data.voxelCollisionUrl),
+    collisionMeshUrl: assetUrl(asNullableString(data.collisionMeshUrl)),
+    voxelCollisionUrl: assetUrl(asVoxelCollisionUrl(data.voxelCollisionUrl)),
     spawnPoints: resolveSpawnPointsForMode(spawnSource, '1v1'),
     spawnPointsByMode: spawnPointsByModeForPreset(spawnSource),
     bounds: asBounds(data.bounds),
@@ -306,7 +309,7 @@ function normalizeSplatMapEntry(value: unknown): SplatMapEntry {
     qualities[defaultQuality] = {
       presetId,
       presetUrl: requiredString(data.presetUrl, 'presetUrl'),
-      splatUrl: requiredString(data.splatUrl, 'splatUrl'),
+      splatUrl: assetUrl(requiredString(data.splatUrl, 'splatUrl')) ?? requiredString(data.splatUrl, 'splatUrl'),
       splatFileSizeBytes: asOptionalNumber(data.splatFileSizeBytes)
     };
   }
@@ -314,7 +317,7 @@ function normalizeSplatMapEntry(value: unknown): SplatMapEntry {
     presetId,
     displayName: asString(data.displayName, presetId),
     presetUrl: requiredString(data.presetUrl, 'presetUrl'),
-    splatUrl: requiredString(data.splatUrl, 'splatUrl'),
+    splatUrl: assetUrl(requiredString(data.splatUrl, 'splatUrl')) ?? requiredString(data.splatUrl, 'splatUrl'),
     splatFileSizeBytes: asOptionalNumber(data.splatFileSizeBytes),
     enabledModes: resolveEnabledModes(data),
     calibrationGroupId: asOptionalString(data.calibrationGroupId),
@@ -525,7 +528,7 @@ function asSplatQualities(value: unknown): Partial<Record<SplatQuality, SplatMap
     qualities[quality] = {
       presetId,
       presetUrl,
-      splatUrl,
+      splatUrl: assetUrl(splatUrl) ?? splatUrl,
       splatFileSizeBytes: asOptionalNumber(record.splatFileSizeBytes)
     };
   }
@@ -539,7 +542,13 @@ function qualityFromPresetId(presetId: string): SplatQuality | undefined {
 
 function asVoxelCollisionUrl(value: unknown): string | null {
   const url = asNullableString(value);
-  return url && url.startsWith('/collision/') && url.endsWith('.voxel.json') ? url : null;
+  if (!url) return null;
+  try {
+    const pathname = new URL(url, 'http://localhost').pathname;
+    return pathname.startsWith('/collision/') && pathname.endsWith('.voxel.json') ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 function asNumber(value: unknown, fallback: number): number {

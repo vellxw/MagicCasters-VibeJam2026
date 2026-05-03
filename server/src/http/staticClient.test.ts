@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join, resolve } from 'node:path';
-import { getClientAssetPath, resolveServerPort } from './staticClient';
+import { cacheControlForExtension, getClientAssetPath, resolveServerPort } from './staticClient';
 
 describe('static client helpers', () => {
   it('uses Render PORT before local SERVER_PORT and the default', () => {
@@ -22,5 +22,11 @@ describe('static client helpers', () => {
 
     expect(getClientAssetPath('/splats/Dorfplatz%20Interlaken%20Switzerland.sog', clientDist))
       .toBe(join(clientDist, 'splats', 'Dorfplatz Interlaken Switzerland.sog'));
+  });
+
+  it('lets browsers reuse large splat assets instead of redownloading them every visit', () => {
+    expect(cacheControlForExtension('.html')).toBe('no-store');
+    expect(cacheControlForExtension('.sog')).toBe('public, max-age=2592000');
+    expect(cacheControlForExtension('.js')).toBe('public, max-age=31536000, immutable');
   });
 });

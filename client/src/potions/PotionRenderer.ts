@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { PotionType, PublicPotionState } from '../../../shared/types';
+import { assetUrl } from '../world/AssetUrls';
 
 export interface PotionCollectedVisualEvent {
   type: PotionType;
@@ -44,7 +45,7 @@ export class PotionRenderer {
     await Promise.all(
       (Object.keys(POTION_MODEL_PATHS) as PotionType[]).map(async (type) => {
         try {
-          const gltf = await loader.loadAsync(POTION_MODEL_PATHS[type]);
+          const gltf = await loader.loadAsync(assetUrl(POTION_MODEL_PATHS[type]) ?? POTION_MODEL_PATHS[type]);
           this.loadedModels.set(type, gltf.scene);
         } catch {
           // The procedural fallback keeps gameplay readable if an asset is missing.

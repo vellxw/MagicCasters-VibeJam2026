@@ -4,6 +4,7 @@ import {
   isPlayableSplatMapEntry,
   type SplatMapPoolEntry
 } from '../../../shared/splatMapPool';
+import { assetUrl } from './AssetUrls';
 import { loadSplatMapCatalog } from './ArenaPreset';
 
 export interface PublishedMapChoice {
@@ -74,7 +75,7 @@ function choiceFromEntry(entry: SplatMapPoolEntry): PublishedMapChoice | null {
   return {
     presetId: groupId,
     displayName: preview.title,
-    previewUrl: preview.url,
+    previewUrl: assetUrl(preview.url) ?? preview.url,
     enabledModes: modes,
     presetUrl: entry.presetUrl
   };

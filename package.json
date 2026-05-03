@@ -12,15 +12,18 @@
     "dev:client": "npm run dev --workspace client",
     "dev:server": "npm run dev --workspace server",
     "build": "npm run build --workspace server && npm run build --workspace client",
+    "build:cloudflare": "npm run build --workspace client && node tools/prepare-cloudflare-assets.mjs",
     "start": "node server/dist/server/src/index.js",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client",
     "test": "npm run test --workspace server",
+    "deploy:cloudflare": "wrangler deploy",
     "splat:collision": "node tools/generate-splat-collision.mjs",
     "splat:qualities": "node tools/generate-splat-qualities.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.87.0"
   },
   "engines": {
     "node": ">=20"

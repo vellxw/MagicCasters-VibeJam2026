@@ -83,6 +83,19 @@ The root `start` script runs the compiled Colyseus server. The Docker image sets
 
 The client uses same-origin WebSockets in production, so both the built client and the `magic_match` Colyseus room run from the same Fly URL. See `docs/fly-production.md` before changing Fly environment variables; production should normally leave `VITE_COLYSEUS_URL` unset so the client connects with `wss://` on the current Fly origin.
 
+## Cloudflare Static Deployment
+
+Use Cloudflare for the public frontend when you want Render/Fly to handle only Colyseus traffic.
+
+In Workers & Pages, use:
+
+```bash
+Build command: npm install && npm run build:cloudflare
+Deploy command: npx wrangler deploy
+```
+
+The root `wrangler.jsonc` deploys `client/dist` as Workers Static Assets and enables SPA fallback. The Cloudflare build removes optional collision GLB files that exceed the 25 MiB Workers asset limit; source assets remain under `client/public`. Set `VITE_COLYSEUS_URL` to the live Colyseus server, for example `wss://your-game-server.onrender.com`. For R2 asset hosting later, set `VITE_ASSET_BASE_URL` to the public R2/custom-domain origin and upload `splats/`, `collision/`, `map-previews/`, and `models/` with the same paths.
+
 ## Project Layout
 
 ```txt

@@ -69,6 +69,7 @@ import { loadMapVfxConfig, type MapVfxEntry, type MapVfxConfig } from '../vfx/Ma
 import { resolveEffectiveTier, saveGraphicsTier, tierToSplatQuality, splatQualityToTier, type GraphicsTier } from '../utils/GraphicsSettings';
 import { VoiceCommandManager } from '../voice/VoiceCommandManager';
 import { createArenaProvider, type ArenaDebugInfo, type ArenaRuntime } from '../world/ArenaProvider';
+import { assetUrl } from '../world/AssetUrls';
 import {
   applyCalibrationToPreset,
   calibrationSettingsFromPreset,
@@ -2925,9 +2926,9 @@ function compactCalibrationMaps(catalog: SplatMapCatalog): SplatMapEntry[] {
 
 async function detectGeneratedCollisionUrls(preset: SplatArenaPreset): Promise<{ collisionMeshUrl: string | null; voxelCollisionUrl: string | null }> {
   const arenaId = collisionAssetIdFromPreset(preset);
-  const voxelCollisionUrl = `/collision/${arenaId}.voxel.json`;
-  const voxelBinUrl = `/collision/${arenaId}.voxel.bin`;
-  const collisionMeshUrl = `/collision/${arenaId}.collision.glb`;
+  const voxelCollisionUrl = assetUrl(`/collision/${arenaId}.voxel.json`) ?? `/collision/${arenaId}.voxel.json`;
+  const voxelBinUrl = assetUrl(`/collision/${arenaId}.voxel.bin`) ?? `/collision/${arenaId}.voxel.bin`;
+  const collisionMeshUrl = assetUrl(`/collision/${arenaId}.collision.glb`) ?? `/collision/${arenaId}.collision.glb`;
   const [hasVoxelJson, hasVoxelBin, hasGlb] = await Promise.all([
     assetExists(voxelCollisionUrl),
     assetExists(voxelBinUrl),

@@ -1,0 +1,11 @@
+/splats/*
+  Cache-Control: public, max-age=2592000
+
+/collision/*
+  Cache-Control: public, max-age=2592000
+
+/map-previews/*
+  Cache-Control: public, max-age=2592000
+
+/models/*
+  Cache-Control: public, max-age=2592000

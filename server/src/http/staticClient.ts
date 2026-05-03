@@ -102,7 +102,8 @@ function hasTraversalSegment(url: string | undefined): boolean {
   }
 }
 
-function cacheControlForExtension(extension: string): string {
-  if (extension === '.html' || extension === '.sog') return 'no-store';
+export function cacheControlForExtension(extension: string): string {
+  if (extension === '.html') return 'no-store';
+  if (extension === '.sog') return 'public, max-age=2592000';
   return 'public, max-age=31536000, immutable';
 }

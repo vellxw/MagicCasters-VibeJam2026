@@ -10,6 +10,7 @@ import {
   styleForCombatRelation,
   type CombatRelation
 } from './CombatIdentity';
+import { assetUrl } from '../world/AssetUrls';
 
 const ANIM_MAP: Record<string, string> = {
   idle: 'reposo',
@@ -281,7 +282,7 @@ export { AnimatedPlayerController as AnimatedRemotePlayerController };
 export async function preloadCharacterGltf(characterClass: CharacterClass): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
   const cls = CLASSES[characterClass];
   const loader = new GLTFLoader();
-  const gltf = await loader.loadAsync(cls.modelPath);
+  const gltf = await loader.loadAsync(assetUrl(cls.modelPath) ?? cls.modelPath);
   return { scene: gltf.scene, animations: gltf.animations };
 }
 
